@@ -143,9 +143,15 @@ chmod +x scripts/setup-github-remote.sh scripts/push-both.sh
 ./scripts/setup-github-remote.sh carlostovar1995/game-sync
 ```
 
-After that, `./scripts/push-both.sh` updates Origin and GitHub together. Collaborators clone `https://github.com/carlostovar1995/game-sync.git` — they do not need Cursor.
+After that, `./scripts/push-both.sh` (or the desktop icon) updates Origin and GitHub together.
 
-If `git pull` says your branch has diverged after a history cleanup, run `git fetch origin && git reset --hard origin/main` in `~/game-sync` (only if you have no uncommitted work).
+If push says `Permission to carlostovar1995/game-sync.git denied`, Git is using a Windows-saved password instead of `gh`. In Ubuntu:
+
+```bash
+cd ~/game-sync
+gh auth refresh -h github.com -s repo
+./scripts/setup-github-remote.sh
+```
 
 ## License
 

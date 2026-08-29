@@ -11,6 +11,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 export PATH="${HOME}/.local/bin:${PATH}"
+# shellcheck source=github-git.sh
+source "${ROOT}/scripts/github-git.sh"
 
 SLUG="${1:-carlostovar1995/game-sync}"
 if [[ "$SLUG" != */* ]]; then
@@ -30,7 +32,8 @@ else
 fi
 
 if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-  gh auth setup-git >/dev/null 2>&1 || true
+  ensure_gh_repo_scope
+  gh auth setup-git
   if ! gh repo view "$SLUG" >/dev/null 2>&1; then
     echo "Creating private GitHub repo ${SLUG}..."
     gh repo create "$SLUG" --private --source=. --remote=github --description "Boss Fighter (Godot) — mirror of Cursor Origin game-sync"
@@ -38,7 +41,7 @@ if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
 fi
 
 echo "Pushing main to GitHub (this can take a while)..."
-git push -u github main
+github_git push -u github main
 
 echo
 echo "GitHub: https://github.com/${SLUG}"

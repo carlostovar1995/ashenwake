@@ -5,6 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 export PATH="${HOME}/.local/bin:${PATH}"
+# shellcheck source=github-git.sh
+source "${ROOT}/scripts/github-git.sh"
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
@@ -13,7 +15,7 @@ git push -u origin "${BRANCH}"
 
 if git remote get-url github >/dev/null 2>&1; then
   echo "Pushing ${BRANCH} to github..."
-  git push -u github "${BRANCH}"
+  github_git push -u github "${BRANCH}"
 else
   echo "No 'github' remote yet. Create a GitHub repo, then:"
   echo "  ./scripts/setup-github-remote.sh carlostovar1995/game-sync"
