@@ -104,6 +104,19 @@ Optional later: keep the home PC awake and use **Remote Control** (Settings → 
 
 See [AGENTS.md](AGENTS.md) for agent-facing conventions.
 
+## Desktop sync icon (Windows)
+
+Double-click **Sync Boss Fighter** on the desktop to pull, save local edits, and push to Origin and GitHub. Install it once from Ubuntu:
+
+```bash
+cd ~/game-sync
+git pull
+chmod +x scripts/windows/*.sh
+./scripts/windows/install-desktop-shortcut.sh
+```
+
+The first click may open a GitHub browser login. After that, one click keeps both remotes updated.
+
 ## GitHub mirror
 
 Cursor Cloud Agents keep using Origin. GitHub is a second copy for sharing with people who are not on Cursor.

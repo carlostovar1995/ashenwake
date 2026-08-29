@@ -14,7 +14,8 @@ This repository is **Boss Fighter**, a Godot 4.7 GDScript 5vBoss game with Leagu
 - `scripts/setup-origin.sh` / `scripts/ensure-origin-path.sh` — WSL Origin CLI + PATH. `scripts/setup-windows.ps1` jumps from PowerShell into WSL.
 - `scripts/import-local-godot.sh` — copy a Windows/WSL Godot project into this repo without dropping the kit. Use `--push` to commit and push.
 - `scripts/push-both.sh` — push the current branch to Origin and GitHub.
-- `scripts/setup-github-remote.sh USER/REPO` — add the GitHub mirror remote and push.
+- `scripts/setup-github-remote.sh` — add `github` remote (`carlostovar1995/game-sync`) and push.
+- `scripts/windows/install-desktop-shortcut.sh` — put **Sync Boss Fighter** on the Windows desktop. The icon runs `scripts/windows/sync-from-desktop.sh` (pull, optional commit, GitHub link, push-both).
 
 ## Commands
 
@@ -39,7 +40,7 @@ godot --headless --path . --import  # import only
 - Rewrite `.uid` files or binary-ize `.tscn` without a reason.
 - Assume the Godot editor GUI or a Godot MCP plugin is available in the cloud. Those are home-PC only.
 - Bump Godot casually. If you must, change `.godot-version` and `config/features` in `project.godot` in the same change.
-- On Windows, never pipe Origin `install.sh` to `sh` in PowerShell. Use WSL or `scripts/setup-windows.ps1`. After install, put `~/.local/bin` on PATH (`scripts/ensure-origin-path.sh`).
+- On Windows, a desktop shortcut **Sync Boss Fighter** (installed by `scripts/windows/install-desktop-shortcut.sh`) is the preferred way to pull/push Origin + GitHub. Do not ask them to pipe Origin `install.sh` to `sh` in PowerShell.
 
 ## Replacing the local Windows copy
 
