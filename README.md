@@ -16,7 +16,21 @@ This tree currently includes a small placeholder project so Cloud Agents can run
 
 ## Get the repository on the Windows home PC
 
-Desktop OS is Windows. Run this in a **WSL** terminal:
+Desktop OS is Windows. Origin CLI is **not** a PowerShell command. If you see `sh : The term 'sh' is not recognized`, you are still in PowerShell (`PS C:\Users\...>`). Leave that window and use WSL.
+
+**1. Open WSL from PowerShell** (this is the only Origin command that belongs in PowerShell):
+
+```powershell
+wsl
+```
+
+The prompt should change to a Linux shell (`user@pc:~$`), not `PS C:\...`. If `wsl` is missing, install it in **Windows PowerShell as Administrator**, reboot, then open Ubuntu from the Start menu:
+
+```powershell
+wsl --install
+```
+
+**2. Inside WSL**, install Origin and clone:
 
 ```bash
 # Run in WSL (Origin CLI is not available in PowerShell)
