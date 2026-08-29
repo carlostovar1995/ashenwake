@@ -58,7 +58,7 @@ Later, from PowerShell you can jump into that WSL setup with `scripts/setup-wind
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 cd ~/game-sync
-git pull
+git pull origin main
 chmod +x scripts/import-local-godot.sh
 ./scripts/import-local-godot.sh --push "/mnt/c/Users/carlo/OneDrive/Desktop/Projects/Boss Game"
 ```
@@ -110,7 +110,7 @@ Double-click **Sync Boss Fighter** on the desktop to pull, save local edits, and
 
 ```bash
 cd ~/game-sync
-git pull
+git pull origin main
 chmod +x scripts/windows/*.sh
 ./scripts/windows/install-desktop-shortcut.sh
 ```
@@ -130,7 +130,7 @@ In the **Ubuntu** app from the Start menu:
 
 ```bash
 cd ~/game-sync
-git pull
+git pull origin main
 ./scripts/windows/install-desktop-shortcut.sh
 ```
 
@@ -157,7 +157,7 @@ If `gh` is missing: `sudo apt update && sudo apt install -y gh`, or install from
 
 ```bash
 cd ~/game-sync
-git pull
+git pull origin main
 chmod +x scripts/setup-github-remote.sh scripts/push-both.sh
 ./scripts/setup-github-remote.sh carlostovar1995/game-sync
 ```

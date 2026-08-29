@@ -27,10 +27,10 @@ if (-not $distro) {
 }
 
 Write-Host "Installing shortcut via distro: $distro"
-$bash = 'cd "$HOME/game-sync" && git pull && chmod +x scripts/windows/*.sh && ./scripts/windows/install-desktop-shortcut.sh'
+$bash = 'cd "$HOME/game-sync" && git pull origin main && chmod +x scripts/windows/*.sh && ./scripts/windows/install-desktop-shortcut.sh'
 & wsl.exe -d $distro -- /bin/bash -lc $bash
 if ($LASTEXITCODE -ne 0) {
-    throw "Install failed (exit $LASTEXITCODE). Open Ubuntu from the Start menu and run: cd ~/game-sync && git pull && ./scripts/windows/install-desktop-shortcut.sh"
+    throw "Install failed (exit $LASTEXITCODE). Open Ubuntu and run: cd ~/game-sync && git pull origin main && ./scripts/windows/install-desktop-shortcut.sh"
 }
 
 Write-Host "Done. Double-click Sync Boss Fighter on the desktop."

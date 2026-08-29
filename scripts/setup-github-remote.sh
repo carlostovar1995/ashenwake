@@ -41,7 +41,9 @@ if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
 fi
 
 echo "Pushing main to GitHub (this can take a while)..."
-github_git push -u github main
+# GitHub is a mirror; Origin remains the upstream used by plain `git pull`.
+github_git push github main
+git branch --set-upstream-to=origin/main main >/dev/null
 
 echo
 echo "GitHub: https://github.com/${SLUG}"

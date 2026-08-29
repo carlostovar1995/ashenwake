@@ -15,7 +15,10 @@ git push -u origin "${BRANCH}"
 
 if git remote get-url github >/dev/null 2>&1; then
   echo "Pushing ${BRANCH} to github..."
-  github_git push -u github "${BRANCH}"
+  # GitHub is only a mirror. Never make it the branch upstream: plain
+  # `git pull` must continue to read from Cursor Origin.
+  github_git push github "${BRANCH}"
+  git branch --set-upstream-to="origin/${BRANCH}" "${BRANCH}" >/dev/null
 else
   echo "No 'github' remote yet. Create a GitHub repo, then:"
   echo "  ./scripts/setup-github-remote.sh carlostovar1995/game-sync"
