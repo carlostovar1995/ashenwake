@@ -69,6 +69,17 @@ SRC="$(win_to_wsl "$SRC")"
 if [[ ! -e "$SRC" ]]; then
   echo "Source not found: $SRC" >&2
   echo "In WSL, Windows C: is /mnt/c/..." >&2
+  echo
+  echo "Nearby under /mnt/c/Users/${USER:-carlo}:" >&2
+  ls -la "/mnt/c/Users/${USER:-carlo}" 2>/dev/null | head -n 30 || true
+  echo
+  echo "OneDrive / Desktop folders:" >&2
+  ls -d /mnt/c/Users/"${USER:-carlo}"/OneDrive* /mnt/c/Users/"${USER:-carlo}"/Desktop 2>/dev/null || true
+  echo
+  echo "Searching for project.godot (this can take a minute)..." >&2
+  find /mnt/c/Users/"${USER:-carlo}" -maxdepth 6 -name project.godot 2>/dev/null | head -n 20 || true
+  echo
+  echo "Or drag the Boss Games folder from File Explorer into this Ubuntu window to paste its real path." >&2
   exit 1
 fi
 
