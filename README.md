@@ -115,7 +115,16 @@ chmod +x scripts/windows/*.sh
 ./scripts/windows/install-desktop-shortcut.sh
 ```
 
-The first click may open a GitHub browser login. After that, one click keeps both remotes updated.
+The first click may open a GitHub browser login. After that, one click keeps both remotes updated. GitHub pushes use the `gh` login (not Windows saved passwords).
+
+**File path of the icon** (whichever Desktop Windows actually uses):
+
+- `C:\Users\carlo\OneDrive\Desktop\Sync Boss Fighter.lnk`
+- `C:\Users\carlo\Desktop\Sync Boss Fighter.lnk`
+
+There is also `Sync Boss Fighter.bat` in the same folder. Re-run `./scripts/windows/install-desktop-shortcut.sh` after a pull if you want the installer to print the exact path it used.
+
+If the icon says `execvpe(bash) failed`, the desktop `.bat` is stale. Pull and reinstall the shortcut so it launches `/bin/bash` instead of `bash`.
 
 ## GitHub mirror
 

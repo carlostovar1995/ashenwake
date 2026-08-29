@@ -30,4 +30,7 @@ fi
 '@
 
 Write-Host "Running Origin setup inside WSL (not PowerShell)..."
-wsl -e bash -lc $linux
+wsl.exe -d Ubuntu -e /bin/bash -lc $linux
+if ($LASTEXITCODE -ne 0) {
+    wsl.exe -e /bin/bash -lc $linux
+}
