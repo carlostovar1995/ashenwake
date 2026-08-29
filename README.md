@@ -44,12 +44,18 @@ origin auth login
 origin repo clone carlos-tovar/game-sync
 ```
 
-If `origin` is not found after install, persist `~/.local/bin` on PATH in WSL (bash):
+If `origin` is not found after install, persist `~/.local/bin` on PATH in WSL (bash), or run `scripts/ensure-origin-path.sh` after the clone exists:
 
 ```bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
+
+Later, from PowerShell you can jump into that WSL setup with `scripts/setup-windows.ps1` instead of piping to `sh`.
+
+**3. After clone** (you can skip Origin until the next pull/push):
+
+If you cloned from `/mnt/c/Users/Carlos Tovar`, the folder is usually `C:\Users\Carlos Tovar\game-sync`. Open that in Cursor and in Godot.
 
 Then:
 
