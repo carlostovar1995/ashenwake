@@ -122,9 +122,13 @@ The first click may open a GitHub browser login. After that, one click keeps bot
 - `C:\Users\carlo\OneDrive\Desktop\Sync Boss Fighter.lnk`
 - `C:\Users\carlo\Desktop\Sync Boss Fighter.lnk`
 
-There is also `Sync Boss Fighter.bat` in the same folder. Re-run `./scripts/windows/install-desktop-shortcut.sh` after a pull if you want the installer to print the exact path it used.
+There is also `Sync-Boss-Fighter.ps1` in the same folder (the real launcher). The `.lnk` starts PowerShell, which runs Ubuntu via `wsl -- /bin/bash` (not `wsl -e bash`).
 
-If the icon says `execvpe(bash) failed`, the desktop `.bat` is stale. Pull and reinstall the shortcut so it launches `/bin/bash` instead of `bash`.
+If the icon still says `execvpe(bash)`, run this **in Windows PowerShell** (not Ubuntu) to rebuild the shortcut from the clone:
+
+```powershell
+wsl -- /bin/bash -lc 'cd "$HOME/game-sync" && git pull && ./scripts/windows/install-desktop-shortcut.sh'
+```
 
 ## GitHub mirror
 
