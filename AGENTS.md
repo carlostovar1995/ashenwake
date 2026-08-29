@@ -1,12 +1,12 @@
-# Agent notes — Godot game-sync
+# Agent notes — Boss Fighter (game-sync)
 
-This repository is a **Godot 4 GDScript** game plus a Cursor Cloud Agent kit. The Windows home PC is the place to playtest in the Godot editor. Cloud Agents, the laptop, and the phone work from this Origin remote.
+This repository is **Boss Fighter**, a Godot 4.7 GDScript 5vBoss game with League-style controls, plus a Cursor Cloud Agent kit. Playtest in the Godot editor on the Windows home PC. Cloud Agents, the laptop, and the phone work from this Origin remote.
 
 ## Layout
 
-- `project.godot` — Godot project (replace the placeholder with the real game; keep this file at the repo root).
-- `scenes/`, `scripts/` — game content.
-- `tools/` — headless CI scripts (`ci_check.gd`).
+- `project.godot` — Boss Fighter (Godot 4.7, Forward Plus).
+- `scenes/`, `scripts/` — arena, units, combat, UI, input.
+- `tools/ci_check.gd` — tiny headless sanity print. `tools/smoke_test.gd` — spawn/match smoke test (needs a successful import).
 - `.godot-version` — pinned editor tag (default `4.7-stable`). Must match the home PC editor.
 - `.cursor/environment.json` — Cloud Agent image + install.
 - `scripts/cloud-agent-install.sh` — download Godot Linux editor, symlink `godot`, `godot --headless --import`.
@@ -39,6 +39,6 @@ godot --headless --path . --import  # import only
 - Bump Godot casually. If you must, change `.godot-version` and `config/features` in `project.godot` in the same change.
 - On Windows, never pipe Origin `install.sh` to `sh` in PowerShell. Use WSL or `scripts/setup-windows.ps1`. After install, put `~/.local/bin` on PATH (`scripts/ensure-origin-path.sh`).
 
-## Replacing the placeholder
+## Replacing the local Windows copy
 
-The shipped `scenes/main.tscn` is a stub so Cloud Agents can import before the real game is copied in. On the home PC, copy the existing Godot project over this tree **without** deleting `.cursor/`, `scripts/cloud-agent-install.sh`, `scripts/verify-headless.sh`, `AGENTS.md`, `.godot-version`, or `tools/ci_check.gd`. Keep `project.godot` at the repository root. Set `.godot-version` to the same tag the home editor uses (for example `4.4.1-stable` or `4.7-stable`).
+The Origin repo is the source of truth. On the home PC, open `~/game-sync` (or `\\wsl$\Ubuntu\home\carlo\game-sync`) in Godot — not only the old OneDrive `Boss Game` folder — so edits can be pulled and pushed. Keep `.cursor/`, the `scripts/*.sh` kit, `AGENTS.md`, `.godot-version`, and `tools/ci_check.gd`.

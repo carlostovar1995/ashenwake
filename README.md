@@ -53,18 +53,17 @@ source ~/.bashrc
 
 Later, from PowerShell you can jump into that WSL setup with `scripts/setup-windows.ps1` instead of piping to `sh`.
 
-**3. After clone** (you can skip Origin until the next pull/push):
+**3. After clone**, import the Godot game from Windows (WSL, not PowerShell):
 
-If you cloned from `/mnt/c/Users/Carlos Tovar`, the folder is usually `C:\Users\Carlos Tovar\game-sync`. Open that in Cursor and in Godot.
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+cd ~/game-sync
+git pull
+chmod +x scripts/import-local-godot.sh
+./scripts/import-local-godot.sh --push "/mnt/c/Users/carlo/OneDrive/Desktop/Projects/Boss Game"
+```
 
-Then:
-
-1. In Godot on the home PC: **Project → Version Control → Generate Version Control Metadata** (if the game does not already have `.gitignore` / `.gitattributes`).
-2. Copy `project.godot`, `scenes/`, `scripts/`, and assets into the clone. Keep `.godot/` out of git. Do not delete this repo’s `.cursor/`, `scripts/`, `AGENTS.md`, `.godot-version`, or `tools/ci_check.gd`.
-3. Set `.godot-version` to the same tag as the home editor (example: `4.7-stable` or `4.4.1-stable`). Match `config/features` in `project.godot`.
-4. If art or audio files are huge, enable Git LFS before the first large commit.
-5. Commit and `git push`.
-6. Open the clone in Cursor (WSL path or a synced Windows folder). Do not force-push import caches.
+Use **Boss Game** (singular). Do not import `Boss Game Backup`. Open `~/game-sync` in Cursor and in the Godot editor afterward.
 
 ## Upgrade Cursor for this workflow
 
