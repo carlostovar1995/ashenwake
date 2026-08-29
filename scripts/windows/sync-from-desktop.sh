@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Run from the Windows desktop shortcut (via WSL). Pulls, commits local
-# game edits if needed, wires GitHub once, then pushes Origin + GitHub.
+# Run from the Windows desktop shortcut (via WSL). Pulls latest scripts,
+# commits local game edits if needed, then pushes Origin + GitHub using `gh`.
 set -euo pipefail
 
 export PATH="${HOME}/.local/bin:${PATH}"
@@ -13,15 +13,23 @@ if [[ ! -d "${REPO}/.git" ]]; then
 fi
 
 cd "${REPO}"
-chmod +x scripts/*.sh 2>/dev/null || true
+chmod +x scripts/*.sh scripts/windows/*.sh 2>/dev/null || true
 
-echo "==> Updating from Origin"
-git fetch origin
-if git status --porcelain | grep -q .; then
-  git pull --rebase origin main || git pull origin main
-else
-  git pull origin main
+if [[ "${1:-}" != "--after-pull" ]]; then
+  echo "==> Updating from Origin (including this shortcut script)"
+  git fetch origin
+  if [[ -n "$(git status --porcelain)" ]]; then
+    git stash push -u -m "desktop-sync-pre-pull" || true
+    git pull --rebase origin main || git pull origin main
+    git stash pop || true
+  else
+    git pull origin main
+  fi
+  exec bash "${REPO}/scripts/windows/sync-from-desktop.sh" --after-pull
 fi
+
+# shellcheck source=../github-git.sh
+source "${REPO}/scripts/github-git.sh"
 
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "==> Saving local game changes"
@@ -51,3 +59,5 @@ fi
 echo
 echo "Done. Origin and GitHub should both be up to date."
 echo "GitHub: https://github.com/carlostovar1995/game-sync"
+echo "Shortcut: C:\\Users\\carlo\\OneDrive\\Desktop\\Sync Boss Fighter.lnk"
+echo "          (or C:\\Users\\carlo\\Desktop\\Sync Boss Fighter.lnk)"

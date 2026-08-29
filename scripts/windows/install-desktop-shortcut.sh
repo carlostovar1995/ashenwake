@@ -14,4 +14,9 @@ fi
 WIN_PS1="$(wslpath -w "$PS1")"
 echo "Installing desktop shortcut..."
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$WIN_PS1"
+
+echo
+echo "Usual locations:"
+echo "  C:\\Users\\carlo\\OneDrive\\Desktop\\Sync Boss Fighter.lnk"
+echo "  C:\\Users\\carlo\\Desktop\\Sync Boss Fighter.lnk"
 echo "Look on your Windows desktop for 'Sync Boss Fighter'."
