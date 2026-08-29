@@ -1,10 +1,12 @@
-# Places "Sync Boss Fighter" on the Windows desktop.
-# The .lnk starts PowerShell (not `wsl -e bash`).
-$ErrorActionPreference = "Stop"
+# Places a clean, distro-pinned "Sync Boss Fighter" launcher on Windows.
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$DistroName,
+    [Parameter(Mandatory = $true)]
+    [string]$LinuxUser
+)
 
-$ps1Src = Join-Path $PSScriptRoot "Sync-Boss-Fighter.ps1"
-$batSrc = Join-Path $PSScriptRoot "Sync-Boss-Fighter.bat"
-if (-not (Test-Path $ps1Src)) { throw "Missing $ps1Src" }
+$ErrorActionPreference = "Stop"
 
 $desks = New-Object System.Collections.Generic.List[string]
 $primary = [Environment]::GetFolderPath("Desktop")
@@ -19,28 +21,49 @@ foreach ($extra in @(
 }
 
 $created = @()
-$pwsh = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 
 foreach ($desk in $desks) {
-    $ps1Dest = Join-Path $desk "Sync-Boss-Fighter.ps1"
-    $batDest = Join-Path $desk "Sync Boss Fighter.bat"
+    # Remove every old launcher so Windows cannot keep opening the stale
+    # `wsl -e bash` version from OneDrive Desktop or the local Desktop.
+    foreach ($oldName in @(
+            "Sync Boss Fighter.lnk",
+            "Sync Boss Fighter.bat",
+            "Sync-Boss-Fighter.ps1",
+            "Boss Fighter Sync.cmd"
+        )) {
+        Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $desk $oldName)
+    }
+
+    $cmdPath = Join-Path $desk "Boss Fighter Sync.cmd"
     $lnkPath = Join-Path $desk "Sync Boss Fighter.lnk"
-    Copy-Item -Force $ps1Src $ps1Dest
-    if (Test-Path $batSrc) { Copy-Item -Force $batSrc $batDest }
+
+    # DistroName comes from $WSL_DISTRO_NAME in the Ubuntu shell that runs
+    # the installer. /bin/bash is absolute: no PATH lookup can fail.
+    $cmd = @"
+@echo off
+title Sync Boss Fighter
+echo Using WSL distro: $DistroName
+echo.
+"$env:SystemRoot\System32\wsl.exe" --distribution "$DistroName" --exec /bin/bash /home/$LinuxUser/game-sync/scripts/windows/sync-from-desktop.sh
+echo.
+pause
+"@
+    Set-Content -LiteralPath $cmdPath -Value $cmd -Encoding ASCII
 
     $shell = New-Object -ComObject WScript.Shell
     $lnk = $shell.CreateShortcut($lnkPath)
-    $lnk.TargetPath = $pwsh
-    $lnk.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$ps1Dest`""
+    $lnk.TargetPath = $cmdPath
     $lnk.WorkingDirectory = $desk
     $lnk.WindowStyle = 1
     $lnk.Description = "Pull, save, and push Boss Fighter to Origin and GitHub"
-    $lnk.IconLocation = "$pwsh,0"
+    $lnk.IconLocation = "imageres.dll,109"
     $lnk.Save()
 
     $created += $lnkPath
 }
 
-Write-Host "Desktop shortcut created at:"
+Write-Host "Removed old launchers and created a distro-pinned shortcut:"
+Write-Host "  WSL distro: $DistroName"
+Write-Host "  Linux user: $LinuxUser"
 foreach ($p in $created) { Write-Host "  $p" }
-Write-Host "Double-click 'Sync Boss Fighter' (the icon, not the .ps1)."
+Write-Host "Double-click 'Sync Boss Fighter'."

@@ -12,11 +12,16 @@ if [[ ! -f "$PS1" ]]; then
 fi
 
 WIN_PS1="$(wslpath -w "$PS1")"
-echo "Installing desktop shortcut..."
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$WIN_PS1"
+DISTRO="${WSL_DISTRO_NAME:-}"
+if [[ -z "$DISTRO" ]]; then
+  echo "WSL_DISTRO_NAME is missing. Open the Ubuntu app from Start and run this script there." >&2
+  exit 1
+fi
+
+echo "Installing desktop shortcut for WSL distro: ${DISTRO}"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$WIN_PS1" \
+  -DistroName "$DISTRO" \
+  -LinuxUser "$USER"
 
 echo
-echo "Usual locations:"
-echo "  C:\\Users\\carlo\\OneDrive\\Desktop\\Sync Boss Fighter.lnk"
-echo "  C:\\Users\\carlo\\Desktop\\Sync Boss Fighter.lnk"
-echo "Look on your Windows desktop for 'Sync Boss Fighter'."
+echo "Old launchers were removed. Look for the new 'Sync Boss Fighter'."

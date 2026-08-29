@@ -122,9 +122,9 @@ The first click may open a GitHub browser login. After that, one click keeps bot
 - `C:\Users\carlo\OneDrive\Desktop\Sync Boss Fighter.lnk`
 - `C:\Users\carlo\Desktop\Sync Boss Fighter.lnk`
 
-There is also `Sync-Boss-Fighter.ps1` in the same folder (the real launcher). The `.lnk` starts PowerShell, which runs the **Ubuntu** distro with `/bin/bash`. Do not use plain `wsl` — that is often Docker and has no bash.
+There is also `Boss Fighter Sync.cmd` in the same folder. The installer reads the exact distro name (`$WSL_DISTRO_NAME`) and Linux username from the Ubuntu window, then hard-codes both into that launcher. It removes all older `Sync Boss Fighter` launchers first, so it never uses the default WSL distro (often Docker).
 
-**Install the icon — pick one:**
+**Reinstall the working icon in the Ubuntu app from the Start menu:**
 
 In the **Ubuntu** app from the Start menu:
 
@@ -134,14 +134,7 @@ git pull
 ./scripts/windows/install-desktop-shortcut.sh
 ```
 
-Or in **Windows PowerShell** (note `-d Ubuntu`):
-
-```powershell
-wsl -l -v
-wsl -d Ubuntu -- /bin/bash -lc 'cd "$HOME/game-sync" && git pull && ./scripts/windows/install-desktop-shortcut.sh'
-```
-
-If Windows says `Ubuntu` is invalid, use the exact name from `wsl -l -v` (for example `Ubuntu-24.04`).
+Do not install it through plain `wsl` in PowerShell; the installer must run inside the working Ubuntu terminal.
 
 ## GitHub mirror
 
