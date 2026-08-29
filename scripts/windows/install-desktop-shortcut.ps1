@@ -1,4 +1,5 @@
-# Places a clean, distro-pinned "Sync Boss Fighter" launcher on Windows.
+# Places a clean "Sync Boss Fighter" launcher on Windows.
+# The shortcut runs PowerShell so cmd.exe cannot pass quoted distro names to WSL.
 param(
     [string]$DistroHint = "",
     [Parameter(Mandatory = $true)]
@@ -7,40 +8,29 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Read canonical distro names from the Windows WSL registry. This avoids
-# stale/misleading $WSL_DISTRO_NAME values such as "Ubuntu" when Windows
-# registered the distro as "Ubuntu-24.04".
-$candidates = New-Object System.Collections.Generic.List[string]
-$lxss = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss"
-if (Test-Path $lxss) {
-    foreach ($key in Get-ChildItem $lxss) {
-        $name = (Get-ItemProperty $key.PSPath -ErrorAction SilentlyContinue).DistributionName
-        if ($name -and $name -notlike "docker-desktop*" -and -not $candidates.Contains($name)) {
-            [void]$candidates.Add($name)
-        }
-    }
-}
-if ($DistroHint -and $DistroHint -notlike "docker-desktop*" -and -not $candidates.Contains($DistroHint)) {
-    [void]$candidates.Add($DistroHint)
+$sourcePs1 = Join-Path $PSScriptRoot "Sync-Boss-Fighter.ps1"
+if (-not (Test-Path -LiteralPath $sourcePs1)) {
+    throw "Missing $sourcePs1"
 }
 
-$DistroName = $null
-$wsl = Join-Path $env:SystemRoot "System32\wsl.exe"
-$repoScript = "/home/$LinuxUser/game-sync/scripts/windows/sync-from-desktop.sh"
-foreach ($candidate in $candidates) {
-    Write-Host "Testing WSL distro: $candidate"
-    & $wsl --distribution $candidate --exec /bin/sh -c "test -x /bin/bash && test -f '$repoScript'" 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        $DistroName = $candidate
+$launcherPs1 = Join-Path $env:USERPROFILE "Sync-Boss-Fighter.ps1"
+Copy-Item -LiteralPath $sourcePs1 -Destination $launcherPs1 -Force
+
+$iconIco = Join-Path $env:USERPROFILE "game-sync-icon.ico"
+$wslIcon = "\\wsl`$\$LinuxUser\game-sync\icon.ico"
+foreach ($distroGuess in @($DistroHint, "Ubuntu")) {
+    if (-not $distroGuess) { continue }
+    $candidate = "\\wsl`$\$distroGuess\home\$LinuxUser\game-sync\icon.ico"
+    if (Test-Path -LiteralPath $candidate) {
+        $wslIcon = $candidate
         break
     }
 }
-if (-not $DistroName) {
-    Write-Host "Registered WSL distros:"
-    & $wsl --list --verbose
-    throw "Could not find the distro containing $repoScript"
+if (Test-Path -LiteralPath $wslIcon) {
+    Copy-Item -LiteralPath $wslIcon -Destination $iconIco -Force
 }
 
+$powershell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 $desks = New-Object System.Collections.Generic.List[string]
 $primary = [Environment]::GetFolderPath("Desktop")
 if ($primary) { [void]$desks.Add($primary) }
@@ -56,8 +46,6 @@ foreach ($extra in @(
 $created = @()
 
 foreach ($desk in $desks) {
-    # Remove every old launcher so Windows cannot keep opening the stale
-    # `wsl -e bash` version from OneDrive Desktop or the local Desktop.
     foreach ($oldName in @(
             "Sync Boss Fighter.lnk",
             "Sync Boss Fighter.bat",
@@ -69,33 +57,33 @@ foreach ($desk in $desks) {
 
     $cmdPath = Join-Path $desk "Boss Fighter Sync.cmd"
     $lnkPath = Join-Path $desk "Sync Boss Fighter.lnk"
-
-    # The distro was proven above to contain /bin/bash and the sync script.
-    $cmd = @"
-@echo off
-title Sync Boss Fighter
-echo Using WSL distro: $DistroName
-echo.
-"$env:SystemRoot\System32\wsl.exe" --distribution "$DistroName" --exec /bin/bash /home/$LinuxUser/game-sync/scripts/windows/sync-from-desktop.sh
-echo.
-pause
-"@
-    Set-Content -LiteralPath $cmdPath -Value $cmd -Encoding ASCII
+    $cmdLines = @(
+        "@echo off",
+        "title Sync Boss Fighter",
+        "echo Syncing Boss Fighter to Origin and GitHub...",
+        "echo.",
+        "`"$powershell`" -NoProfile -ExecutionPolicy Bypass -File `"$launcherPs1`""
+    )
+    [System.IO.File]::WriteAllText($cmdPath, ($cmdLines -join "`r`n") + "`r`n")
 
     $shell = New-Object -ComObject WScript.Shell
     $lnk = $shell.CreateShortcut($lnkPath)
-    $lnk.TargetPath = $cmdPath
-    $lnk.WorkingDirectory = $desk
+    $lnk.TargetPath = $powershell
+    $lnk.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$launcherPs1`""
+    $lnk.WorkingDirectory = $env:USERPROFILE
     $lnk.WindowStyle = 1
     $lnk.Description = "Pull, save, and push Boss Fighter to Origin and GitHub"
-    $lnk.IconLocation = "imageres.dll,109"
+    if (Test-Path -LiteralPath $iconIco) {
+        $lnk.IconLocation = "$iconIco,0"
+    } else {
+        $lnk.IconLocation = "imageres.dll,109"
+    }
     $lnk.Save()
 
     $created += $lnkPath
 }
 
-Write-Host "Removed old launchers and created a distro-pinned shortcut:"
-Write-Host "  WSL distro: $DistroName"
-Write-Host "  Linux user: $LinuxUser"
+Write-Host "Installed PowerShell desktop shortcut (resolves Ubuntu at click time):"
+Write-Host "  Launcher: $launcherPs1"
 foreach ($p in $created) { Write-Host "  $p" }
 Write-Host "Double-click 'Sync Boss Fighter'."

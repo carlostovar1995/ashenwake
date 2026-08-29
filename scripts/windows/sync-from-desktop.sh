@@ -3,6 +3,10 @@
 # commits local game edits if needed, then pushes Origin + GitHub using `gh`.
 set -euo pipefail
 
+# WSL can import Windows HOME (C:\Users\...), which breaks ~/game-sync.
+if [[ "${HOME:-}" != /home/* ]]; then
+  export HOME="/home/$(id -un)"
+fi
 export PATH="${HOME}/.local/bin:${PATH}"
 
 REPO="${HOME}/game-sync"
