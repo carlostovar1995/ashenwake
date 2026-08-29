@@ -1,0 +1,9 @@
+{
+  "name": "Godot game-sync",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "user": "ubuntu",
+  "install": "./scripts/cloud-agent-install.sh"
+}

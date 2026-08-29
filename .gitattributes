@@ -1,0 +1,14 @@
+# Normalize EOL for text files so Windows, WSL, and Cloud Agents stay consistent.
+* text=auto eol=lf
+
+# Treat Godot resources as text for diffs when they are text-formatted.
+*.gd text
+*.tscn text
+*.tres text
+*.godot text
+*.import text
+*.md text
+*.json text
+*.sh text eol=lf
+*.svg text
+*.uid text

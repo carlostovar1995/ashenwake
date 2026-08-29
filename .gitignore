@@ -1,0 +1,30 @@
+# Godot 4+ generated cache (do not commit)
+.godot/
+.nomedia
+
+# Imported translations generated from CSV
+*.translation
+
+# Export credentials and local export output
+export.cfg
+export_credentials.cfg
+/android/
+/export/
+/build/
+
+# Godot .NET / Mono (if you switch later)
+.mono/
+data_*/
+mono_crash.*.json
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+
+# Editor / tooling
+*.swp
+.vscode/
+.idea/
+agent-tools/

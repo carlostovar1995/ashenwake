@@ -1,0 +1,16 @@
+---
+description: Godot 4 GDScript, scenes, and project.godot conventions for this repo
+globs: "*.{gd,tscn,tres,uid,godot,import}"
+alwaysApply: false
+---
+
+# Godot conventions
+
+- This is Godot 4 GDScript. Do not introduce C# / .NET unless the user explicitly switches the project.
+- Never edit or commit `.godot/` — it is import cache. Regenerate with `godot --headless --path . --import`.
+- Keep `res://` paths valid. After adding or renaming scenes/scripts, run headless import so `.uid` files stay consistent.
+- Prefer text-format `.tscn` / `.tres`. Do not convert resources to binary unless asked.
+- Put scenes in `scenes/`, gameplay scripts in `scripts/`, one-off CI/tool scripts in `tools/`.
+- Do not change `uid://` identifiers on existing resources unless Godot regenerated them after a real rename.
+- After code or scene changes, verify with `./scripts/verify-headless.sh` (import + `tools/ci_check.gd`). Playtesting in the editor happens on the Windows home PC, not in Cloud Agents.
+- Pin the editor with `.godot-version`. If you bump Godot, update that file and `config/features` in `project.godot` together.
