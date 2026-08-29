@@ -18,12 +18,17 @@ fi
 
 cd "${REPO}"
 chmod +x scripts/*.sh scripts/windows/*.sh 2>/dev/null || true
+# shellcheck source=../version.sh
+source "${REPO}/scripts/version.sh"
 
 if [[ "${1:-}" != "--after-pull" ]]; then
   if [[ -n "$(git status --porcelain)" ]]; then
     echo "==> Saving local game changes"
+    NEW_VER="$(bump_patch)"
+    write_version "$NEW_VER"
+    echo "    Version v${NEW_VER}"
     git add -A
-    git commit -m "Sync from Windows $(date -Iseconds)" || true
+    git commit -m "Sync from Windows $(date -Iseconds) (v${NEW_VER})" || true
   fi
   echo "==> Updating from Origin (including this shortcut script)"
   git fetch origin
@@ -45,17 +50,25 @@ if ! gh auth status >/dev/null 2>&1; then
   gh auth login
 fi
 
+VER="$(read_version)"
+if ! tag_exists "$VER"; then
+  echo "==> Tagging v${VER}"
+  create_tag "$VER" "v${VER} — desktop sync $(date -Iseconds)"
+fi
+
 if ! git remote get-url github >/dev/null 2>&1; then
   echo "==> Linking GitHub mirror"
   ./scripts/setup-github-remote.sh carlostovar1995/game-sync
 else
-  echo "==> Pushing Origin + GitHub"
+  echo "==> Pushing Origin + GitHub (including tags)"
   ./scripts/push-both.sh
 fi
 
 echo
 echo "Done. Origin and GitHub should both be up to date."
+echo "Version: v${VER}"
 echo "GitHub: https://github.com/carlostovar1995/game-sync"
+echo "Tags:   https://github.com/carlostovar1995/game-sync/tags"
 echo
 echo "Desktop icon:"
 echo "  C:\\Users\\carlo\\OneDrive\\Desktop\\Sync Boss Fighter.lnk"

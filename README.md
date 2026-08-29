@@ -98,15 +98,16 @@ Optional later: keep the home PC awake and use **Remote Control** (Settings → 
 ```bash
 ./scripts/cloud-agent-install.sh   # download Godot, symlink `godot`, import
 ./scripts/verify-headless.sh       # import + tools/ci_check.gd
-./scripts/push-both.sh             # git push to Origin and GitHub
+./scripts/push-both.sh             # git push branch + tags to Origin and GitHub
 ./scripts/setup-github-remote.sh carlostovar1995/game-sync
+./scripts/version.sh current       # print SemVer (VERSION file)
 ```
 
 See [AGENTS.md](AGENTS.md) for agent-facing conventions.
 
 ## Desktop sync icon (Windows)
 
-Double-click **Sync Boss Fighter** on the desktop to pull, save local edits, and push to Origin and GitHub. Install it once from Ubuntu:
+Double-click **Sync Boss Fighter** on the desktop to pull, save local edits, bump a SemVer patch, tag it, and push the commit plus tag to Origin and GitHub. Install it once from Ubuntu:
 
 ```bash
 cd ~/game-sync
@@ -116,6 +117,28 @@ chmod +x scripts/windows/*.sh
 ```
 
 The first click may open a GitHub browser login. After that, one click keeps both remotes updated. GitHub pushes use the `gh` login (not Windows saved passwords).
+
+## Versions and restore points
+
+Classic SemVer: `MAJOR.MINOR.PATCH`, stored in `VERSION` and `project.godot`. Git tags use the `v` prefix (`v0.1.1`).
+
+| Tag | Meaning |
+| --- | --- |
+| `v0.1.0` | First imported Boss Fighter (rollback if the game breaks) |
+| `v0.1.1` | Versioning + desktop sync tags |
+| `v0.1.2+` | Each later desktop sync that saved local changes |
+
+A dirty sync bumps the **patch** (`0.1.1` → `0.1.2`) and uploads `v0.1.2` to both remotes. Ask for a **minor** bump (`0.2.0`) when a real gameplay milestone lands, or **major** (`1.0.0`) for a release.
+
+Restore a known-good game (does not delete history):
+
+```bash
+cd ~/game-sync
+git fetch origin --tags
+git checkout v0.1.0
+```
+
+Play that snapshot in Godot, then `git checkout main` to return to the latest. Tag list: [github.com/carlostovar1995/game-sync/tags](https://github.com/carlostovar1995/game-sync/tags).
 
 **File path of the icon** (whichever Desktop Windows actually uses):
 

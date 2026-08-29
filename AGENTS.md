@@ -13,9 +13,11 @@ This repository is **Boss Fighter**, a Godot 4.7 GDScript 5vBoss game with Leagu
 - `scripts/verify-headless.sh` — import + script check. Run this after gameplay edits.
 - `scripts/setup-origin.sh` / `scripts/ensure-origin-path.sh` — WSL Origin CLI + PATH. `scripts/setup-windows.ps1` jumps from PowerShell into WSL.
 - `scripts/import-local-godot.sh` — copy a Windows/WSL Godot project into this repo without dropping the kit. Use `--push` to commit and push.
-- `scripts/push-both.sh` — push the current branch to Origin and GitHub.
+- `VERSION` — SemVer `MAJOR.MINOR.PATCH`. Git tags are `vMAJOR.MINOR.PATCH`.
+- `scripts/version.sh` — `current`, `bump-patch`, `tag`. Desktop sync bumps a patch when it saves local edits.
+- `scripts/push-both.sh` — push the current branch and tags to Origin and GitHub.
 - `scripts/setup-github-remote.sh` — add `github` remote (`carlostovar1995/game-sync`) and push.
-- `scripts/windows/install-desktop-shortcut.sh` — put **Sync Boss Fighter** on the Windows desktop. The icon runs `scripts/windows/sync-from-desktop.sh` (pull, optional commit, GitHub link, push-both).
+- `scripts/windows/install-desktop-shortcut.sh` — put **Sync Boss Fighter** on the Windows desktop. The icon runs `scripts/windows/sync-from-desktop.sh` (pull, optional commit, SemVer tag, GitHub link, push-both).
 
 ## Commands
 
@@ -31,7 +33,7 @@ godot --headless --path . --import  # import only
 
 1. Edit GDScript and scenes in this checkout.
 2. Run `./scripts/verify-headless.sh`. Do not skip import after adding resources.
-3. Commit, then `./scripts/push-both.sh` so Origin and GitHub stay in sync.
+3. Commit, then `./scripts/push-both.sh` so Origin and GitHub stay in sync (branch + tags). Desktop sync auto-bumps the patch version when it commits.
 4. Do not treat Cloud Agent “run the game” as playtesting: VMs are Linux, usually without a GPU. Headless import and `--check-only` are the verification bar here.
 
 ## Do not

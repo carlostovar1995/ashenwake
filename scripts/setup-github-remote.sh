@@ -43,6 +43,7 @@ fi
 echo "Pushing main to GitHub (this can take a while)..."
 # GitHub is a mirror; Origin remains the upstream used by plain `git pull`.
 github_git push github main
+github_git push github --tags
 git branch --set-upstream-to=origin/main main >/dev/null
 
 echo
