@@ -2,8 +2,8 @@
 # Copy a local Godot project into this Origin repo without dropping the Cursor kit.
 # Run in WSL, from the game-sync clone (or pass --repo).
 #
-#   ./scripts/import-local-godot.sh "/mnt/c/Users/carlo/OneDrive/Desktop/Projects/Boss Games"
-#   ./scripts/import-local-godot.sh --push "C:\Users\carlo\OneDrive\Desktop\Projects\Boss Games"
+#   ./scripts/import-local-godot.sh "/mnt/c/Users/carlo/OneDrive/Desktop/Projects/Boss Game"
+#   ./scripts/import-local-godot.sh --push "C:\Users\carlo\OneDrive\Desktop\Projects\Boss Game"
 set -euo pipefail
 
 usage() {
@@ -79,7 +79,7 @@ if [[ ! -e "$SRC" ]]; then
   echo "Searching for project.godot (this can take a minute)..." >&2
   find /mnt/c/Users/"${USER:-carlo}" -maxdepth 6 -name project.godot 2>/dev/null | head -n 20 || true
   echo
-  echo "Or drag the Boss Games folder from File Explorer into this Ubuntu window to paste its real path." >&2
+  echo "Or drag the Godot project folder from File Explorer into this Ubuntu window to paste its real path." >&2
   exit 1
 fi
 
@@ -168,7 +168,7 @@ if [[ "$PUSH" -eq 1 ]]; then
   if git diff --cached --quiet; then
     echo "No changes to commit."
   else
-    git commit -m "Import Godot project from local Boss Games folder"
+    git commit -m "Import Godot project from local Boss Game folder"
   fi
   git push -u origin HEAD
   echo "Pushed. Cloud Agents can use this revision."
@@ -176,5 +176,5 @@ else
   echo
   echo "Review, then:"
   echo "  cd \"$REPO\""
-  echo "  git add -A && git commit -m 'Import Godot project from local Boss Games folder' && git push"
+  echo "  git add -A && git commit -m 'Import Godot project from local Boss Game folder' && git push"
 fi
