@@ -164,6 +164,16 @@ grep '^config/name=' project.godot || true
 
 if [[ "$PUSH" -eq 1 ]]; then
   export PATH="${HOME}/.local/bin:${PATH}"
+  if [[ -z "$(git config user.email || true)" || -z "$(git config user.name || true)" ]]; then
+    echo
+    echo "Git needs a name and email before it can commit. In this same Ubuntu window run:"
+    echo "  git config --global user.name \"Carlos Tovar\""
+    echo "  git config --global user.email \"carlostovar1995@gmail.com\""
+    echo "  git add -A"
+    echo "  git commit -m \"Import Godot project from local Boss Game folder\""
+    echo "  git push -u origin HEAD"
+    exit 1
+  fi
   git add -A
   if git diff --cached --quiet; then
     echo "No changes to commit."
