@@ -41,15 +41,9 @@ if (-not $distro) {
 Write-Host "Using WSL distro: $distro"
 $bashLine = 'export PATH="$HOME/.local/bin:$PATH"; exec /bin/bash "$HOME/game-sync/scripts/windows/sync-from-desktop.sh"'
 
-# -- not -e: -e bash looks up "bash" on an empty PATH.
+# Never use default `wsl` — it is often Docker, which has no /bin/bash.
 & wsl.exe -d $distro -- /bin/bash -lc $bashLine
 $code = $LASTEXITCODE
-
-if ($code -ne 0) {
-    Write-Host "Retry without distro name..." -ForegroundColor Yellow
-    & wsl.exe -- /bin/bash -lc $bashLine
-    $code = $LASTEXITCODE
-}
 
 Write-Host ""
 if ($code -eq 0) {

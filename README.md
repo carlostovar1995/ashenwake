@@ -122,13 +122,26 @@ The first click may open a GitHub browser login. After that, one click keeps bot
 - `C:\Users\carlo\OneDrive\Desktop\Sync Boss Fighter.lnk`
 - `C:\Users\carlo\Desktop\Sync Boss Fighter.lnk`
 
-There is also `Sync-Boss-Fighter.ps1` in the same folder (the real launcher). The `.lnk` starts PowerShell, which runs Ubuntu via `wsl -- /bin/bash` (not `wsl -e bash`).
+There is also `Sync-Boss-Fighter.ps1` in the same folder (the real launcher). The `.lnk` starts PowerShell, which runs the **Ubuntu** distro with `/bin/bash`. Do not use plain `wsl` — that is often Docker and has no bash.
 
-If the icon still says `execvpe(bash)`, run this **in Windows PowerShell** (not Ubuntu) to rebuild the shortcut from the clone:
+**Install the icon — pick one:**
+
+In the **Ubuntu** app from the Start menu:
+
+```bash
+cd ~/game-sync
+git pull
+./scripts/windows/install-desktop-shortcut.sh
+```
+
+Or in **Windows PowerShell** (note `-d Ubuntu`):
 
 ```powershell
-wsl -- /bin/bash -lc 'cd "$HOME/game-sync" && git pull && ./scripts/windows/install-desktop-shortcut.sh'
+wsl -l -v
+wsl -d Ubuntu -- /bin/bash -lc 'cd "$HOME/game-sync" && git pull && ./scripts/windows/install-desktop-shortcut.sh'
 ```
+
+If Windows says `Ubuntu` is invalid, use the exact name from `wsl -l -v` (for example `Ubuntu-24.04`).
 
 ## GitHub mirror
 
