@@ -12,6 +12,7 @@ This repository is a **Godot 4 GDScript** game plus a Cursor Cloud Agent kit. Th
 - `scripts/cloud-agent-install.sh` — download Godot Linux editor, symlink `godot`, `godot --headless --import`.
 - `scripts/verify-headless.sh` — import + script check. Run this after gameplay edits.
 - `scripts/setup-origin.sh` / `scripts/ensure-origin-path.sh` — WSL Origin CLI + PATH. `scripts/setup-windows.ps1` jumps from PowerShell into WSL.
+- `scripts/import-local-godot.sh` — copy a Windows/WSL Godot project into this repo without dropping the kit. Use `--push` to commit and push.
 
 ## Commands
 
