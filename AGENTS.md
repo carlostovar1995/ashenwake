@@ -13,6 +13,8 @@ This repository is **Boss Fighter**, a Godot 4.7 GDScript 5vBoss game with Leagu
 - `scripts/verify-headless.sh` — import + script check. Run this after gameplay edits.
 - `scripts/setup-origin.sh` / `scripts/ensure-origin-path.sh` — WSL Origin CLI + PATH. `scripts/setup-windows.ps1` jumps from PowerShell into WSL.
 - `scripts/import-local-godot.sh` — copy a Windows/WSL Godot project into this repo without dropping the kit. Use `--push` to commit and push.
+- `scripts/push-both.sh` — push the current branch to Origin and GitHub.
+- `scripts/setup-github-remote.sh USER/REPO` — add the GitHub mirror remote and push.
 
 ## Commands
 
@@ -28,7 +30,7 @@ godot --headless --path . --import  # import only
 
 1. Edit GDScript and scenes in this checkout.
 2. Run `./scripts/verify-headless.sh`. Do not skip import after adding resources.
-3. Open a PR. The home PC pulls and playtests in the Godot editor.
+3. Commit, then `./scripts/push-both.sh` so Origin and GitHub stay in sync.
 4. Do not treat Cloud Agent “run the game” as playtesting: VMs are Linux, usually without a GPU. Headless import and `--check-only` are the verification bar here.
 
 ## Do not

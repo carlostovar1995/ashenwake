@@ -71,7 +71,7 @@ On the **home PC** and **laptop**:
 
 - Update Cursor to the latest client.
 - Confirm you can start a Cloud Agent against `carlos-tovar/game-sync` from the Agents Window.
-- You do **not** need a separate GitHub remote. This Origin repo is enough.
+- **Origin** is what Cursor Agents use. **GitHub** is an optional public/private mirror so people without Cursor can clone. See [GitHub mirror](#github-mirror) below.
 - Indexing already ignores `.godot/` via `.cursorignore`.
 
 On **phone**:
@@ -83,7 +83,7 @@ On **phone**:
 
 | Where | What you do |
 | --- | --- |
-| Home PC | Cursor + Godot editor. In WSL: `git pull`, playtest, `git push`. |
+| Home PC | Cursor + Godot editor. In WSL: `git pull`, playtest, `./scripts/push-both.sh`. |
 | Laptop | Same Origin clone in Cursor, or start a Cloud Agent from the Agents Window / [cursor.com/agents](https://cursor.com/agents). |
 | Phone | Start, follow, review, and merge that Cloud Agent. No local Godot. |
 
@@ -98,9 +98,41 @@ Optional later: keep the home PC awake and use **Remote Control** (Settings → 
 ```bash
 ./scripts/cloud-agent-install.sh   # download Godot, symlink `godot`, import
 ./scripts/verify-headless.sh       # import + tools/ci_check.gd
+./scripts/push-both.sh             # git push to Origin and GitHub
+./scripts/setup-github-remote.sh YOURUSER/game-sync
 ```
 
 See [AGENTS.md](AGENTS.md) for agent-facing conventions.
+
+## GitHub mirror
+
+Cursor Cloud Agents keep using Origin. GitHub is a second copy for sharing with people who are not on Cursor.
+
+GitHub **rejects files over 100MB**. This repo does not track the Godot Windows editor or the huge source zips under `assets/_incoming/` (the extracted models are already in `assets/`). Download Godot from [godotengine.org](https://godotengine.org/download).
+
+**Once, in Ubuntu (`~/game-sync`):**
+
+1. Create an empty repo on [github.com/new](https://github.com/new) named `game-sync` (private is fine, **no** README).
+2. Sign GitHub into WSL (browser login):
+
+```bash
+gh auth login
+```
+
+If `gh` is missing: `sudo apt update && sudo apt install -y gh`, or install from [cli.github.com](https://cli.github.com/).
+
+3. Point this clone at that repo and push:
+
+```bash
+cd ~/game-sync
+git pull
+chmod +x scripts/setup-github-remote.sh scripts/push-both.sh
+./scripts/setup-github-remote.sh YOUR_GITHUB_USER/game-sync
+```
+
+After that, `./scripts/push-both.sh` updates Origin and GitHub together. Collaborators clone `https://github.com/YOUR_GITHUB_USER/game-sync.git` — they do not need Cursor.
+
+If `git pull` says your branch has diverged after a history cleanup, run `git fetch origin && git reset --hard origin/main` in `~/game-sync` (only if you have no uncommitted work).
 
 ## License
 

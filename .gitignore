@@ -28,3 +28,12 @@ Desktop.ini
 .vscode/
 .idea/
 agent-tools/
+*.lnk
+
+# Too large for GitHub (100MB limit). Download Godot from godotengine.org.
+# Asset kits already extracted under assets/.
+_incoming/godot/
+_incoming/godot472.zip
+assets/_incoming/universal_base_characters_standard.zip
+assets/_incoming/modular_outfits_fantasy_standard.zip
+

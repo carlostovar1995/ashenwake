@@ -180,7 +180,7 @@ if [[ "$PUSH" -eq 1 ]]; then
   else
     git commit -m "Import Godot project from local Boss Game folder"
   fi
-  git push -u origin HEAD
+  ./scripts/push-both.sh
   echo "Pushed. Cloud Agents can use this revision."
 else
   echo
