@@ -1,12 +1,45 @@
 # Places a clean, distro-pinned "Sync Boss Fighter" launcher on Windows.
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$DistroName,
+    [string]$DistroHint = "",
     [Parameter(Mandatory = $true)]
     [string]$LinuxUser
 )
 
 $ErrorActionPreference = "Stop"
+
+# Read canonical distro names from the Windows WSL registry. This avoids
+# stale/misleading $WSL_DISTRO_NAME values such as "Ubuntu" when Windows
+# registered the distro as "Ubuntu-24.04".
+$candidates = New-Object System.Collections.Generic.List[string]
+$lxss = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss"
+if (Test-Path $lxss) {
+    foreach ($key in Get-ChildItem $lxss) {
+        $name = (Get-ItemProperty $key.PSPath -ErrorAction SilentlyContinue).DistributionName
+        if ($name -and $name -notlike "docker-desktop*" -and -not $candidates.Contains($name)) {
+            [void]$candidates.Add($name)
+        }
+    }
+}
+if ($DistroHint -and $DistroHint -notlike "docker-desktop*" -and -not $candidates.Contains($DistroHint)) {
+    [void]$candidates.Add($DistroHint)
+}
+
+$DistroName = $null
+$wsl = Join-Path $env:SystemRoot "System32\wsl.exe"
+$repoScript = "/home/$LinuxUser/game-sync/scripts/windows/sync-from-desktop.sh"
+foreach ($candidate in $candidates) {
+    Write-Host "Testing WSL distro: $candidate"
+    & $wsl --distribution $candidate --exec /bin/sh -c "test -x /bin/bash && test -f '$repoScript'" 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $DistroName = $candidate
+        break
+    }
+}
+if (-not $DistroName) {
+    Write-Host "Registered WSL distros:"
+    & $wsl --list --verbose
+    throw "Could not find the distro containing $repoScript"
+}
 
 $desks = New-Object System.Collections.Generic.List[string]
 $primary = [Environment]::GetFolderPath("Desktop")
@@ -37,8 +70,7 @@ foreach ($desk in $desks) {
     $cmdPath = Join-Path $desk "Boss Fighter Sync.cmd"
     $lnkPath = Join-Path $desk "Sync Boss Fighter.lnk"
 
-    # DistroName comes from $WSL_DISTRO_NAME in the Ubuntu shell that runs
-    # the installer. /bin/bash is absolute: no PATH lookup can fail.
+    # The distro was proven above to contain /bin/bash and the sync script.
     $cmd = @"
 @echo off
 title Sync Boss Fighter

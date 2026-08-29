@@ -18,9 +18,9 @@ if [[ -z "$DISTRO" ]]; then
   exit 1
 fi
 
-echo "Installing desktop shortcut for WSL distro: ${DISTRO}"
+echo "Installing desktop shortcut (hint: ${DISTRO}; Windows will verify the real name)"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$WIN_PS1" \
-  -DistroName "$DISTRO" \
+  -DistroHint "$DISTRO" \
   -LinuxUser "$USER"
 
 echo
