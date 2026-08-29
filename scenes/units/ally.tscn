@@ -1,0 +1,30 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/units/unit.gd" id="1_unit"]
+[ext_resource type="Script" path="res://scripts/units/unit_controller.gd" id="2_ctrl"]
+[ext_resource type="Script" path="res://scripts/units/movement.gd" id="3_move"]
+[ext_resource type="Script" path="res://scripts/combat/auto_attack.gd" id="4_aa"]
+[ext_resource type="Script" path="res://scripts/ai/ally_ai.gd" id="5_ai"]
+
+[node name="Ally" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("1_unit")
+unit_name = "Ally"
+body_color = Color(0.4, 0.75, 0.45, 1)
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 0.45
+target_desired_distance = 0.4
+
+[node name="Controller" type="Node" parent="."]
+script = ExtResource("2_ctrl")
+
+[node name="Movement" type="Node" parent="."]
+script = ExtResource("3_move")
+
+[node name="AutoAttack" type="Node" parent="."]
+script = ExtResource("4_aa")
+
+[node name="AllyAI" type="Node" parent="."]
+script = ExtResource("5_ai")

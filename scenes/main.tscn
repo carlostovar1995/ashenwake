@@ -1,28 +1,20 @@
-[gd_scene load_steps=2 format=3 uid="uid://bqgamesyncmain01"]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="PackedScene" path="res://scenes/arena/arena.tscn" id="2_arena"]
+[ext_resource type="Script" path="res://scripts/input/camera_rig.gd" id="3_cam"]
+[ext_resource type="Script" path="res://scripts/input/player_input.gd" id="4_input"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="5_hud"]
 
-[node name="Main" type="Control"]
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="Main" type="Node"]
 script = ExtResource("1_main")
 
-[node name="Label" type="Label" parent="."]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -420.0
-offset_top = -24.0
-offset_right = 420.0
-offset_bottom = 24.0
-grow_horizontal = 2
-grow_vertical = 2
-text = "game-sync placeholder — copy your Godot project into this repo"
-horizontal_alignment = 1
+[node name="Arena" parent="." instance=ExtResource("2_arena")]
+
+[node name="CameraRig" type="Node3D" parent="."]
+script = ExtResource("3_cam")
+
+[node name="PlayerInput" type="Node" parent="."]
+script = ExtResource("4_input")
+
+[node name="HUD" parent="." instance=ExtResource("5_hud")]

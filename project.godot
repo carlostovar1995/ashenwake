@@ -8,21 +8,49 @@
 
 config_version=5
 
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
+
 [application]
 
-config/name="Game Sync"
-config/description="Placeholder Godot project. Replace with the game from the Windows home PC; keep the Cursor Cloud Agent kit."
+config/name="Boss Fighter"
+config/description="5vBoss fighter with League of Legends-style controls"
 run/main_scene="res://scenes/main.tscn"
-config/features=PackedStringArray("4.7", "GL Compatibility")
+config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
+
+[audio]
+
+buses/default_bus_layout="res://default_bus_layout.tres"
+
+[autoload]
+
+GameSession="*res://scripts/autoload/game_session.gd"
+ArenaState="*res://scripts/autoload/arena_state.gd"
+CombatMeter="*res://scripts/autoload/combat_meter.gd"
+AudioManager="*res://scripts/autoload/audio_manager.gd"
 
 [display]
 
-window/size/viewport_width=1280
-window/size/viewport_height=720
-window/stretch/mode="canvas_items"
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/window_width_override=1600
+window/size/window_height_override=900
+
+[layer_names]
+
+3d_physics/layer_1="world"
+3d_physics/layer_2="units"
+3d_physics/layer_3="projectiles"
+3d_physics/layer_4="click_floor"
+
+[physics]
+
+3d/default_gravity=24.0
+common/physics_interpolation=true
 
 [rendering]
 
-renderer/rendering_method="gl_compatibility"
-renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/anisotropic_filtering_level=4
+anti_aliasing/quality/msaa_3d=2

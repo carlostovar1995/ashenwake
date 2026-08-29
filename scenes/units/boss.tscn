@@ -1,0 +1,44 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/units/unit.gd" id="1_unit"]
+[ext_resource type="Script" path="res://scripts/units/unit_controller.gd" id="2_ctrl"]
+[ext_resource type="Script" path="res://scripts/units/movement.gd" id="3_move"]
+[ext_resource type="Script" path="res://scripts/combat/auto_attack.gd" id="4_aa"]
+[ext_resource type="Script" path="res://scripts/ai/boss_ai.gd" id="5_ai"]
+
+[node name="Boss" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("1_unit")
+unit_name = "Colossus"
+team = 1
+is_boss = true
+body_color = Color(0.62, 0.12, 0.14, 1)
+radius = 1.35
+height = 4.2
+max_health = 100000.0
+max_mana = 0.0
+move_speed = 4.4
+turn_rate = 5.5
+attack_damage = 78.0
+attack_range = 3.6
+attack_windup = 0.35
+attack_cooldown = 1.35
+is_melee = true
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 0.6
+target_desired_distance = 0.55
+radius = 1.3
+
+[node name="Controller" type="Node" parent="."]
+script = ExtResource("2_ctrl")
+
+[node name="Movement" type="Node" parent="."]
+script = ExtResource("3_move")
+
+[node name="AutoAttack" type="Node" parent="."]
+script = ExtResource("4_aa")
+
+[node name="BossAI" type="Node" parent="."]
+script = ExtResource("5_ai")

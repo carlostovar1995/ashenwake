@@ -1,0 +1,27 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/units/unit.gd" id="1_unit"]
+[ext_resource type="Script" path="res://scripts/units/unit_controller.gd" id="2_ctrl"]
+[ext_resource type="Script" path="res://scripts/units/movement.gd" id="3_move"]
+[ext_resource type="Script" path="res://scripts/combat/auto_attack.gd" id="4_aa"]
+
+[node name="Champion" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("1_unit")
+unit_name = "Spark"
+is_champion = true
+body_color = Color(0.28, 0.58, 1, 1)
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 0.45
+target_desired_distance = 0.4
+
+[node name="Controller" type="Node" parent="."]
+script = ExtResource("2_ctrl")
+
+[node name="Movement" type="Node" parent="."]
+script = ExtResource("3_move")
+
+[node name="AutoAttack" type="Node" parent="."]
+script = ExtResource("4_aa")

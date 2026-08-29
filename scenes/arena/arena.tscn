@@ -1,0 +1,135 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://scripts/arena/arena.gd" id="1_arena"]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 1
+background_color = Color(0.05, 0.055, 0.08, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.42, 0.48, 0.58, 1)
+ambient_light_energy = 0.55
+tonemap_mode = 2
+glow_enabled = false
+fog_enabled = true
+fog_light_color = Color(0.08, 0.09, 0.12, 1)
+fog_density = 0.004
+
+[sub_resource type="NavigationMesh" id="NavigationMesh_1"]
+geometry_parsed_geometry_type = 2
+cell_size = 0.25
+cell_height = 0.25
+agent_height = 2.0
+agent_radius = 0.65
+agent_max_climb = 0.35
+agent_max_slope = 40.0
+region_min_size = 1.0
+region_merge_size = 4.0
+
+[sub_resource type="StandardMaterial3D" id="Mat_floor"]
+albedo_color = Color(0.16, 0.18, 0.22, 1)
+roughness = 0.85
+
+[sub_resource type="CylinderMesh" id="Mesh_floor"]
+material = SubResource("Mat_floor")
+top_radius = 28.0
+bottom_radius = 28.0
+height = 0.5
+radial_segments = 48
+
+[sub_resource type="CylinderShape3D" id="Shape_floor"]
+radius = 28.0
+height = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_ring"]
+albedo_color = Color(0.1, 0.11, 0.14, 1)
+
+[sub_resource type="TorusMesh" id="Mesh_edge"]
+material = SubResource("Mat_ring")
+inner_radius = 27.6
+outer_radius = 29.2
+rings = 12
+ring_segments = 48
+
+[sub_resource type="StandardMaterial3D" id="Mat_obs"]
+albedo_color = Color(0.22, 0.2, 0.26, 1)
+roughness = 0.7
+
+[sub_resource type="BoxMesh" id="Mesh_obs"]
+material = SubResource("Mat_obs")
+size = Vector3(4, 2.4, 4)
+
+[sub_resource type="BoxShape3D" id="Shape_obs"]
+size = Vector3(4, 2.4, 4)
+
+[node name="Arena" type="Node3D"]
+script = ExtResource("1_arena")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.813, -0.441, 0.38, 0, 0.653, 0.757, -0.582, -0.616, 0.531, 0, 24, 0)
+light_energy = 1.15
+light_color = Color(1, 0.96, 0.9, 1)
+shadow_enabled = true
+
+[node name="FillLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 8)
+light_energy = 0.55
+light_color = Color(0.45, 0.6, 1, 1)
+omni_range = 40.0
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("NavigationMesh_1")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
+collision_layer = 1
+collision_mask = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Floor"]
+mesh = SubResource("Mesh_floor")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Floor"]
+shape = SubResource("Shape_floor")
+
+[node name="Edge" type="MeshInstance3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
+mesh = SubResource("Mesh_edge")
+
+[node name="Obstacle1" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, 1.2, 5)
+collision_layer = 1
+collision_mask = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Obstacle1"]
+mesh = SubResource("Mesh_obs")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Obstacle1"]
+shape = SubResource("Shape_obs")
+
+[node name="Obstacle2" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 1.2, -4)
+collision_layer = 1
+collision_mask = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Obstacle2"]
+mesh = SubResource("Mesh_obs")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Obstacle2"]
+shape = SubResource("Shape_obs")
+
+[node name="Obstacle3" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(0.866, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866, 3, 1.2, -12)
+collision_layer = 1
+collision_mask = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Obstacle3"]
+mesh = SubResource("Mesh_obs")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Obstacle3"]
+shape = SubResource("Shape_obs")
+
+[node name="Units" type="Node3D" parent="."]
+
+[node name="ShrinkRing" type="MeshInstance3D" parent="."]
