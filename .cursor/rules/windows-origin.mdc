@@ -17,5 +17,5 @@ source ~/.bashrc
 - Then `origin auth login` and `origin repo clone carlos-tovar/game-sync`.
 - To bring the local Godot game in, run `scripts/import-local-godot.sh --push` from WSL with the Windows path converted to `/mnt/c/...`. Do not ask them to copy files by hand unless the script fails.
 - Day-to-day Godot and Cursor stay on Windows. WSL is only for Origin/git when Windows git cannot talk to Origin.
-- After gameplay edits, `./scripts/push-both.sh` so Origin (Cursor Agents) and GitHub (non-Cursor clones) stay in sync. If the `github` remote is missing, tell them to run `scripts/setup-github-remote.sh USER/game-sync` in WSL after `gh auth login`.
+- After gameplay edits, `./scripts/push-both.sh` so Origin (Cursor Agents) and GitHub (non-Cursor clones) stay in sync. GitHub remote: `carlostovar1995/game-sync`. If it is missing, run `scripts/setup-github-remote.sh` in WSL after `gh auth login`.
 - Docs: https://cursor.com/docs/origin/cli

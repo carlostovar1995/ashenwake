@@ -3,17 +3,17 @@
 # Origin stays the Cursor Cloud Agent host.
 #
 # 1. Create an empty GitHub repo (no README) at https://github.com/new
-#    or run:  gh auth login && gh repo create YOURUSER/game-sync --private
+#    or run:  gh auth login
 # 2. From the game-sync clone:
-#      ./scripts/setup-github-remote.sh YOURUSER/game-sync
+#      ./scripts/setup-github-remote.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 export PATH="${HOME}/.local/bin:${PATH}"
 
-SLUG="${1:-}"
-if [[ -z "$SLUG" || "$SLUG" != */* ]]; then
+SLUG="${1:-carlostovar1995/game-sync}"
+if [[ "$SLUG" != */* ]]; then
   echo "Usage: $0 GITHUB_USER/REPO" >&2
   echo "Example: $0 carlostovar1995/game-sync" >&2
   exit 2

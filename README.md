@@ -99,7 +99,7 @@ Optional later: keep the home PC awake and use **Remote Control** (Settings → 
 ./scripts/cloud-agent-install.sh   # download Godot, symlink `godot`, import
 ./scripts/verify-headless.sh       # import + tools/ci_check.gd
 ./scripts/push-both.sh             # git push to Origin and GitHub
-./scripts/setup-github-remote.sh YOURUSER/game-sync
+./scripts/setup-github-remote.sh carlostovar1995/game-sync
 ```
 
 See [AGENTS.md](AGENTS.md) for agent-facing conventions.
@@ -127,10 +127,10 @@ If `gh` is missing: `sudo apt update && sudo apt install -y gh`, or install from
 cd ~/game-sync
 git pull
 chmod +x scripts/setup-github-remote.sh scripts/push-both.sh
-./scripts/setup-github-remote.sh YOUR_GITHUB_USER/game-sync
+./scripts/setup-github-remote.sh carlostovar1995/game-sync
 ```
 
-After that, `./scripts/push-both.sh` updates Origin and GitHub together. Collaborators clone `https://github.com/YOUR_GITHUB_USER/game-sync.git` — they do not need Cursor.
+After that, `./scripts/push-both.sh` updates Origin and GitHub together. Collaborators clone `https://github.com/carlostovar1995/game-sync.git` — they do not need Cursor.
 
 If `git pull` says your branch has diverged after a history cleanup, run `git fetch origin && git reset --hard origin/main` in `~/game-sync` (only if you have no uncommitted work).
 

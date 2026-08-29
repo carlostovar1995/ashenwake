@@ -16,5 +16,5 @@ if git remote get-url github >/dev/null 2>&1; then
   git push -u github "${BRANCH}"
 else
   echo "No 'github' remote yet. Create a GitHub repo, then:"
-  echo "  ./scripts/setup-github-remote.sh YOURUSER/game-sync"
+  echo "  ./scripts/setup-github-remote.sh carlostovar1995/game-sync"
 fi
