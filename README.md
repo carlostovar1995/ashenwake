@@ -1,199 +1,61 @@
-# game-sync
+# Ashenwake
 
-Private Origin repository for a **Godot 4** game that you can work on from a Windows home PC, a laptop, and a phone. Cloud Agents run Godot **headless** on Linux. Real playtesting stays in the Godot editor on the home machine.
+Godot 4.7 arena fighter (5vBoss, League-style controls). Daily work is a **local Windows or laptop clone**. GitHub is the only remote you need.
 
-Repo: [https://cursor.com/codebase/carlos-tovar/game-sync](https://cursor.com/codebase/carlos-tovar/game-sync)  
-Visibility: **Private**. Change it in settings on that page if you want.
+Repo: [https://github.com/carlostovar1995/ashenwake](https://github.com/carlostovar1995/ashenwake)
 
-This tree currently includes a small placeholder project so Cloud Agents can run `godot --headless --import` before you copy the real game in.
+Home PC folder: `C:\Users\carlo\OneDrive\Desktop\Projects\Ashenwake`
 
 ## What you need
 
-- A paid Cursor plan (Cloud Agents, iOS app, and [cursor.com/agents](https://cursor.com/agents) on Android).
-- Cursor desktop on the home PC and laptop, updated to the latest version (**Help → Check for Updates**). Remote Control of the home PC (optional) needs **3.9.8+**.
-- **Privacy Mode** (not Privacy Mode Legacy). Cloud Agents cannot start on Legacy. Cursor does not train on your code.
-- Origin CLI on macOS, Linux, or **WSL**. It is not available in PowerShell. Docs: [https://cursor.com/docs/origin/cli](https://cursor.com/docs/origin/cli)
+- Git for Windows and a GitHub login (`gh auth login` or Git Credential Manager).
+- Godot **4.7.2** (same as `.godot-version`).
+- Cursor on the machine you are editing on.
 
-## Get the repository on the Windows home PC
+## Home PC
 
-Desktop OS is Windows. Origin CLI is **not** a PowerShell command. If you see `sh : The term 'sh' is not recognized`, you are still in PowerShell (`PS C:\Users\...>`). Leave that window and use WSL.
-
-**1. Open WSL from PowerShell** (this is the only Origin command that belongs in PowerShell):
-
-```powershell
-wsl
-```
-
-The prompt should change to a Linux shell (`user@pc:~$`), not `PS C:\...`. If `wsl` is missing, install it in **Windows PowerShell as Administrator**, reboot, then open Ubuntu from the Start menu:
+1. Open `C:\Users\carlo\OneDrive\Desktop\Projects\Ashenwake` in Cursor and in Godot.
+2. Edit and playtest here.
+3. When you are done:
 
 ```powershell
-wsl --install
+cd C:\Users\carlo\OneDrive\Desktop\Projects\Ashenwake
+git add -A
+git commit -m "Describe the session"
+git push origin main
 ```
 
-**2. Inside WSL**, install Origin and clone:
+Or double-click **Sync Ashenwake** on the desktop (pull, commit if dirty, push).
 
-```bash
-# Run in WSL (Origin CLI is not available in PowerShell)
-# Install the Origin CLI
-curl -fsSL https://downloads.cursor.com/origin/install.sh | sh
+Install or refresh that icon from PowerShell:
 
-# Sign in (also sets up git credentials)
-origin auth login
-
-# Clone the repository
-origin repo clone carlos-tovar/game-sync
+```powershell
+cd C:\Users\carlo\OneDrive\Desktop\Projects\Ashenwake
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\install-desktop-shortcut.ps1
 ```
 
-If `origin` is not found after install, persist `~/.local/bin` on PATH in WSL (bash), or run `scripts/ensure-origin-path.sh` after the clone exists:
+## Laptop
 
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
+```powershell
+git clone https://github.com/carlostovar1995/ashenwake.git
 ```
 
-Later, from PowerShell you can jump into that WSL setup with `scripts/setup-windows.ps1` instead of piping to `sh`.
+Open the cloned folder in Cursor and Godot. `git pull` / `git push` against the same GitHub repo. No WSL.
 
-**3. After clone**, import the Godot game from Windows (WSL, not PowerShell):
+If you already cloned the old `game-sync` URL:
 
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-cd ~/game-sync
+```powershell
+git remote set-url origin https://github.com/carlostovar1995/ashenwake.git
 git pull origin main
-chmod +x scripts/import-local-godot.sh
-./scripts/import-local-godot.sh --push "/mnt/c/Users/carlo/OneDrive/Desktop/Projects/Boss Game"
 ```
 
-Use **Boss Game** (singular). Do not import `Boss Game Backup`. Open `~/game-sync` in Cursor and in the Godot editor afterward.
+## Do not
 
-## Upgrade Cursor for this workflow
+- Edit the old Ubuntu copy (`~/game-sync` or `\\wsl$\...`). It is stale.
+- Commit `.godot/` or export binaries.
+- Use Origin / `push-both.sh` for the daily loop.
 
-On the **home PC** and **laptop**:
-
-- Update Cursor to the latest client.
-- Confirm you can start a Cloud Agent against `carlos-tovar/game-sync` from the Agents Window.
-- **Origin** is what Cursor Agents use. **GitHub** is an optional public/private mirror so people without Cursor can clone. See [GitHub mirror](#github-mirror) below.
-- Indexing already ignores `.godot/` via `.cursorignore`.
-
-On **phone**:
-
-- iPhone / iPad: [Cursor for iOS](https://apps.apple.com/app/cursor/id6767085653) (iOS / iPadOS 26+). Direct agents and review PRs. There is no editor or terminal on mobile.
-- Android: Chrome → [cursor.com/agents](https://cursor.com/agents) → Add to Home Screen. There is no native Android app yet.
-
-## Daily loop
-
-| Where | What you do |
-| --- | --- |
-| Home PC | Cursor + Godot editor. In WSL: `git pull`, playtest, `./scripts/push-both.sh`. |
-| Laptop | Same Origin clone in Cursor, or start a Cloud Agent from the Agents Window / [cursor.com/agents](https://cursor.com/agents). |
-| Phone | Start, follow, review, and merge that Cloud Agent. No local Godot. |
-
-Agents should prove changes with `./scripts/verify-headless.sh`. After a laptop or phone agent opens a PR, pull on the home PC and playtest in the editor.
-
-Cloud VMs usually have no GPU. Headless import and script checks are the bar in the cloud. Feel, animation, and input are checked at home.
-
-Optional later: keep the home PC awake and use **Remote Control** (Settings → Agents, `/remote-control`) so an agent can use the local Godot editor without a push. The home PC must stay online.
-
-## Commands
-
-```bash
-./scripts/cloud-agent-install.sh   # download Godot, symlink `godot`, import
-./scripts/verify-headless.sh       # import + tools/ci_check.gd
-./scripts/push-both.sh             # git push branch + tags to Origin and GitHub
-./scripts/setup-github-remote.sh carlostovar1995/game-sync
-./scripts/version.sh current       # print SemVer (VERSION file)
-```
-
-See [AGENTS.md](AGENTS.md) for agent-facing conventions.
-
-## Desktop sync icon (Windows)
-
-Double-click **Sync Boss Fighter** on the desktop to pull, save local edits, bump a SemVer patch, tag it, and push the commit plus tag to Origin and GitHub. Install it once from Ubuntu:
-
-```bash
-cd ~/game-sync
-git pull origin main
-chmod +x scripts/windows/*.sh
-./scripts/windows/install-desktop-shortcut.sh
-```
-
-The first click may open a GitHub browser login. After that, one click keeps both remotes updated. GitHub pushes use the `gh` login (not Windows saved passwords).
-
-## Versions and restore points
-
-Classic SemVer: `MAJOR.MINOR.PATCH`, stored in `VERSION` and `project.godot`. Git tags use the `v` prefix (`v0.1.1`).
-
-| Tag | Meaning |
-| --- | --- |
-| `v0.1.0` | First imported Boss Fighter (rollback if the game breaks) |
-| `v0.1.1` | Versioning + desktop sync tags |
-| `v0.1.2+` | Each later desktop sync that saved local changes |
-
-A dirty sync bumps the **patch** (`0.1.1` → `0.1.2`) and uploads `v0.1.2` to both remotes. Ask for a **minor** bump (`0.2.0`) when a real gameplay milestone lands, or **major** (`1.0.0`) for a release.
-
-Restore a known-good game (does not delete history):
-
-```bash
-cd ~/game-sync
-git fetch origin --tags
-git checkout v0.1.0
-```
-
-Play that snapshot in Godot, then `git checkout main` to return to the latest. Tag list: [github.com/carlostovar1995/game-sync/tags](https://github.com/carlostovar1995/game-sync/tags).
-
-**File path of the icon** (whichever Desktop Windows actually uses):
-
-- `C:\Users\carlo\OneDrive\Desktop\Sync Boss Fighter.lnk`
-- `C:\Users\carlo\Desktop\Sync Boss Fighter.lnk`
-
-There is also `Boss Fighter Sync.cmd` in the same folder. The installer reads the exact distro name (`$WSL_DISTRO_NAME`) and Linux username from the Ubuntu window, then hard-codes both into that launcher. It removes all older `Sync Boss Fighter` launchers first, so it never uses the default WSL distro (often Docker).
-
-**Reinstall the working icon in the Ubuntu app from the Start menu:**
-
-In the **Ubuntu** app from the Start menu:
-
-```bash
-cd ~/game-sync
-git pull origin main
-./scripts/windows/install-desktop-shortcut.sh
-```
-
-Do not install it through plain `wsl` in PowerShell; the installer must run inside the working Ubuntu terminal.
-
-## GitHub mirror
-
-Cursor Cloud Agents keep using Origin. GitHub is a second copy for sharing with people who are not on Cursor.
-
-GitHub **rejects files over 100MB**. This repo does not track the Godot Windows editor or the huge source zips under `assets/_incoming/` (the extracted models are already in `assets/`). Download Godot from [godotengine.org](https://godotengine.org/download).
-
-**Once, in Ubuntu (`~/game-sync`):**
-
-1. Create an empty repo on [github.com/new](https://github.com/new) named `game-sync` (private is fine, **no** README).
-2. Sign GitHub into WSL (browser login):
-
-```bash
-gh auth login
-```
-
-If `gh` is missing: `sudo apt update && sudo apt install -y gh`, or install from [cli.github.com](https://cli.github.com/).
-
-3. Point this clone at that repo and push:
-
-```bash
-cd ~/game-sync
-git pull origin main
-chmod +x scripts/setup-github-remote.sh scripts/push-both.sh
-./scripts/setup-github-remote.sh carlostovar1995/game-sync
-```
-
-After that, `./scripts/push-both.sh` (or the desktop icon) updates Origin and GitHub together.
-
-If push says `Permission to carlostovar1995/game-sync.git denied`, Git is using a Windows-saved password instead of `gh`. In Ubuntu:
-
-```bash
-cd ~/game-sync
-gh auth refresh -h github.com -s repo
-./scripts/setup-github-remote.sh
-```
+Optional Cloud Agent scripts are still in `scripts/` if you want them later. They are not part of day-to-day work.
 
 ## License
 

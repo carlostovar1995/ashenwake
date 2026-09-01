@@ -19,6 +19,7 @@ var _lmb_down: bool = false
 var _rmb_down: bool = false
 
 const _ENEMY_HOVER := Color(1.0, 0.45, 0.08, 0.92)
+const _ALLY_HOVER := Color(0.28, 0.95, 0.42, 0.92)
 const _TARGET_HOVER := Color(1.0, 0.92, 0.18, 0.95)
 const _ATTACK_CLICK_ACQUIRE := 4.2
 
@@ -54,8 +55,9 @@ func _process(delta: float) -> void:
 		return
 	var u := _unit()
 	if u == null or u.is_dead:
-		_overlay.hide_fx()
-		_overlay.hide_lock()
+		if _overlay != null:
+			_overlay.hide_fx()
+			_overlay.hide_lock()
 		_rmb_held = false
 		_clear_hover()
 		_show_target_cursor(false)
@@ -67,18 +69,27 @@ func _process(delta: float) -> void:
 	# Hardware button state still updates, so poll edges here.
 	_poll_mouse(u)
 	_tick_rmb_hold(delta, u)
+	if _overlay == null:
+		return
 	var channeling := u.controller != null and u.controller.is_channeling()
+	var burst_ab := _burst_cast_lock(u)
 	if channeling:
 		var ch_ab := u.controller.casting_ability()
-		if ch_ab:
+		if SpellWallLayout.is_protection(ch_ab):
+			_overlay.hide_lock()
+			_overlay.hide_fx()
+		elif ch_ab:
 			_overlay.show_locked_aoe(
 				u,
 				u.controller.cast_point,
 				ch_ab.scaled_radius(u.controller.channel_charge()),
-				ch_ab.color
+				ch_ab.color,
+				ch_ab
 			)
 		else:
 			_overlay.hide_lock()
+	elif burst_ab:
+		_overlay.show_locked_aoe(u, u.controller.cast_point, burst_ab.aoe_radius, burst_ab.color, burst_ab)
 	else:
 		_overlay.hide_lock()
 	if targeting == TargetMode.NONE:
@@ -124,10 +135,7 @@ func _input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("stop_command"):
 		_cancel_targeting()
-		if not u.controller.is_channeling():
-			u.controller.issue_stop_local()
-		else:
-			u.controller.clear_cast_queue()
+		u.controller.issue_stop_local()
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("clear_target"):
@@ -165,6 +173,29 @@ func try_activate_ability(index: int, from_bar: bool = false) -> bool:
 	if u == null or u.is_dead:
 		return false
 	return _activate_ability(u, index, from_bar)
+
+
+func try_cancel_cast() -> bool:
+	var cancelled := false
+	if targeting != TargetMode.NONE:
+		_cancel_targeting()
+		cancelled = true
+	var u := _unit()
+	if u != null and u.controller != null and u.controller.cancel_cast():
+		cancelled = true
+	if cancelled:
+		_resume_held_move(u)
+	return cancelled
+
+
+func _resume_held_move(u: Unit) -> void:
+	if u == null or u.controller == null:
+		return
+	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+		return
+	_rmb_held = true
+	_hold_accum = 1.0
+	u.controller.issue_move_hold(ground_at_mouse())
 
 
 func _reset_mouse_edges() -> void:
@@ -241,18 +272,25 @@ func _activate_ability(u: Unit, index: int, from_bar: bool) -> bool:
 	if u.controller == null or index < 0 or index >= u.abilities.size():
 		return false
 	if u.controller.is_channeling() and u.controller.cast_index == index:
+		var ch := u.controller.casting_ability()
+		if SpellWallLayout.is_protection(ch):
+			if _smart_fire(u, index, ch, false):
+				return true
+			u.controller.issue_cast_local(index, ground_at_mouse(), null)
+			_cancel_targeting()
+			return true
 		u.controller.confirm_channel()
 		_cancel_targeting()
 		return true
 	if not u.can_prepare_cast(index):
 		return true
 	var ab: AbilityDef = u.abilities[index]
-	if ab.target_mode == AbilityDef.TargetMode.INSTANT:
-		u.controller.issue_cast_local(index, u.global_position, null)
-		_cancel_targeting()
-		return true
 	if _alt_held() and ab.can_self_cast():
 		u.controller.issue_cast_local(index, u.global_position, u)
+		_cancel_targeting()
+		return true
+	if ab.target_mode == AbilityDef.TargetMode.INSTANT:
+		u.controller.issue_cast_local(index, u.global_position, u if ab.can_target_allies() else null)
 		_cancel_targeting()
 		return true
 	if GameSession.smart_cast and not _shift_held():
@@ -278,47 +316,30 @@ func _begin_targeting(index: int, ab: AbilityDef) -> void:
 
 func _smart_fire(u: Unit, index: int, ab: AbilityDef, from_bar: bool) -> bool:
 	_refresh_aim_cache()
-	var target := _smart_aim_unit(from_bar)
-	var ground := _smart_aim_ground(from_bar, target)
-	match ab.target_mode:
-		AbilityDef.TargetMode.SKILLSHOT:
-			if from_bar and not _aim_ready:
-				return false
-			u.controller.issue_cast_local(index, ground, null)
-			_click_fx.ping(ground, ab.color)
-			_cancel_targeting()
-			return true
-		AbilityDef.TargetMode.GROUND:
-			if from_bar and not _aim_ready:
-				return false
-			ground = u.clamped_ground_point(ground, ab.range)
-			u.controller.issue_cast_local(index, ground, null)
-			_click_fx.ping(ground, ab.color)
-			_cancel_targeting()
-			return true
-		AbilityDef.TargetMode.UNIT:
-			if ab.is_ally_support():
-				if target != null and target.team != u.team:
-					return false
-				if target == null:
-					target = u
-			else:
-				if target == null or target.team == u.team:
-					var locked := GameSession.selected_target
-					if locked and is_instance_valid(locked) and not locked.is_dead and locked.team != u.team:
-						target = locked
-					else:
-						return false
-			GameSession.select_target(target)
-			u.controller.issue_cast_local(index, target.global_position, target)
-			_click_fx.ping(target.global_position, ab.color)
-			_cancel_targeting()
-			return true
-		_:
+	if ab.locks_unit_target():
+		var target := _smart_aim_unit(from_bar, ab.allows_self_click())
+		target = _resolve_unit_target(u, ab, target)
+		if target == null:
 			return false
+		GameSession.select_target(target)
+		u.controller.issue_cast_local(index, target.global_position, target)
+		_click_fx.ping(target.global_position, ab.color)
+		_cancel_targeting()
+		return true
+	if ab.target_mode == AbilityDef.TargetMode.INSTANT:
+		return false
+	if from_bar and not _aim_ready:
+		return false
+	var ground := _point_aim_ground(from_bar)
+	if ab.target_mode == AbilityDef.TargetMode.GROUND:
+		ground = u.clamped_ground_point(ground, ab.range)
+	u.controller.issue_cast_local(index, ground, null)
+	_click_fx.ping(ground, ab.color)
+	_cancel_targeting()
+	return true
 
 
-func _smart_aim_unit(from_bar: bool) -> Unit:
+func _smart_aim_unit(from_bar: bool, include_self: bool = false) -> Unit:
 	var party := _party_unit_at_mouse()
 	if party:
 		return party
@@ -326,21 +347,13 @@ func _smart_aim_unit(from_bar: bool) -> Unit:
 		return _cached_aim_unit()
 	if _mouse_over_ability_bar():
 		return _cached_aim_unit()
-	return unit_at_mouse()
+	return unit_at_mouse(include_self)
 
 
-func _smart_aim_ground(from_bar: bool, target: Unit) -> Vector3:
-	var party := _party_unit_at_mouse()
-	if party:
-		return party.global_position
-	if target and (from_bar or _aim_from_frame):
-		return target.global_position
+func _point_aim_ground(from_bar: bool) -> Vector3:
 	if from_bar or _mouse_over_ability_bar():
-		if _aim_ready:
+		if _aim_ready and not _aim_from_frame:
 			return _aim_ground
-		if target:
-			return target.global_position
-		return Vector3.ZERO
 	return ground_at_mouse()
 
 
@@ -391,6 +404,18 @@ func _mouse_over_ability_bar() -> bool:
 	return false
 
 
+func _targeting_allows_self(u: Unit) -> bool:
+	if targeting != TargetMode.UNIT or u == null:
+		return false
+	if targeting_index < 0 or targeting_index >= u.abilities.size():
+		return false
+	return _allows_self_click(u.abilities[targeting_index])
+
+
+func _allows_self_click(ab: AbilityDef) -> bool:
+	return ab != null and ab.allows_self_click()
+
+
 func _alt_held() -> bool:
 	return Input.is_physical_key_pressed(KEY_ALT) or Input.is_key_pressed(KEY_ALT)
 
@@ -406,6 +431,10 @@ func _on_party_frame_click(u: Unit) -> bool:
 	if targeting == TargetMode.UNIT:
 		GameSession.select_target(frame_unit)
 		_confirm_ability(u, frame_unit)
+		get_viewport().set_input_as_handled()
+		return true
+	if targeting == TargetMode.GROUND or targeting == TargetMode.SKILLSHOT:
+		GameSession.select_target(frame_unit)
 		get_viewport().set_input_as_handled()
 		return true
 	if targeting == TargetMode.ATTACK_MOVE:
@@ -443,7 +472,7 @@ func _on_left_click(u: Unit) -> void:
 		return
 	if targeting != TargetMode.NONE:
 		if targeting == TargetMode.UNIT:
-			var aimed := unit_at_mouse()
+			var aimed := unit_at_mouse(_targeting_allows_self(u))
 			if aimed:
 				GameSession.select_target(aimed)
 		_confirm_ability(u)
@@ -460,6 +489,17 @@ func _on_left_click(u: Unit) -> void:
 
 func _is_mid_cast(u: Unit) -> bool:
 	return u.controller != null and (u.controller.is_casting() or u.controller.is_channeling())
+
+
+func _burst_cast_lock(u: Unit) -> AbilityDef:
+	if u.controller == null or u.controller.is_channeling() or not u.controller.is_casting():
+		return null
+	var ab := u.controller.casting_ability()
+	if ab == null:
+		return null
+	if ab.delivery == AbilityDef.Delivery.AOE_EXPLOSION or ab.id == "aoe_explosion":
+		return ab
+	return null
 
 
 func _on_right_click(u: Unit) -> void:
@@ -485,39 +525,39 @@ func _confirm_ability(u: Unit, forced_target: Unit = null) -> void:
 		_cancel_targeting()
 		return
 	var ab: AbilityDef = u.abilities[targeting_index]
+	if targeting == TargetMode.SKILLSHOT or targeting == TargetMode.GROUND:
+		var ground := ground_at_mouse()
+		if targeting == TargetMode.GROUND:
+			ground = u.clamped_ground_point(ground, ab.range)
+		u.controller.issue_cast_local(targeting_index, ground, null)
+		_click_fx.ping(ground, ab.color)
+		_cancel_targeting()
+		return
 	var target := forced_target
 	var ground := ground_at_mouse()
 	if target:
 		ground = target.global_position
 	else:
-		target = unit_at_mouse()
+		target = unit_at_mouse(_allows_self_click(ab))
 	match targeting:
-		TargetMode.SKILLSHOT:
-			u.controller.issue_cast_local(targeting_index, ground, null)
-		TargetMode.GROUND:
-			ground = u.clamped_ground_point(ground, ab.range)
-			u.controller.issue_cast_local(targeting_index, ground, null)
 		TargetMode.UNIT:
-			if ab.is_ally_support():
-				if target != null and target.team != u.team:
-					_cancel_targeting()
-					return
-				if target == null:
-					target = u
-			elif target == null or target.team == u.team:
-				_cancel_targeting()
+			if target == null:
+				return
+			target = _resolve_unit_target(u, ab, target)
+			if target == null:
 				return
 			u.controller.issue_cast_local(targeting_index, target.global_position, target)
+			_click_fx.ping(target.global_position, ab.color)
 		_:
 			pass
-	_click_fx.ping(ground if target == null else target.global_position, ab.color)
 	_cancel_targeting()
 
 
 func _cancel_targeting() -> void:
 	targeting = TargetMode.NONE
 	targeting_index = -1
-	_overlay.hide_fx()
+	if _overlay != null:
+		_overlay.hide_fx()
 	_clear_hover()
 	_show_target_cursor(false)
 
@@ -562,18 +602,21 @@ func _refresh_hover(caster: Unit, ab: AbilityDef = null, locked_aoe: bool = fals
 			wanted[u] = spell_c
 	var hovered := _party_unit_at_mouse()
 	if hovered == null:
-		hovered = unit_at_mouse()
+		hovered = unit_at_mouse(ab != null and ab.allows_self_click())
 	if hovered and not hovered.is_dead:
 		if ab and targeting != TargetMode.ATTACK_MOVE and not locked_aoe:
-			var spell_target := _ability_hover_target(caster, ab)
-			if spell_target:
-				wanted[spell_target] = _hover_color(ab, spell_target, caster)
-			elif hovered.team != caster.team and not wanted.has(hovered):
-				wanted[hovered] = _ENEMY_HOVER
+			if ab.locks_unit_target():
+				var spell_target := _ability_hover_target(caster, ab)
+				if spell_target:
+					wanted[spell_target] = _hover_color(ab, spell_target, caster)
+				elif hovered != caster and not wanted.has(hovered):
+					wanted[hovered] = _pointer_hover_color(caster, hovered)
+			elif hovered != caster and not wanted.has(hovered):
+				wanted[hovered] = _pointer_hover_color(caster, hovered)
 		elif hovered.team == caster.team and caster.can_attack_ally() and targeting == TargetMode.ATTACK_MOVE:
-			wanted[hovered] = Color(0.35, 0.95, 0.45, 0.92)
-		elif hovered.team != caster.team and not wanted.has(hovered):
-			wanted[hovered] = _ENEMY_HOVER
+			wanted[hovered] = _ALLY_HOVER
+		elif hovered != caster and not wanted.has(hovered):
+			wanted[hovered] = _pointer_hover_color(caster, hovered)
 	var locked := GameSession.selected_target
 	if locked and is_instance_valid(locked) and not locked.is_dead:
 		wanted[locked] = _TARGET_HOVER
@@ -587,6 +630,8 @@ func _preview_aoe_units(caster: Unit, ab: AbilityDef, locked_aoe: bool) -> Array
 			return out
 		return _units_in_circle(caster, caster.controller.cast_point, ab.scaled_radius(caster.controller.channel_charge()))
 	if targeting == TargetMode.GROUND:
+		if ab.delivery == AbilityDef.Delivery.WALL:
+			return _units_in_wall(caster, ab)
 		var pos := caster.clamped_ground_point(ground_at_mouse(), ab.range)
 		return _units_in_circle(caster, pos, ab.aoe_radius)
 	if targeting != TargetMode.SKILLSHOT:
@@ -600,7 +645,7 @@ func _preview_aoe_units(caster: Unit, ab: AbilityDef, locked_aoe: bool) -> Array
 	if ab.is_cone():
 		return _units_in_cone(caster, dir, ab)
 	var max_len := minf(ab.skillshot_length, ab.range) if ab.skillshot_length > 0.05 else ab.range
-	max_len = caster.wall_travel_distance(dir, max_len)
+	max_len = caster.wall_travel_distance(dir, max_len, false)
 	var length := max_len
 	if ab.splash_radius > 0.05:
 		var to_cursor := Vector2(aim.x - caster.global_position.x, aim.z - caster.global_position.z).length()
@@ -622,6 +667,21 @@ func _preview_aoe_units(caster: Unit, ab: AbilityDef, locked_aoe: bool) -> Array
 	return out
 
 
+func _units_in_wall(caster: Unit, ab: AbilityDef) -> Array[Unit]:
+	var out: Array[Unit] = []
+	var pos := caster.clamped_ground_point(ground_at_mouse(), ab.range)
+	var dir := SpellWallLayout.aim_dir(caster.global_position, pos, caster.facing_dir())
+	for raw in ArenaState.units:
+		var u := raw as Unit
+		if u == null or not is_instance_valid(u) or u.is_dead or u == caster:
+			continue
+		if u.team == caster.team and SpellWallLayout.style_id(ab) != "nature" and SpellWallLayout.style_id(ab) != "divine":
+			continue
+		if SpellWallLayout.contains_point(pos, dir, ab, u.global_position, u.radius):
+			out.append(u)
+	return out
+
+
 func _units_in_circle(caster: Unit, point: Vector3, radius: float) -> Array[Unit]:
 	var out: Array[Unit] = []
 	for raw in ArenaState.units:
@@ -630,9 +690,9 @@ func _units_in_circle(caster: Unit, point: Vector3, radius: float) -> Array[Unit
 			continue
 		if u.team == caster.team:
 			continue
-		if u.global_position.distance_to(point) > radius + u.radius:
+		if u.hit_distance_to(point) > radius:
 			continue
-		if not caster._burst_has_los(point, u.global_position):
+		if not u.is_structure and not caster._burst_has_los(point, u.global_position):
 			continue
 		out.append(u)
 	return out
@@ -685,6 +745,18 @@ func _apply_hovers(wanted: Dictionary) -> void:
 		_hover_units.append(unit)
 
 
+func _resolve_unit_target(caster: Unit, ab: AbilityDef, target: Unit) -> Unit:
+	if target != null and is_instance_valid(target) and not target.is_dead:
+		return target if ab.accepts_unit(caster.team, target) else null
+	if ab.can_target_enemies():
+		var locked := GameSession.selected_target
+		if locked and is_instance_valid(locked) and not locked.is_dead and locked.team != caster.team:
+			return locked
+	if ab.can_target_allies():
+		return caster
+	return null
+
+
 func _party_unit_at_mouse() -> Unit:
 	var hud := _combat_hud()
 	if hud == null or not hud.has_method("party_unit_under_mouse"):
@@ -695,24 +767,26 @@ func _party_unit_at_mouse() -> Unit:
 func _ability_hover_target(caster: Unit, ab: AbilityDef) -> Unit:
 	var other := _party_unit_at_mouse()
 	if other == null:
-		other = unit_at_mouse()
+		other = unit_at_mouse(ab != null and ab.allows_self_click())
 	if other == null or other.is_dead:
 		return null
-	if other.team == caster.team:
-		if ab == null or (ab.heal <= 0.0 and ab.shield <= 0.0):
-			return null
-		return other
-	if ab != null and ab.is_ally_support():
-		return null
-	return other
+	if ab == null:
+		return other if other.team != caster.team else null
+	return other if ab.accepts_unit(caster.team, other) else null
 
 
 func _hover_color(ab: AbilityDef, target: Unit, caster: Unit) -> Color:
-	var c := ab.color
 	if target.team == caster.team:
-		c = Color(0.35, 0.95, 0.45)
+		return _ALLY_HOVER
+	var c := ab.color
 	c.a = 0.92
 	return c.lightened(0.18)
+
+
+func _pointer_hover_color(caster: Unit, hovered: Unit) -> Color:
+	if hovered.team == caster.team:
+		return _ALLY_HOVER
+	return _ENEMY_HOVER
 
 
 func _clear_hover() -> void:
@@ -748,16 +822,19 @@ func _attackable_near_point(caster: Unit, point: Vector3) -> Unit:
 		var other := raw as Unit
 		if other == null or other == caster or not is_instance_valid(other) or other.is_dead:
 			continue
+		if other.is_structure:
+			if other.host_wall == null or not is_instance_valid(other.host_wall) or not other.host_wall.can_be_targeted_by(caster):
+				continue
 		if other.team == caster.team and not caster.can_attack_ally():
 			continue
-		var d := point.distance_to(other.global_position) - other.radius
+		var d := other.hit_distance_to(point)
 		if d < best_d:
 			best_d = d
 			best = other
 	return best
 
 
-func unit_at_mouse() -> Unit:
+func unit_at_mouse(include_self: bool = false) -> Unit:
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return null
@@ -769,12 +846,27 @@ func unit_at_mouse() -> Unit:
 		var u := raw as Unit
 		if u == null or not is_instance_valid(u) or u.is_dead:
 			continue
-		if u == self_unit:
+		if (not include_self and u == self_unit) or u.is_structure:
 			continue
 		var score := _unit_click_score(cam, mouse, u)
 		if score < best_score:
 			best_score = score
 			best = u
+	var tree := get_tree()
+	if tree:
+		for node in tree.get_nodes_in_group("spell_hittable_walls"):
+			if node == null or not is_instance_valid(node) or not (node is SpellWall):
+				continue
+			var wall := node as SpellWall
+			if not wall.can_be_targeted_by(self_unit):
+				continue
+			var proxy := wall.target_proxy()
+			if proxy == null:
+				continue
+			var wall_score := _wall_click_score(cam, mouse, wall)
+			if wall_score < best_score:
+				best_score = wall_score
+				best = proxy
 	return best
 
 
@@ -800,6 +892,35 @@ func _unit_click_score(cam: Camera3D, mouse: Vector2, u: Unit) -> float:
 	if on_plate:
 		return minf(dist, mouse.distance_to(plate_rect.get_center()) * 0.35)
 	return dist
+
+
+func _wall_click_score(cam: Camera3D, mouse: Vector2, wall: SpellWall) -> float:
+	var started := false
+	var r := Rect2()
+	for p in wall.click_world_points():
+		if cam.is_position_behind(p):
+			continue
+		var s := cam.unproject_position(p)
+		if not started:
+			r = Rect2(s, Vector2.ZERO)
+			started = true
+		else:
+			r = r.expand(s)
+	var bar := wall.hp_bar_world()
+	if bar != Vector3.ZERO and not cam.is_position_behind(bar):
+		var bs := cam.unproject_position(bar)
+		var bar_r := Rect2(bs, Vector2.ZERO).grow(40.0)
+		if not started:
+			r = bar_r
+			started = true
+		else:
+			r = r.merge(bar_r)
+	if not started:
+		return INF
+	r = r.grow(18.0)
+	if not r.has_point(mouse):
+		return INF
+	return mouse.distance_to(r.get_center()) * 0.85
 
 
 func _nameplate_screen_rect(cam: Camera3D, u: Unit) -> Rect2:

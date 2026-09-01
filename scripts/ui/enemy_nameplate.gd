@@ -6,10 +6,11 @@ const StatusIcons := preload("res://scripts/ui/status_icons.gd")
 const PLATE_W := 768
 const HEADER_H := 146
 const HP_H := 40
+const THREAT_H := 36
 const GAP := 6
-const PLATE_H := HEADER_H + GAP + HP_H
-const ICON := 146
-const MAX_ICONS := 3
+const PLATE_H := HEADER_H + GAP + HP_H + GAP + THREAT_H
+const ICON := 112
+const MAX_ICONS := 6
 const WORLD_W := 4.39
 
 var _vp: SubViewport
@@ -19,6 +20,10 @@ var _name: Label
 var _hp: ProgressBar
 var _hp_fill: StyleBoxFlat
 var _hp_shield: ColorRect
+var _threat_wrap: Panel
+var _threat: ProgressBar
+var _threat_fill: StyleBoxFlat
+var _threat_label: Label
 var _icons: Array[Panel] = []
 var _clock_tex: Texture2D
 
@@ -29,7 +34,7 @@ func _ready() -> void:
 	_vp.transparent_bg = true
 	_vp.disable_3d = true
 	_vp.gui_disable_input = true
-	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	add_child(_vp)
 	_build_ui()
 	_sprite = Sprite3D.new()
@@ -78,8 +83,8 @@ func refresh(u: Unit) -> void:
 			_hp_shield.visible = true
 			_hp_shield.anchor_left = clampf(hp / span, 0.0, 1.0)
 			_hp_shield.anchor_right = clampf((hp + sh) / span, 0.0, 1.0)
+	_refresh_threat(u)
 	var debuffs := u.collect_nameplate_debuffs()
-	debuffs.reverse()
 	while _icons.size() < mini(debuffs.size(), MAX_ICONS):
 		_make_icon()
 	var shown := mini(debuffs.size(), MAX_ICONS)
@@ -92,12 +97,33 @@ func refresh(u: Unit) -> void:
 		_paint_icon(icon, debuffs[i])
 		var from_right := shown - i
 		var x := float(PLATE_W) - float(from_right * ICON) - float(shown - i - 1) * 8.0
-		icon.position = Vector2(x, 0.0)
+		icon.position = Vector2(x, float(HEADER_H - ICON) * 0.5)
 		icon.size = Vector2(ICON, ICON)
 	var icon_span := 0.0
 	if shown > 0:
 		icon_span = float(ICON * shown + 8 * (shown - 1) + 10)
 	_name.size = Vector2(float(PLATE_W) - icon_span, float(HEADER_H))
+	if _vp:
+		_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+
+
+func _refresh_threat(u: Unit) -> void:
+	if _threat == null or _threat_label == null:
+		return
+	var view := ThreatTable.player_view(u)
+	var status := String(view.get("status", "none"))
+	var color: Color = view.get("color", Color(0.62, 0.10, 0.10))
+	_hp_fill.bg_color = color
+	_threat_fill.bg_color = color
+	_threat.value = clampf(float(view.get("ratio", 0.0)), 0.0, 1.0)
+	var text := String(view.get("label", ""))
+	var holder := String(view.get("aggro_name", ""))
+	if text.is_empty():
+		text = "—" if holder.is_empty() else holder
+	elif status != "aggro" and not holder.is_empty():
+		text = "%s  ·  %s" % [text, holder]
+	_threat_label.text = text
+	_threat_wrap.visible = true
 
 
 func _build_ui() -> void:
@@ -152,6 +178,39 @@ func _build_ui() -> void:
 	_hp_shield.anchor_bottom = 1.0
 	_hp_shield.visible = false
 	_hp.add_child(_hp_shield)
+	_threat_wrap = Panel.new()
+	_threat_wrap.position = Vector2(0, HEADER_H + GAP + HP_H + GAP)
+	_threat_wrap.size = Vector2(PLATE_W, THREAT_H)
+	_threat_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_threat_wrap.add_theme_stylebox_override("panel", _box(Color.BLACK, Color.BLACK, 0))
+	root.add_child(_threat_wrap)
+	_threat = ProgressBar.new()
+	_threat.position = Vector2(4, 4)
+	_threat.size = Vector2(PLATE_W - 8, THREAT_H - 8)
+	_threat.show_percentage = false
+	_threat.max_value = 1.0
+	_threat.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_threat.add_theme_color_override("font_color", Color(0, 0, 0, 0))
+	_threat.add_theme_font_size_override("font_size", 1)
+	_threat_fill = StyleBoxFlat.new()
+	_threat_fill.bg_color = Color(0.18, 0.62, 0.28)
+	var threat_trough := StyleBoxFlat.new()
+	threat_trough.bg_color = Color(0.06, 0.06, 0.07)
+	_threat.add_theme_stylebox_override("fill", _threat_fill)
+	_threat.add_theme_stylebox_override("background", threat_trough)
+	_threat_wrap.add_child(_threat)
+	_threat_label = Label.new()
+	_threat_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_threat_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_threat_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_threat_label.offset_left = 10
+	_threat_label.offset_right = -10
+	_threat_label.add_theme_font_size_override("font_size", 22)
+	_threat_label.add_theme_color_override("font_color", Color.WHITE)
+	_threat_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	_threat_label.add_theme_constant_override("outline_size", 8)
+	_threat_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_threat.add_child(_threat_label)
 	for i in MAX_ICONS:
 		_make_icon()
 
@@ -162,6 +221,7 @@ func _make_icon() -> void:
 	p.size = Vector2(ICON, ICON)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	p.visible = false
+	p.clip_contents = false
 	p.z_index = 2
 	p.add_theme_stylebox_override("panel", _box(Color(0.75, 0.8, 1.0), Color.BLACK, 4))
 	var art := TextureRect.new()
@@ -188,15 +248,22 @@ func _make_icon() -> void:
 	p.add_child(clock)
 	var stacks := Label.new()
 	stacks.name = "Stacks"
-	stacks.position = Vector2.ZERO
-	stacks.size = Vector2(ICON, ICON)
-	stacks.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stacks.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	stacks.add_theme_font_size_override("font_size", 84)
+	stacks.anchor_left = 0.0
+	stacks.anchor_top = 1.0
+	stacks.anchor_right = 0.0
+	stacks.anchor_bottom = 1.0
+	stacks.offset_left = 4
+	stacks.offset_top = -44
+	stacks.offset_right = 96
+	stacks.offset_bottom = -2
+	stacks.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	stacks.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	stacks.add_theme_font_size_override("font_size", 36)
 	stacks.add_theme_color_override("font_color", Color.WHITE)
 	stacks.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
-	stacks.add_theme_constant_override("outline_size", 16)
+	stacks.add_theme_constant_override("outline_size", 10)
 	stacks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stacks.z_index = 8
 	p.add_child(stacks)
 	_root.add_child(p)
 	_icons.append(p)
@@ -223,8 +290,9 @@ func _paint_icon(icon: Panel, data: Dictionary) -> void:
 			clock.visible = false
 	var stacks := icon.get_node_or_null("Stacks") as Label
 	if stacks:
-		var n := int(data.get("stacks", 0))
-		stacks.text = str(n) if n > 0 else ""
+		var text := StatusIcons.stack_text(data)
+		stacks.text = text
+		stacks.visible = not text.is_empty()
 
 
 func _box(bg: Color, border: Color, width: int) -> StyleBoxFlat:

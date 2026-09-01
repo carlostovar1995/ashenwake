@@ -25,7 +25,9 @@ var element: int = 0
 var extra_elements: PackedInt32Array = PackedInt32Array()
 var mark_damage_bonus: float = 0.0
 var overheat_cast_id: int = -1
+var combat_text_cast_id: int = -1
 var infusion_double: int = 0
+var ability_id: String = ""
 var los_from_source: bool = false
 var requires_cover: bool = false
 var pillar_damage_ratio: float = 0.0
@@ -56,6 +58,8 @@ var _wall_mat: StandardMaterial3D
 var _rim_lights: Array[OmniLight3D] = []
 var _last_outer: float = -1.0
 var _shadow_edge_mats: Array[StandardMaterial3D] = []
+var _wall_shadows: Array[MeshInstance3D] = []
+var _wall_shadow_key: String = ""
 var _outline: MeshInstance3D
 var _outline_mat: StandardMaterial3D
 
@@ -68,6 +72,7 @@ static func circle_slam(p_source: Unit, pos: Vector3, p_radius: float, p_time: f
 	t.warning_time = p_time
 	t.damage = p_damage
 	t.hostile = p_hostile
+	t.ability_id = "circle_slam"
 	t.color = Color(1.0, 0.4, 0.15, 0.5)
 	_add(t, pos, Vector3.ZERO)
 	return t
@@ -81,6 +86,7 @@ static func cone_cleave(p_source: Unit, origin: Vector3, forward: Vector3, p_rad
 	t.cone_angle = p_angle
 	t.warning_time = p_time
 	t.damage = p_damage
+	t.ability_id = "cone_cleave"
 	t.color = Color(1.0, 0.55, 0.12, 0.5)
 	_add(t, origin, forward)
 	return t
@@ -94,6 +100,7 @@ static func line_breath(p_source: Unit, origin: Vector3, forward: Vector3, p_len
 	t.width = p_width
 	t.warning_time = p_time
 	t.damage = p_damage
+	t.ability_id = "line_breath"
 	t.color = Color(1.0, 0.25, 0.35, 0.5)
 	_add(t, origin, forward)
 	return t
@@ -106,6 +113,7 @@ static func solar_collapse(p_source: Unit, p_time: float, p_damage: float) -> Te
 	t.radius = 32.0
 	t.warning_time = p_time
 	t.damage = p_damage
+	t.ability_id = "solar_collapse"
 	t.los_from_source = false
 	t.requires_cover = true
 	t.inbound_cover = true
@@ -220,14 +228,9 @@ func _build_collapse_visual() -> void:
 	add_child(_ring)
 	_build_pull_particles()
 	call_deferred("_build_pillar_shadows")
+	call_deferred("_sync_wall_shadows")
 	call_deferred("_spawn_rim_heat")
-	_boss_light = OmniLight3D.new()
-	_boss_light.light_color = Color(1.0, 0.55, 0.15)
-	_boss_light.light_energy = 2.0
-	_boss_light.omni_range = 16.0
-	_boss_light.position.y = 2.4
-	add_child(_boss_light)
-	_build_rim_lights()
+	FxHeroLights.bind(self, Color(1.0, 0.55, 0.15), 2.4, 16.0)
 
 
 func _build_pull_particles() -> void:
@@ -305,15 +308,65 @@ func _build_pillar_shadows() -> void:
 		_shadow_edge_mats.append(edge_mat)
 
 
+func _sync_wall_shadows() -> void:
+	if not cover_visual:
+		return
+	var key := ""
+	var walls: Array[SpellWall] = []
+	for wall in SpellWall.living_walls():
+		if not wall.is_cover_solid():
+			continue
+		walls.append(wall)
+		key += "%d:%.0f:%.0f," % [wall.get_instance_id(), wall.global_position.x * 10.0, wall.global_position.z * 10.0]
+	if key == _wall_shadow_key:
+		return
+	_wall_shadow_key = key
+	for node in _wall_shadows:
+		if is_instance_valid(node):
+			node.queue_free()
+	_wall_shadows.clear()
+	for wall in walls:
+		var mi := MeshInstance3D.new()
+		mi.mesh = _shadow_mesh_at(wall.global_position, wall.cover_half(), 0.08, 1.0, true)
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.02, 0.04, 0.12, 1.0)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mat.vertex_color_use_as_albedo = true
+		mi.material_override = mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(mi)
+		_wall_shadows.append(mi)
+		var edge := MeshInstance3D.new()
+		edge.mesh = _shadow_edge_at(wall.global_position, wall.cover_half(), 0.11)
+		var edge_mat := StandardMaterial3D.new()
+		edge_mat.albedo_color = Color(1.0, 0.78, 0.28, 0.08)
+		edge_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		edge_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		edge_mat.emission_enabled = true
+		edge_mat.emission = Color(1.0, 0.62, 0.12)
+		edge_mat.emission_energy_multiplier = 1.2
+		edge_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		edge.material_override = edge_mat
+		edge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(edge)
+		_wall_shadows.append(edge)
+
+
 func _shadow_mesh_for(pillar: ArenaPillar, y: float, width_scale: float, fade: bool = false) -> ArrayMesh:
-	var p := Vector3(pillar.global_position.x, 0.0, pillar.global_position.z)
+	return _shadow_mesh_at(pillar.global_position, pillar.half_xz(), y, width_scale, fade)
+
+
+func _shadow_mesh_at(origin: Vector3, half_xz: float, y: float, width_scale: float, fade: bool = false) -> ArrayMesh:
+	var p := Vector3(origin.x, 0.0, origin.z)
 	var inward := Vector3(-p.x, 0.0, -p.z)
 	if inward.length_squared() < 0.01:
 		inward = Vector3(0, 0, -1)
 	inward = inward.normalized()
 	var right := Vector3(-inward.z, 0.0, inward.x)
-	var half := (pillar.half_xz() + 0.28) * width_scale
-	var start := p + inward * (pillar.half_xz() + 0.08)
+	var half := (half_xz + 0.28) * width_scale
+	var start := p + inward * (half_xz + 0.08)
 	var length := 9.2
 	var end := start + inward * length
 	var half2 := half * 1.18
@@ -347,14 +400,18 @@ func _shadow_mesh_for(pillar: ArenaPillar, y: float, width_scale: float, fade: b
 
 
 func _shadow_edge_strip(pillar: ArenaPillar, y: float) -> ArrayMesh:
-	var p := Vector3(pillar.global_position.x, 0.0, pillar.global_position.z)
+	return _shadow_edge_at(pillar.global_position, pillar.half_xz(), y)
+
+
+func _shadow_edge_at(origin: Vector3, half_xz: float, y: float) -> ArrayMesh:
+	var p := Vector3(origin.x, 0.0, origin.z)
 	var inward := Vector3(-p.x, 0.0, -p.z)
 	if inward.length_squared() < 0.01:
 		inward = Vector3(0, 0, -1)
 	inward = inward.normalized()
 	var right := Vector3(-inward.z, 0.0, inward.x)
-	var half := pillar.half_xz() + 0.22
-	var start := p + inward * (pillar.half_xz() + 0.04)
+	var half := half_xz + 0.22
+	var start := p + inward * (half_xz + 0.04)
 	var end := start + inward * 0.55
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -480,7 +537,9 @@ func cover_dodge_point(from: Vector3) -> Vector3:
 	var arena := ArenaState.arena as Arena
 	if arena == null:
 		return from
-	var threat := source.global_position if source else global_position
+	var threat: Vector3 = global_position
+	if source != null:
+		threat = source.global_position
 	var best := from
 	var best_d := INF
 	for pillar in arena.living_pillars():
@@ -493,6 +552,15 @@ func cover_dodge_point(from: Vector3) -> Vector3:
 		if d < best_d:
 			best_d = d
 			best = dest
+	if inbound_cover:
+		for wall in SpellWall.living_walls():
+			if not wall.is_cover_solid():
+				continue
+			var wall_dest := arena.cover_point_inward_at(wall.global_position, wall.cover_half(), 0.45)
+			var wall_d := Vector2(from.x - wall_dest.x, from.z - wall_dest.z).length()
+			if wall_d < best_d:
+				best_d = wall_d
+				best = wall_dest
 	return best
 
 
@@ -546,6 +614,8 @@ func _process(delta: float) -> void:
 		var oc := color
 		oc.a = GroundIndicator.OUTLINE_ALPHA
 		_outline_mat.albedo_color = oc
+	if cover_visual:
+		_sync_wall_shadows()
 	if cover_visual and _ring_mesh:
 		var u := clampf(elapsed / maxf(warning_time, 0.001), 0.0, 1.0)
 		var arena := ArenaState.arena as Arena
@@ -575,13 +645,6 @@ func _process(delta: float) -> void:
 				edge_mat.albedo_color = Color(1.0, 0.78, 0.22, 0.12 + 0.7 * u)
 				edge_mat.emission = Color(1.0, 0.62, 0.12)
 				edge_mat.emission_energy_multiplier = 1.4 + 6.5 * u
-		if _boss_light:
-			_boss_light.light_energy = 1.4 + 8.0 * u
-			_boss_light.omni_range = 14.0 + 12.0 * u
-		for light in _rim_lights:
-			if light:
-				light.light_energy = 0.5 + 5.5 * u
-				light.omni_range = 12.0 + 8.0 * u
 		if _pull:
 			var pm := _pull.process_material as ParticleProcessMaterial
 			if pm:
@@ -658,21 +721,25 @@ func _apply_damage() -> void:
 	for u in ArenaState.units:
 		if u == null or not is_instance_valid(u) or u.is_dead:
 			continue
+		if u.is_structure:
+			continue
 		if source and u.team == source.team:
 			continue
 		if contains_point(u.global_position):
 			if _blocked_by_wall(u):
 				continue
 			if element != AbilityDef.Element.NONE or mark_damage_bonus > 0.0 or extra_elements.size() > 0:
-				u.receive_ability_hit(source, element, damage, mark_damage_bonus, extra_elements, false, true, true, overheat_cast_id, infusion_double)
+				u.receive_ability_hit(source, element, damage, mark_damage_bonus, extra_elements, false, true, true, overheat_cast_id, infusion_double, ability_id, combat_text_cast_id)
 			else:
-				u.take_damage(damage, source)
+				u.apply_world_hit(damage, source, "hit", ability_id if not ability_id.is_empty() else "boss_hit", combat_text_cast_id)
 			if slow_duration > 0.0:
 				u.apply_slow(slow_percent, slow_duration)
+	_damage_walls()
 	if pillar_damage_ratio > 0.0:
 		var arena := ArenaState.arena as Arena
 		if arena:
 			arena.damage_living_pillars(pillar_damage_ratio)
+			_chip_cover_walls(pillar_damage_ratio)
 	if linger_seconds > 0.0:
 		var linger_arena := ArenaState.arena as Arena
 		if linger_arena:
@@ -693,3 +760,60 @@ func _blocked_by_wall(u: Unit) -> bool:
 	if source and (los_from_source or shape == Shape.CONE or shape == Shape.LINE):
 		from = source.global_position
 	return not arena.spell_has_los(from, u.global_position, exclude)
+
+
+func _damage_walls() -> void:
+	if damage <= 0.0:
+		return
+	if inbound_cover and pillar_damage_ratio > 0.0:
+		return
+	for wall in SpellWall.living_walls():
+		if not wall.can_be_damaged_by(source):
+			continue
+		if not _overlaps_wall(wall):
+			continue
+		if _wall_in_cover(wall):
+			continue
+		wall.take_hit(damage, wall.aim_point(global_position), source, "hit", Color(0, 0, 0, 0), false, combat_text_cast_id)
+
+
+func _chip_cover_walls(ratio: float) -> void:
+	if ratio <= 0.0 and damage <= 0.0:
+		return
+	for wall in SpellWall.living_walls():
+		if not wall.is_cover_solid():
+			continue
+		if not wall.can_be_damaged_by(source):
+			continue
+		if _wall_in_cover(wall):
+			continue
+		var amount := damage if damage > 0.0 else wall.max_health * ratio
+		wall.take_hit(amount, wall.aim_point(global_position), source, "hit", Color(0, 0, 0, 0), false, combat_text_cast_id)
+
+
+func _overlaps_wall(wall: SpellWall) -> bool:
+	if wall == null:
+		return false
+	if shape == Shape.CIRCLE and wall.range_to(global_position) <= radius:
+		return true
+	if contains_point(wall.global_position):
+		return true
+	for p in wall.click_world_points():
+		if contains_point(p):
+			return true
+	return false
+
+
+func _wall_in_cover(wall: SpellWall) -> bool:
+	var arena := ArenaState.arena as Arena
+	if arena == null or wall == null:
+		return false
+	var exclude: Array[RID] = []
+	if source:
+		exclude.append(source.get_rid())
+	exclude.append(wall.get_rid())
+	if inbound_cover:
+		return arena.has_radial_shadow(wall.global_position, exclude)
+	if source and (los_from_source or shape == Shape.CONE or shape == Shape.LINE):
+		return not arena.spell_has_los(source.global_position, wall.aim_point(source.global_position), exclude)
+	return false

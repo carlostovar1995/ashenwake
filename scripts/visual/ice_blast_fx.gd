@@ -3,11 +3,17 @@ extends Node3D
 
 const _SHADER := preload("res://scripts/visual/ice_blast.gdshader")
 const _WISP_SHADER := preload("res://scripts/visual/ice_wisp.gdshader")
+const _CRYSTAL_SHADER := preload("res://scripts/visual/ice_crystal.gdshader")
+const _HeroLights := preload("res://scripts/visual/fx_hero_lights.gd")
 
 var _sheet_mat: ShaderMaterial
-var _light: OmniLight3D
+var _crystal_mat: ShaderMaterial
+var _glow_mat: StandardMaterial3D
 var _wisps: GPUParticles3D
 var _mist: GPUParticles3D
+var _shards: GPUParticles3D
+var _crystals: Array[Node3D] = []
+var _crystal_scales: PackedFloat32Array = PackedFloat32Array()
 var _radius: float = 8.0
 var _angle: float = deg_to_rad(60.0)
 
@@ -27,27 +33,12 @@ static func spawn(origin: Vector3, dir: Vector3, radius: float, angle: float, sp
 
 
 static func puff_at(pos: Vector3) -> void:
-	var puff := GPUParticles3D.new()
-	puff.amount = 18
-	puff.lifetime = 0.5
-	puff.one_shot = true
-	puff.explosiveness = 1.0
-	puff.preprocess = 0.02
-	puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var mesh := QuadMesh.new()
-	mesh.size = Vector2(0.18, 0.55)
-	puff.draw_pass_1 = mesh
-	puff.process_material = _puff_process()
-	puff.material_override = _wisp_mat(Color(0.9, 0.98, 1.0, 0.54))
-	var parent: Node = ArenaState.arena if ArenaState.arena else Engine.get_main_loop().root
-	parent.add_child(puff)
-	puff.global_position = pos + Vector3(0.0, 0.15, 0.0)
 	AudioManager.play_at("freeze.hit", pos)
-	puff.emitting = true
-	puff.get_tree().create_timer(0.8).timeout.connect(func() -> void:
-		if is_instance_valid(puff):
-			puff.queue_free()
-	)
+
+
+static func _free_if_valid(node: Node) -> void:
+	if is_instance_valid(node):
+		node.queue_free()
 
 
 func setup(radius: float, angle: float, spoke_lengths: PackedFloat32Array = PackedFloat32Array()) -> void:
@@ -59,32 +50,33 @@ func setup(radius: float, angle: float, spoke_lengths: PackedFloat32Array = Pack
 		for v in spoke_lengths:
 			clipped = minf(clipped, float(v))
 		_radius = maxf(clipped, 0.6)
-	_wisps = _make_particles(34, 0.6, Vector2(0.1, 0.48), Color(0.42, 0.9, 1.0, 0.54), 2.8, 0.25)
-	_mist = _make_particles(22, 0.75, Vector2(0.42, 0.55), Color(0.82, 0.95, 1.0, 0.23), 0.85, 0.2)
-	_light = OmniLight3D.new()
-	_light.light_color = Color(0.5, 0.88, 1.0)
-	_light.light_energy = 2.15
-	_light.omni_range = radius * 0.9
-	_light.position = Vector3(0.0, 0.55, -radius * 0.38)
-	add_child(_light)
+	_make_crystals()
+	_wisps = _make_particles(40, 0.55, Vector2(0.08, 0.42), Color(0.55, 0.95, 1.0, 0.7), 3.4, 0.85)
+	_mist = _make_particles(18, 0.7, Vector2(0.36, 0.48), Color(0.2, 0.95, 0.7, 0.22), 0.7, 0.35)
+	_shards = _make_particles(48, 0.5, Vector2(0.09, 0.09), Color(0.75, 0.98, 1.0, 0.95), 2.8, 0.95)
+	_HeroLights.pulse(global_position + Vector3(0.0, 0.7, 0.0), Color(0.55, 0.92, 1.0), 4.4, radius * 0.95, 0.55)
 
 
 func play() -> void:
 	if _sheet_mat:
 		_sheet_mat.set_shader_parameter("grow", 0.0)
 		_sheet_mat.set_shader_parameter("fade", 1.0)
+	if _crystal_mat:
+		_crystal_mat.set_shader_parameter("fade", 1.0)
+	_set_crystal_grow(0.0)
 	if _wisps:
 		_wisps.emitting = true
 	if _mist:
 		_mist.emitting = true
+	if _shards:
+		_shards.emitting = true
 	var tw := create_tween()
 	tw.set_parallel(false)
-	tw.tween_method(_set_grow, 0.0, 1.0, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_interval(0.48)
+	tw.tween_method(_set_grow, 0.0, 1.0, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_method(_set_crystal_grow, 0.0, 1.0, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(0.52)
 	tw.tween_callback(_stop_particles)
-	tw.tween_method(_set_fade, 1.0, 0.0, 0.38)
-	if _light:
-		tw.parallel().tween_property(_light, "light_energy", 0.0, 0.38)
+	tw.tween_method(_set_fade, 1.0, 0.0, 0.36)
 	tw.chain().tween_callback(queue_free)
 
 
@@ -93,6 +85,8 @@ func _stop_particles() -> void:
 		_wisps.emitting = false
 	if _mist:
 		_mist.emitting = false
+	if _shards:
+		_shards.emitting = false
 
 
 func _set_grow(v: float) -> void:
@@ -103,6 +97,20 @@ func _set_grow(v: float) -> void:
 func _set_fade(v: float) -> void:
 	if _sheet_mat:
 		_sheet_mat.set_shader_parameter("fade", v)
+	if _crystal_mat:
+		_crystal_mat.set_shader_parameter("fade", v)
+	if _glow_mat:
+		_glow_mat.albedo_color.a = 0.42 * v
+		_glow_mat.emission_energy_multiplier = 2.8 * v
+
+
+func _set_crystal_grow(v: float) -> void:
+	for i in _crystals.size():
+		var n := _crystals[i]
+		if n == null or not is_instance_valid(n):
+			continue
+		var s := _crystal_scales[i] if i < _crystal_scales.size() else 1.0
+		n.scale = Vector3(s * (0.35 + v * 0.65), s * v, s * (0.35 + v * 0.65))
 
 
 func _make_sheet(spoke_lengths: PackedFloat32Array = PackedFloat32Array()) -> void:
@@ -111,15 +119,129 @@ func _make_sheet(spoke_lengths: PackedFloat32Array = PackedFloat32Array()) -> vo
 	mi.sorting_offset = 1.5
 	_sheet_mat = ShaderMaterial.new()
 	_sheet_mat.shader = _SHADER
-	_sheet_mat.set_shader_parameter("ice_color", Color(0.38, 0.92, 1.0, 0.9))
-	_sheet_mat.set_shader_parameter("crack_color", Color(0.97, 1.0, 1.0, 1.0))
-	_sheet_mat.set_shader_parameter("edge_color", Color(0.14, 0.46, 0.88, 0.95))
+	_sheet_mat.set_shader_parameter("ice_color", Color(0.55, 0.95, 1.0, 0.92))
+	_sheet_mat.set_shader_parameter("crack_color", Color(1.0, 1.0, 1.0, 1.0))
+	_sheet_mat.set_shader_parameter("edge_color", Color(0.12, 0.55, 0.88, 0.95))
 	_sheet_mat.set_shader_parameter("grow", 0.0)
 	_sheet_mat.set_shader_parameter("fade", 1.0)
-	_sheet_mat.set_shader_parameter("opacity", 0.4)
+	_sheet_mat.set_shader_parameter("opacity", 0.14)
 	mi.material_override = _sheet_mat
 	mi.mesh = _build_cone_mesh(_radius, _angle, spoke_lengths)
 	add_child(mi)
+
+
+func _make_crystals() -> void:
+	_crystal_mat = ShaderMaterial.new()
+	_crystal_mat.shader = _CRYSTAL_SHADER
+	_crystal_mat.set_shader_parameter("ice_color", Color(0.52, 0.94, 1.0, 0.82))
+	_crystal_mat.set_shader_parameter("core_color", Color(0.95, 1.0, 1.0, 1.0))
+	_crystal_mat.set_shader_parameter("base_glow", Color(0.18, 0.96, 0.62, 1.0))
+	_crystal_mat.set_shader_parameter("fade", 1.0)
+	var meshes: Array[ArrayMesh] = [_spike_mesh(0), _spike_mesh(1), _spike_mesh(2)]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var half := _angle * 0.5
+	for i in 42:
+		var dist_t := pow(rng.randf(), 0.68)
+		var dist := lerpf(0.45, 1.85, dist_t)
+		var yaw := rng.randf_range(-half * 0.55, half * 0.55)
+		yaw *= 0.3 + 0.7 * absf(yaw) / maxf(half, 0.001)
+		var n := MeshInstance3D.new()
+		n.mesh = meshes[i % meshes.size()]
+		n.material_override = _crystal_mat
+		n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		n.position = Vector3(sin(yaw) * dist, 0.0, -cos(yaw) * dist)
+		n.rotation = Vector3(
+			deg_to_rad(rng.randf_range(16.0, 34.0)),
+			yaw + rng.randf_range(-0.12, 0.12),
+			rng.randf_range(-0.18, 0.18)
+		)
+		var s := lerpf(2.15, 0.85, dist_t) * rng.randf_range(0.7, 1.15)
+		if i < 8:
+			s *= 1.12
+		n.scale = Vector3.ZERO
+		_crystals.append(n)
+		_crystal_scales.append(s)
+		add_child(n)
+	_make_base_glow()
+
+
+func _make_base_glow() -> void:
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(2.2, 1.8)
+	mi.mesh = q
+	mi.rotation.x = -PI * 0.5
+	mi.position = Vector3(0.0, 0.03, -1.05)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_glow_mat = StandardMaterial3D.new()
+	_glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_glow_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_glow_mat.albedo_color = Color(0.12, 0.95, 0.58, 0.28)
+	_glow_mat.emission_enabled = true
+	_glow_mat.emission = Color(0.2, 1.0, 0.62)
+	_glow_mat.emission_energy_multiplier = 2.8
+	mi.material_override = _glow_mat
+	add_child(mi)
+
+
+func _spike_mesh(variant: int) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var tip := Vector3(0.03, 1.85, 0.07)
+	var base: Array[Vector3] = [
+		Vector3(-0.17, 0.0, -0.09),
+		Vector3(-0.04, 0.0, -0.19),
+		Vector3(0.15, 0.0, -0.11),
+		Vector3(0.18, 0.0, 0.07),
+		Vector3(0.01, 0.0, 0.17),
+		Vector3(-0.15, 0.0, 0.09),
+	]
+	if variant == 1:
+		tip = Vector3(-0.05, 2.15, 0.1)
+		base = [
+			Vector3(-0.12, 0.0, -0.14),
+			Vector3(0.06, 0.0, -0.16),
+			Vector3(0.2, 0.0, -0.02),
+			Vector3(0.1, 0.0, 0.14),
+			Vector3(-0.1, 0.0, 0.12),
+			Vector3(-0.2, 0.0, -0.02),
+		]
+	elif variant == 2:
+		tip = Vector3(0.08, 1.55, 0.02)
+		base = [
+			Vector3(-0.22, 0.0, -0.06),
+			Vector3(0.0, 0.0, -0.16),
+			Vector3(0.2, 0.0, -0.08),
+			Vector3(0.16, 0.0, 0.1),
+			Vector3(-0.06, 0.0, 0.14),
+			Vector3(-0.18, 0.0, 0.04),
+		]
+	for i in base.size():
+		var a: Vector3 = base[i]
+		var b: Vector3 = base[(i + 1) % base.size()]
+		st.set_uv(Vector2(0.5, 1.0))
+		st.add_vertex(tip)
+		st.set_uv(Vector2(float(i) / float(base.size()), 0.0))
+		st.add_vertex(a)
+		st.set_uv(Vector2(float(i + 1) / float(base.size()), 0.0))
+		st.add_vertex(b)
+	var mid := Vector3.ZERO
+	for p in base:
+		mid += p
+	mid /= float(base.size())
+	for i in base.size():
+		var a: Vector3 = base[i]
+		var b: Vector3 = base[(i + 1) % base.size()]
+		st.set_uv(Vector2(0.5, 0.0))
+		st.add_vertex(mid)
+		st.set_uv(Vector2(0.0, 0.0))
+		st.add_vertex(b)
+		st.set_uv(Vector2(1.0, 0.0))
+		st.add_vertex(a)
+	st.generate_normals()
+	return st.commit()
 
 
 func _build_cone_mesh(radius: float, angle: float, spoke_lengths: PackedFloat32Array = PackedFloat32Array()) -> ArrayMesh:
@@ -156,7 +278,7 @@ func _make_particles(amount: int, life: float, size: Vector2, color: Color, spee
 	p.explosiveness = explosiveness
 	p.emitting = false
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	p.position = Vector3(0.0, 0.1, -_radius * 0.45)
+	p.position = Vector3(0.0, 0.18, -minf(_radius * 0.22, 1.4))
 	var mesh := QuadMesh.new()
 	mesh.size = size
 	p.draw_pass_1 = mesh
@@ -165,7 +287,7 @@ func _make_particles(amount: int, life: float, size: Vector2, color: Color, spee
 	pp.particle_flag_align_y = true
 	pp.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
 	var half := _angle * 0.5
-	pp.emission_shape_scale = Vector3(sin(half) * _radius * 0.38, 0.05, _radius * 0.36)
+	pp.emission_shape_scale = Vector3(sin(half) * minf(_radius * 0.22, 1.1), 0.12, minf(_radius * 0.2, 1.0))
 	pp.direction = Vector3(0.0, 1.0, 0.0)
 	pp.spread = 12.0
 	pp.initial_velocity_min = speed * 0.4

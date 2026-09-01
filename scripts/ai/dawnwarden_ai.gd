@@ -5,9 +5,16 @@ const JudgmentBeamScript := preload("res://scripts/combat/judgment_beam.gd")
 const COLLAPSE_FIRST := 16.0
 const COLLAPSE_P1 := 28.0
 const COLLAPSE_P2 := 20.0
+const ECHO_FIRST := 22.0
+const ECHO_P1 := 50.0
+const ECHO_P2 := 40.0
+const ECHO_CAST := 1.55
+const ECHO_GROUP := "solar_echo"
 
 var _collapse_cd: float = COLLAPSE_FIRST
 var _collapsing: bool = false
+var _echo_cd: float = ECHO_FIRST
+var _echoing: bool = false
 
 
 func _ready() -> void:
@@ -25,7 +32,7 @@ func _physics_process(delta: float) -> void:
 		_enter_phase2()
 	if unit.is_stunned():
 		return
-	if _collapsing:
+	if _collapsing or _echoing:
 		return
 	var target := _pick_target()
 	if target == null:
@@ -35,8 +42,12 @@ func _physics_process(delta: float) -> void:
 	else:
 		unit.controller.ai_move(target.global_position)
 	_collapse_cd -= delta
+	_echo_cd -= delta
 	if _collapse_cd <= 0.0:
 		_fire_collapse()
+		return
+	if _echo_cd <= 0.0 and _collapse_cd > 8.0:
+		_fire_echoes()
 		return
 	_cycle -= delta
 	if _cycle > 0.0:
@@ -47,19 +58,14 @@ func _physics_process(delta: float) -> void:
 
 
 func _pick_target() -> Unit:
-	var tank := ArenaState.tank()
-	if tank:
-		return tank
-	if ArenaState.champion and not ArenaState.champion.is_dead:
-		return ArenaState.champion
-	return ArenaState.nearest_enemy(unit.global_position, unit.team) as Unit
+	return ThreatTable.pick_target(unit)
 
 
 func _random_non_tank() -> Unit:
 	var tank := ArenaState.tank()
 	var choices: Array[Unit] = []
 	for u in ArenaState.living_allies():
-		if u == tank:
+		if u == tank or not u.can_be_aggroed():
 			continue
 		choices.append(u)
 	if choices.is_empty():
@@ -120,7 +126,7 @@ func _fire_collapse() -> void:
 
 
 func freeze_is_deferred() -> bool:
-	return _collapsing or super.freeze_is_deferred()
+	return _collapsing or _echoing or super.freeze_is_deferred()
 
 
 func _enter_phase2() -> void:
@@ -128,3 +134,47 @@ func _enter_phase2() -> void:
 	unit.attack_damage *= 1.1
 	if _collapse_cd > COLLAPSE_P2:
 		_collapse_cd = COLLAPSE_P2
+	if _echo_cd > ECHO_P2:
+		_echo_cd = ECHO_P2
+
+
+func _fire_echoes() -> void:
+	var arena := ArenaState.arena as Arena
+	var pillars: Array[ArenaPillar] = []
+	if arena:
+		pillars = arena.living_pillars()
+	if pillars.is_empty():
+		_echo_cd = 8.0
+		return
+	if _living_echo_count() >= maxi(pillars.size() * 2, 4):
+		_echo_cd = 5.0
+		return
+	_echoing = true
+	_echo_cd = ECHO_P2 if _phase2 else ECHO_P1
+	begin_ability("Solar Echoes", ECHO_CAST, Color(1.0, 0.42, 0.12), false)
+	AbilityFx.play_at(AbilityFx.FIRE_CAST, unit.global_position + Vector3(0.0, 1.35, 0.0), {
+		"scale": 2.4,
+		"lifetime": 1.9,
+	})
+	AudioManager.play_at("fire.cast", unit.global_position + Vector3(0.0, 1.65, 0.0))
+	var tree := get_tree()
+	if tree:
+		await tree.create_timer(ECHO_CAST).timeout
+	if not is_instance_valid(self) or unit == null or not is_instance_valid(unit) or unit.is_dead:
+		_echoing = false
+		return
+	if ArenaState.arena and ArenaState.arena.has_method("spawn_dawnwarden_echoes"):
+		ArenaState.arena.spawn_dawnwarden_echoes()
+	_echoing = false
+
+
+func _living_echo_count() -> int:
+	var n := 0
+	var tree := get_tree()
+	if tree == null:
+		return 0
+	for node in tree.get_nodes_in_group(ECHO_GROUP):
+		var u := node as Unit
+		if u != null and is_instance_valid(u) and not u.is_dead:
+			n += 1
+	return n

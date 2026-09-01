@@ -69,5 +69,5 @@ void fragment() {
 
 	ALBEDO = col * (1.35 + core * 1.8 + ring * 1.6);
 	ALPHA = clamp(alpha, 0.0, 1.0);
-	EMISSION = col * (1.1 + core * 2.2 + ring * 2.0);
+	EMISSION = col * (1.6 + core * 2.8 + ring * 2.4);
 }

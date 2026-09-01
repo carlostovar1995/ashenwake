@@ -47,12 +47,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _pick_target() -> Unit:
-	var tank := ArenaState.tank()
-	if tank:
-		return tank
-	if ArenaState.champion and not ArenaState.champion.is_dead:
-		return ArenaState.champion
-	return ArenaState.nearest_enemy(unit.global_position, unit.team) as Unit
+	return ThreatTable.pick_target(unit)
 
 
 func _fire_ability(target: Unit) -> void:

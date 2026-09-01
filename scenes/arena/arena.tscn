@@ -9,18 +9,25 @@ ambient_light_source = 2
 ambient_light_color = Color(0.42, 0.48, 0.58, 1)
 ambient_light_energy = 0.55
 tonemap_mode = 2
-glow_enabled = false
+glow_enabled = true
+glow_normalized = true
+glow_intensity = 0.42
+glow_strength = 0.85
+glow_bloom = 0.02
+glow_hdr_threshold = 1.12
+glow_hdr_scale = 1.7
+glow_blend_mode = 1
 fog_enabled = true
 fog_light_color = Color(0.08, 0.09, 0.12, 1)
 fog_density = 0.004
 
 [sub_resource type="NavigationMesh" id="NavigationMesh_1"]
-geometry_parsed_geometry_type = 2
+geometry_parsed_geometry_type = 1
 cell_size = 0.25
 cell_height = 0.25
 agent_height = 2.0
-agent_radius = 0.65
-agent_max_climb = 0.35
+agent_radius = 0.75
+agent_max_climb = 0.25
 agent_max_slope = 40.0
 region_min_size = 1.0
 region_merge_size = 4.0
@@ -96,17 +103,6 @@ shape = SubResource("Shape_floor")
 [node name="Edge" type="MeshInstance3D" parent="NavigationRegion3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
 mesh = SubResource("Mesh_edge")
-
-[node name="Obstacle1" type="StaticBody3D" parent="NavigationRegion3D"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, 1.2, 5)
-collision_layer = 1
-collision_mask = 0
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Obstacle1"]
-mesh = SubResource("Mesh_obs")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Obstacle1"]
-shape = SubResource("Shape_obs")
 
 [node name="Obstacle2" type="StaticBody3D" parent="NavigationRegion3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 1.2, -4)

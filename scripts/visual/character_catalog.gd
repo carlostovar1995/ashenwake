@@ -23,13 +23,45 @@ static var _libs_ready: bool = false
 
 
 static func attach(unit: Unit, model_path: String, model_scale: float = 1.0, yaw: float = PI, y_offset: float = 0.0, pitch: float = 0.0) -> void:
-	if model_path.is_empty() or not ResourceLoader.exists(model_path):
+	if unit == null or not is_instance_valid(unit):
+		return
+	if model_path.is_empty():
+		return
+	var existing := unit.get_node_or_null("CharacterVisual")
+	if existing is CharacterVisual:
+		return
+	if existing != null:
+		existing.free()
+	var packed := load(model_path) as PackedScene
+	if packed == null:
 		push_warning("Missing character model: %s" % model_path)
 		return
 	var vis := CharacterVisual.new()
 	vis.name = "CharacterVisual"
 	unit.add_child(vis)
 	vis.setup(unit, model_path, model_scale, yaw, y_offset, pitch)
+	if vis.get_child_count() == 0:
+		_mount_model(vis, unit, packed, model_scale, yaw, y_offset, pitch)
+
+
+static func _mount_model(vis: Node, unit: Unit, packed: PackedScene, model_scale: float, yaw: float, y_offset: float, pitch: float) -> void:
+	var model := packed.instantiate() as Node3D
+	if model == null:
+		return
+	vis.add_child(model)
+	model.scale = Vector3.ONE * model_scale
+	if absf(pitch) > 0.001:
+		model.rotate_x(pitch)
+	if absf(yaw) > 0.001:
+		model.rotate_y(yaw)
+	if absf(y_offset) > 0.001:
+		model.position.y = y_offset
+	var mesh := unit.get_node_or_null("MeshInstance3D") as MeshInstance3D
+	if mesh:
+		mesh.visible = false
+	var face := unit.get_node_or_null("FacingMarker") as MeshInstance3D
+	if face:
+		face.visible = false
 
 
 static func animation_libraries() -> Array:

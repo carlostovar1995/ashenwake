@@ -78,8 +78,12 @@ func play() -> void:
 		play()
 
 func stop() -> void:
-	anim.play("stop")
-	anim.stop()
+	if anim:
+		if anim.has_animation(&"stop"):
+			anim.play(&"stop")
+		anim.stop()
+	for p in particles:
+		p.emitting = false
 	stopped.emit()
 
 func _restart_particles() -> void:

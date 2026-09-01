@@ -26,6 +26,7 @@ var extras: PackedInt32Array = PackedInt32Array()
 var overheat_cast_id: int = -1
 var infusion_double: int = 0
 var ability_id: String = "chilled_ground"
+var combat_text_cast_id: int = -1
 
 var _elapsed: float = 0.0
 var _tick_acc: float = 0.0
@@ -35,14 +36,13 @@ var _chill_granted: Dictionary = {}
 var _fill_mat: StandardMaterial3D
 var _ring_mat: ShaderMaterial
 var _sheet_mat: ShaderMaterial
-var _light: OmniLight3D
 var _mist: GPUParticles3D
 var _spark: GPUParticles3D
 var _closing: bool = false
 var _loop_sfx: int = 0
 
 
-static func spawn(caster: Unit, point: Vector3, p_radius: float, p_duration: float, p_interval: float, p_damage: float, p_element: int, p_extras: PackedInt32Array, p_overheat_cast_id: int = -1, p_infusion_double: int = 0, p_ability_id: String = "chilled_ground") -> ChilledGroundZone:
+static func spawn(caster: Unit, point: Vector3, p_radius: float, p_duration: float, p_interval: float, p_damage: float, p_element: int, p_extras: PackedInt32Array, p_overheat_cast_id: int = -1, p_infusion_double: int = 0, p_ability_id: String = "chilled_ground", p_combat_text_cast_id: int = -1) -> ChilledGroundZone:
 	var z := ChilledGroundZone.new()
 	z.source = caster
 	z.radius = p_radius
@@ -54,6 +54,7 @@ static func spawn(caster: Unit, point: Vector3, p_radius: float, p_duration: flo
 	z.overheat_cast_id = p_overheat_cast_id
 	z.infusion_double = p_infusion_double
 	z.ability_id = p_ability_id if not p_ability_id.is_empty() else "chilled_ground"
+	z.combat_text_cast_id = p_combat_text_cast_id
 	z._max_ticks = maxi(int(round(p_duration / z.tick_interval)), 1)
 	z.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	var parent: Node = ArenaState.arena if ArenaState.arena else Engine.get_main_loop().root
@@ -124,13 +125,7 @@ func _build() -> void:
 
 	_mist = _make_particles(22, 1.4, Vector2(1.15, 0.55), Color(0.82, 0.93, 1.0, 0.10), 0.35, false)
 	_spark = _make_particles(16, 0.9, Vector2(0.08, 0.22), Color(0.55, 0.9, 1.0, MAX_OPACITY), 0.85, true)
-
-	_light = OmniLight3D.new()
-	_light.light_color = Color(0.45, 0.82, 1.0)
-	_light.light_energy = 1.65
-	_light.omni_range = radius * 1.25
-	_light.position = Vector3(0.0, 0.7, 0.0)
-	add_child(_light)
+	FxHeroLights.bind(self, Color(0.45, 0.82, 1.0), 1.4, radius * 1.25)
 
 
 static func _circle_texture() -> Texture2D:
@@ -183,17 +178,15 @@ func _pulse() -> void:
 			continue
 		if u.team == source.team:
 			continue
-		var to := u.global_position - global_position
-		to.y = 0.0
-		if to.length() > radius + u.radius:
+		if u.hit_distance_to(global_position) > radius:
 			continue
-		if not _has_los(u):
+		if not u.is_structure and not _has_los(u):
 			continue
 		var id := u.get_instance_id()
 		var first_contact := not _chill_granted.has(id)
 		if first_contact:
 			_chill_granted[id] = true
-		u.receive_ability_hit(source, element, tick_damage, 0.0, extras, true, first_contact, true, overheat_cast_id, infusion_double, ability_id)
+		u.receive_ability_hit(source, element, tick_damage, 0.0, extras, true, first_contact, true, overheat_cast_id, infusion_double, ability_id, combat_text_cast_id)
 
 
 func _contains(u: Unit) -> bool:
@@ -207,6 +200,7 @@ func _contains(u: Unit) -> bool:
 func _refresh_haste() -> void:
 	if source == null or not is_instance_valid(source) or source.is_dead:
 		return
+	var hit_caster := false
 	for other in ArenaState.units:
 		var u := other as Unit
 		if u == null or not is_instance_valid(u) or u.is_dead:
@@ -215,7 +209,11 @@ func _refresh_haste() -> void:
 			continue
 		if not _contains(u):
 			continue
+		if u == source:
+			hit_caster = true
 		u.apply_haste(HASTE_PERCENT, HASTE_REFRESH)
+	if not hit_caster:
+		source.apply_haste(HASTE_PERCENT, HASTE_REFRESH)
 
 
 func _has_los(u: Unit) -> bool:
@@ -242,8 +240,6 @@ func _close() -> void:
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_method(_set_fade, 1.0, 0.0, 0.4)
-	if _light:
-		tw.tween_property(_light, "light_energy", 0.0, 0.4)
 	tw.chain().tween_callback(queue_free)
 
 

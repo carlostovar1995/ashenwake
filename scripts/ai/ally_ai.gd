@@ -97,8 +97,8 @@ func _spread_inward_cover() -> Vector3:
 	var arena := ArenaState.arena as Arena
 	if arena == null:
 		return unit.global_position
-	var pillars := arena.living_pillars()
-	if pillars.is_empty():
+	var spots := arena.inward_cover_spots(unit.radius)
+	if spots.is_empty():
 		return unit.global_position
 	var hiders: Array = []
 	var tank := ArenaState.tank()
@@ -109,10 +109,7 @@ func _spread_inward_cover() -> Vector3:
 	var idx := hiders.find(unit)
 	if idx < 0:
 		idx = 0
-	pillars.sort_custom(func(a: ArenaPillar, b: ArenaPillar) -> bool:
-		return atan2(a.global_position.x, a.global_position.z) < atan2(b.global_position.x, b.global_position.z)
-	)
-	return arena.cover_point_inward(pillars[idx % pillars.size()], unit.radius)
+	return spots[idx % spots.size()]
 
 
 func _has_cover_from(threat: Unit) -> bool:

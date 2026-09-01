@@ -12,5 +12,6 @@ alwaysApply: false
 - Prefer text-format `.tscn` / `.tres`. Do not convert resources to binary unless asked.
 - Put scenes in `scenes/`, gameplay scripts in `scripts/`, one-off CI/tool scripts in `tools/`.
 - Do not change `uid://` identifiers on existing resources unless Godot regenerated them after a real rename.
-- After code or scene changes, verify with `./scripts/verify-headless.sh` (import + `tools/ci_check.gd`). Playtesting in the editor happens on the Windows home PC, not in Cloud Agents.
+- Playtest in the Godot editor on the machine that has this checkout. Cloud Agents are not the daily loop.
+- MCP `godot` is the Coding-Solo CLI (run/log). MCP `godot-editor` is KeeVeeG and needs the Godot **editor** open with the Godot MCP plugin active, pointed at this Windows folder.
 - Pin the editor with `.godot-version`. If you bump Godot, update that file and `config/features` in `project.godot` together.

@@ -2,7 +2,21 @@ class_name AbilityDef
 extends Resource
 
 enum TargetMode { SKILLSHOT, UNIT, GROUND, INSTANT }
-enum Element { NONE, FIRE, ICE, STORM }
+enum Element { NONE, FIRE, ICE, STORM, HOLY, SHADOW, NATURE, PROTECTION, WIND, ILLUSION }
+enum Delivery {
+	BOLT,
+	MISSILES,
+	GROUND_AOE,
+	AOE_EXPLOSION,
+	AURA,
+	RAY,
+	METEOR,
+	NOVA,
+	WALL,
+	SHIELD,
+	TARGET,
+	WAVE,
+}
 
 @export var id: String = ""
 @export var display_name: String = ""
@@ -15,6 +29,7 @@ enum Element { NONE, FIRE, ICE, STORM }
 @export var skillshot_speed: float = 18.0
 @export var skillshot_length: float = 12.0
 @export var aoe_radius: float = 2.5
+@export var inner_radius: float = 0.0
 @export var damage: float = 80.0
 @export var heal: float = 0.0
 @export var cast_time: float = 0.12
@@ -59,6 +74,78 @@ enum Element { NONE, FIRE, ICE, STORM }
 @export var free_cast_charges: int = 0
 @export var heal_allies: bool = false
 @export var hit_cooldown_reduction: float = 0.0
+@export var projectile_count: int = 1
+@export var extra_elements: PackedInt32Array = PackedInt32Array()
+@export var split_elements: PackedInt32Array = PackedInt32Array()
+@export var split_damage_inc: PackedFloat32Array = PackedFloat32Array()
+@export var split_heal_inc: PackedFloat32Array = PackedFloat32Array()
+@export var split_shield_inc: PackedFloat32Array = PackedFloat32Array()
+@export var split_flat: PackedFloat32Array = PackedFloat32Array()
+@export var vfx_layers: Array = []
+@export var can_freeze: bool = false
+@export var holy_pulse_ratio: float = 0.0
+@export var applies_rejuvenation: bool = false
+@export var base_power: float = 0.0
+@export var echo: bool = false
+@export var echo_damage_mult: float = 0.2
+@export var crit_chance: float = 0.05
+@export var crit_damage: float = 2.0
+@export var recast_window: float = 0.0
+@export var recast_damage_mult: float = 0.2
+@export var icon_infusion_tag: String = ""
+@export var delivery: Delivery = Delivery.BOLT
+@export var cost_per_tick: bool = false
+@export var is_toggle: bool = false
+@export var friendly_only: bool = false
+@export var can_help_allies: bool = false
+@export var altered: bool = false
+@export var altered_element: int = Element.NONE
+@export var move_while_casting: bool = false
+@export var infusion_ids: PackedStringArray = PackedStringArray()
+@export var implemented: bool = true
+@export var threat_mult: float = 1.0
+@export var loadout_slot: int = -1
+
+
+func combat_id(slot: int = -1) -> String:
+	var idx := slot if slot >= 0 else loadout_slot
+	if idx < 0 or id.is_empty():
+		return id
+	return "%s#%d" % [id, idx]
+
+
+static func combat_id_of(ab: AbilityDef, fallback: String = "") -> String:
+	if ab == null:
+		return fallback
+	return ab.combat_id()
+
+
+static func matches_base(ability_id: String, base: String) -> bool:
+	return base_from_combat_id(ability_id) == base
+
+
+static func stamp_loadout_slots(next: Array) -> void:
+	for i in next.size():
+		var ab = next[i]
+		if ab is AbilityDef:
+			(ab as AbilityDef).loadout_slot = i
+
+
+static func slot_from_combat_id(ability_id: String) -> int:
+	var hash_at := ability_id.rfind("#")
+	if hash_at < 0:
+		return -1
+	var tail := ability_id.substr(hash_at + 1)
+	if not tail.is_valid_int():
+		return -1
+	return tail.to_int()
+
+
+static func base_from_combat_id(ability_id: String) -> String:
+	var hash_at := ability_id.rfind("#")
+	if hash_at < 0:
+		return ability_id
+	return ability_id.substr(0, hash_at)
 
 
 static func make(
@@ -90,13 +177,73 @@ func is_cone() -> bool:
 
 
 func is_ally_support() -> bool:
+	if friendly_only:
+		return true
 	return (heal > 0.05 or shield > 0.05) and damage <= 0.05
 
 
-func can_self_cast() -> bool:
-	if target_mode != TargetMode.UNIT:
+func locks_unit_target() -> bool:
+	return target_mode == TargetMode.UNIT
+
+
+func can_target_allies() -> bool:
+	return friendly_only or can_help_allies or altered
+
+
+func can_target_enemies() -> bool:
+	return not friendly_only
+
+
+func accepts_unit(caster_team: int, target: Unit) -> bool:
+	if target == null or not is_instance_valid(target) or target.is_dead:
 		return false
-	return heal > 0.05 or shield > 0.05
+	if target.team == caster_team:
+		return can_target_allies()
+	return can_target_enemies()
+
+
+func can_self_cast() -> bool:
+	return can_target_allies()
+
+
+func altered_buff_elements() -> PackedInt32Array:
+	var out := PackedInt32Array()
+	if not altered:
+		return out
+	for kind in [Element.FIRE, Element.ICE, Element.STORM, Element.SHADOW]:
+		if has_element(kind) or altered_element == kind:
+			out.append(kind)
+	return out
+
+
+func allows_self_click() -> bool:
+	if not locks_unit_target() or not can_self_cast():
+		return false
+	return delivery == Delivery.TARGET or id == "target"
+
+
+func ticks_shield() -> bool:
+	return delivery == Delivery.GROUND_AOE or delivery == Delivery.AURA or delivery == Delivery.RAY
+
+
+func pierces_skillshot() -> bool:
+	return delivery == Delivery.WAVE
+
+
+func has_infusion(infusion_id: String) -> bool:
+	return infusion_ids.has(infusion_id)
+
+
+func has_element(kind: int) -> bool:
+	if element == kind:
+		return true
+	for extra in extra_elements:
+		if extra == kind:
+			return true
+	for split in split_elements:
+		if split == kind:
+			return true
+	return false
 
 
 func scaled_damage(charge: float) -> float:
@@ -128,35 +275,12 @@ func vfx_cfg() -> Dictionary:
 
 
 func tooltip() -> String:
-	var lines: PackedStringArray = []
-	lines.append("%s    [%s]" % [display_name, hotkey])
-	var bits: PackedStringArray = []
-	if mana_cost > 0.05:
-		bits.append("Mana %d" % int(mana_cost))
-	if cooldown <= 0.05:
-		bits.append("No CD")
-	else:
-		bits.append("CD %s s" % _num(cooldown))
-	if range > 0.05:
-		bits.append("Range %s" % _num(range))
-	if gcd_exempt:
-		bits.append("Off GCD")
-	if heal > 0.05:
-		bits.append("Heal %d" % int(round(heal)))
-	if shield > 0.05:
-		bits.append("Shield %d" % int(round(shield)))
-	if cast_time > 0.05:
-		bits.append("Cast %s s" % _num(cast_time))
-	elif is_channel:
-		bits.append("Channel %s s" % _num(channel_time))
-	else:
-		bits.append("Instant")
-	if not bits.is_empty():
-		lines.append("   ·   ".join(bits))
-	if not description.is_empty():
-		lines.append("")
-		lines.append(description)
-	return "\n".join(lines)
+	var recipe: SpellRecipe = null
+	if GameSession.spell_loadout.size() == 6:
+		var idx := SpellCatalog.HOTKEYS.find(hotkey)
+		if idx >= 0 and GameSession.spell_loadout[idx] is SpellRecipe:
+			recipe = GameSession.spell_loadout[idx]
+	return "%s    [%s]\n%s" % [display_name, hotkey, SpellCard.hud(self, recipe)]
 
 
 func _num(v: float) -> String:

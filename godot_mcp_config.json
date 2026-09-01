@@ -1,0 +1,7 @@
+{
+  "enabled_tools": {
+    "delete_scene": false,
+    "reload_project": false,
+    "execute_editor_script": false
+  }
+}

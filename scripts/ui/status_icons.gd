@@ -6,11 +6,46 @@ const _ALIASES := {
 	"overcharged": "overcharge",
 	"overheat": "overcharge",
 }
+const _PAINTERLY := {
+	"bolt": true,
+	"missiles": true,
+	"ground_aoe": true,
+	"burst": true,
+	"aura": true,
+	"ray": true,
+	"meteor": true,
+	"nova": true,
+	"wall": true,
+	"wave": true,
+	"fire": true,
+	"ice": true,
+	"lightning": true,
+	"shadow": true,
+	"nature": true,
+	"divine": true,
+	"protection": true,
+	"wind": true,
+	"illusion": true,
+}
 
 static var _cache: Dictionary = {}
 
 
+static func stack_text(data: Dictionary) -> String:
+	var badge := String(data.get("badge", ""))
+	if not badge.is_empty():
+		return badge
+	var count := int(data.get("stacks", 0))
+	return str(count) if count > 0 else ""
+
+
 static func texture_for(icon_id: String) -> Texture2D:
+	var painted := _painterly_texture(icon_id, "")
+	if painted:
+		return painted
+	var base := _spell_base_icon(icon_id)
+	if not base.is_empty():
+		return _procedural_base(base, "")
 	if icon_id.is_empty():
 		return _procedural(icon_id)
 	if _cache.has(icon_id):
@@ -26,6 +61,12 @@ static func texture_for(icon_id: String) -> Texture2D:
 
 
 static func texture_for_ability(icon_id: String, infusion_tag: String = "") -> Texture2D:
+	var painted := _painterly_texture(icon_id, infusion_tag)
+	if painted:
+		return painted
+	var base := _spell_base_icon(icon_id)
+	if not base.is_empty():
+		return _procedural_base(base, infusion_tag)
 	if icon_id.is_empty() or infusion_tag.is_empty():
 		return texture_for(icon_id)
 	var variant_id := "%s_infused_%s" % [icon_id, infusion_tag]
@@ -33,6 +74,176 @@ static func texture_for_ability(icon_id: String, infusion_tag: String = "") -> T
 	if ResourceLoader.exists(variant_path):
 		return texture_for(variant_id)
 	return texture_for(icon_id)
+
+
+static func _painterly_key(icon_id: String) -> String:
+	var base := _spell_base_icon(icon_id)
+	if not base.is_empty():
+		return base
+	return String(_ALIASES.get(icon_id, icon_id))
+
+
+static func _painterly_texture(icon_id: String, infusion_tag: String) -> Texture2D:
+	var key := _painterly_key(icon_id)
+	if key.is_empty():
+		return null
+	if not infusion_tag.is_empty():
+		var variant_id := "%s_infused_%s" % [key, infusion_tag]
+		var variant := _load_png(variant_id)
+		if variant:
+			return variant
+	if _PAINTERLY.has(key):
+		return _load_png(key)
+	return null
+
+
+static func _load_png(stem: String) -> Texture2D:
+	if _cache.has(stem):
+		return _cache[stem]
+	var path := ICON_DIR + stem + ".png"
+	var tex: Texture2D = null
+	if ResourceLoader.exists(path):
+		tex = load(path) as Texture2D
+	_cache[stem] = tex
+	return tex
+
+
+static func _spell_base_icon(icon_id: String) -> String:
+	match icon_id:
+		"bolt", "firebolt", "radiant_bolt", "energy_bolt":
+			return "bolt"
+		"missiles", "thunder_wave", "chain_spark":
+			return "missiles"
+		"ground_aoe", "field":
+			return "ground_aoe"
+		"burst", "aoe_explosion":
+			return "burst"
+		"aura":
+			return "aura"
+		"ray", "judgment":
+			return "ray"
+		"meteor":
+			return "meteor"
+		"nova", "bastion":
+			return "nova"
+		"wall":
+			return "wall"
+		"target", "shield", "ward_cast":
+			return "target"
+		"wave":
+			return "wave"
+	return ""
+
+
+static func _procedural_base(base_id: String, infusion_tag: String) -> Texture2D:
+	var key := "%s|%s" % [base_id, infusion_tag]
+	if _cache.has(key):
+		return _cache[key]
+	var pal := _infusion_palette(infusion_tag)
+	var img := Image.create(48, 48, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	_fill_round(img, pal.bg)
+	_draw_base_glyph(img, base_id, pal.ink, pal.glow)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[key] = tex
+	return tex
+
+
+static func _infusion_palette(tag: String) -> Dictionary:
+	match tag:
+		"fire":
+			return {"bg": Color(0.28, 0.07, 0.02), "ink": Color(1.0, 0.48, 0.12), "glow": Color(1.0, 0.86, 0.32)}
+		"ice":
+			return {"bg": Color(0.05, 0.14, 0.26), "ink": Color(0.48, 0.84, 1.0), "glow": Color(0.82, 0.96, 1.0)}
+		"lightning", "storm":
+			return {"bg": Color(0.12, 0.07, 0.2), "ink": Color(0.82, 0.7, 1.0), "glow": Color(1.0, 0.95, 0.55)}
+		"shadow":
+			return {"bg": Color(0.1, 0.04, 0.16), "ink": Color(0.72, 0.38, 0.95), "glow": Color(0.92, 0.7, 1.0)}
+		"nature":
+			return {"bg": Color(0.04, 0.16, 0.07), "ink": Color(0.4, 0.88, 0.4), "glow": Color(0.78, 1.0, 0.52)}
+		"divine", "holy":
+			return {"bg": Color(0.2, 0.14, 0.04), "ink": Color(1.0, 0.84, 0.36), "glow": Color(1.0, 0.97, 0.78)}
+		"protection":
+			return {"bg": Color(0.1, 0.14, 0.22), "ink": Color(0.72, 0.82, 1.0), "glow": Color(0.94, 0.97, 1.0)}
+		"wind":
+			return {"bg": Color(0.06, 0.16, 0.14), "ink": Color(0.72, 0.92, 0.82), "glow": Color(0.92, 1.0, 0.9)}
+		"illusion":
+			return {"bg": Color(0.16, 0.05, 0.14), "ink": Color(0.92, 0.55, 0.82), "glow": Color(1.0, 0.78, 0.92)}
+		_:
+			return {"bg": Color(0.1, 0.12, 0.18), "ink": Color(0.78, 0.86, 1.0), "glow": Color(0.95, 0.97, 1.0)}
+
+
+static func _draw_base_glyph(img: Image, base_id: String, ink: Color, glow: Color) -> void:
+	match base_id:
+		"bolt":
+			_poly(img, [Vector2(14, 36), Vector2(22, 20), Vector2(18, 20), Vector2(30, 10), Vector2(26, 22), Vector2(30, 22), Vector2(16, 38)], ink)
+			_disc(img, 30, 12, 3, glow)
+		"missiles":
+			_poly(img, [Vector2(10, 32), Vector2(16, 16), Vector2(20, 18), Vector2(14, 34)], ink)
+			_poly(img, [Vector2(20, 36), Vector2(26, 14), Vector2(30, 16), Vector2(24, 38)], glow)
+			_poly(img, [Vector2(30, 32), Vector2(36, 18), Vector2(40, 20), Vector2(34, 34)], ink)
+		"ground_aoe":
+			for y in range(28, 42):
+				var t := absf(float(y) - 34.0) / 7.0
+				var half := int(round(lerpf(16.0, 6.0, t)))
+				for x in range(24 - half, 25 + half):
+					var edge := y == 28 or y == 41 or x == 24 - half or x == 24 + half
+					img.set_pixel(x, y, glow if edge else ink.darkened(0.25))
+			_disc(img, 24, 22, 5, ink)
+			_disc(img, 24, 22, 2, glow)
+		"burst":
+			_disc(img, 24, 24, 14, ink.darkened(0.2))
+			_disc(img, 24, 24, 9, ink)
+			_disc(img, 24, 24, 4, glow)
+			_star(img, 24, 24, 18, 6, glow)
+		"aura":
+			for r in [16, 11, 6]:
+				_ring_pixels(img, 24, 24, r, ink if r > 8 else glow)
+			_disc(img, 24, 24, 3, glow)
+		"ray":
+			for y in range(8, 42):
+				var t := absf(float(y) - 24.0) / 16.0
+				var half := int(round(lerpf(4.0, 1.0, t)))
+				for x in range(24 - half, 25 + half):
+					img.set_pixel(x, y, ink.lerp(glow, 1.0 - t))
+			_disc(img, 24, 9, 4, glow)
+			_disc(img, 24, 40, 3, ink)
+		"meteor":
+			for i in 12:
+				var t := float(i) / 11.0
+				_disc(img, 16 + int(round(t * 10.0)), 8 + int(round(t * 16.0)), int(round(lerpf(2.0, 6.0, t))), ink.lerp(glow, t))
+			_disc(img, 30, 32, 8, ink)
+			_disc(img, 28, 30, 3, glow)
+		"nova":
+			_star(img, 24, 24, 17, 6, ink)
+			_star(img, 24, 24, 9, 3, glow)
+			_disc(img, 24, 24, 3, glow)
+		"wall":
+			for y in range(10, 40):
+				for x in range(16, 33):
+					var edge := x == 16 or x == 32 or y == 10 or y == 39
+					img.set_pixel(x, y, glow if edge else ink.darkened(0.15))
+			_disc(img, 24, 16, 3, glow)
+		"target":
+			_target_reticle(img, ink, glow)
+		"shield":
+			_target_reticle(img, ink, glow)
+		"wave":
+			_poly(img, [Vector2(8, 34), Vector2(18, 14), Vector2(24, 18), Vector2(14, 36)], ink)
+			_poly(img, [Vector2(16, 36), Vector2(28, 12), Vector2(36, 16), Vector2(24, 38)], glow)
+			_poly(img, [Vector2(26, 36), Vector2(38, 18), Vector2(42, 22), Vector2(32, 38)], ink)
+		_:
+			_disc(img, 24, 24, 10, ink)
+
+
+static func _ring_pixels(img: Image, cx: int, cy: int, radius: int, color: Color) -> void:
+	for y in range(cy - radius, cy + radius + 1):
+		for x in range(cx - radius, cx + radius + 1):
+			if x < 0 or y < 0 or x >= 48 or y >= 48:
+				continue
+			var d := Vector2(float(x - cx), float(y - cy)).length()
+			if absf(d - float(radius)) <= 1.35:
+				img.set_pixel(x, y, color)
 
 
 static func _procedural(icon_id: String) -> Texture2D:
@@ -66,9 +277,40 @@ static func _draw_icon(img: Image, icon_id: String) -> void:
 			_fill_round(img, Color(0.16, 0.2, 0.24, 1.0))
 			_snow(img, Color(0.55, 0.68, 0.78))
 			_slash(img, Color(0.95, 0.38, 0.32))
-		"storm_infused", "charged":
-			_fill_round(img, Color(0.12, 0.1, 0.02, 1.0) if icon_id == "charged" else Color(0.08, 0.1, 0.28, 1.0))
-			_bolt(img, Color(1.0, 0.92, 0.35) if icon_id == "charged" else Color(0.7, 0.82, 1.0))
+		"storm_infused", "charged", "shocked", "lightning":
+			_fill_round(img, Color(0.12, 0.08, 0.18, 1.0) if icon_id == "shocked" or icon_id == "charged" else Color(0.08, 0.1, 0.28, 1.0))
+			_bolt(img, Color(0.88, 0.72, 1.0) if icon_id == "shocked" or icon_id == "charged" else Color(0.7, 0.82, 1.0))
+		"shadow", "afflicted":
+			_fill_round(img, Color(0.1, 0.04, 0.16, 1.0))
+			_disc(img, 24, 24, 11, Color(0.42, 0.16, 0.62))
+			_disc(img, 24, 24, 5, Color(0.78, 0.42, 1.0))
+		"nature", "rejuvenation":
+			_fill_round(img, Color(0.05, 0.16, 0.08, 1.0))
+			_disc(img, 24, 28, 8, Color(0.32, 0.72, 0.28))
+			_star(img, 24, 18, 10, 4, Color(0.7, 1.0, 0.45))
+		"divine", "holy_blessing":
+			_fill_round(img, Color(0.2, 0.14, 0.04, 1.0))
+			_star(img, 24, 24, 15, 6, Color(1.0, 0.9, 0.42))
+			_disc(img, 24, 24, 5, Color(1.0, 0.97, 0.78))
+		"protection":
+			_fill_round(img, Color(0.1, 0.14, 0.22, 1.0))
+			_shield(img, Color(0.78, 0.86, 1.0))
+		"altered_fire":
+			_fill_round(img, Color(0.28, 0.08, 0.02, 1.0))
+			_flame(img, Color(1.0, 0.42, 0.08), Color(1.0, 0.82, 0.22))
+		"altered_ice", "frost_trail":
+			_fill_round(img, Color(0.06, 0.16, 0.28, 1.0))
+			_snow(img, Color(0.72, 0.94, 1.0))
+		"altered_lightning":
+			_fill_round(img, Color(0.08, 0.1, 0.28, 1.0))
+			_bolt(img, Color(0.7, 0.82, 1.0))
+		"altered_shadow", "shadow_pact":
+			_fill_round(img, Color(0.1, 0.04, 0.16, 1.0))
+			_disc(img, 24, 24, 11, Color(0.42, 0.16, 0.62))
+			_disc(img, 24, 24, 5, Color(0.78, 0.42, 1.0))
+		"encore":
+			_fill_round(img, Color(0.2, 0.12, 0.04, 1.0))
+			_encore(img)
 		"ward":
 			_fill_round(img, Color(0.22, 0.14, 0.04, 1.0))
 			_shield(img, Color(1.0, 0.72, 0.28))
@@ -124,6 +366,10 @@ static func _draw_icon(img: Image, icon_id: String) -> void:
 			_fill_round(img, Color(0.22, 0.16, 0.04, 1.0))
 			_star(img, 24, 24, 16, 7, Color(1.0, 0.9, 0.4))
 			_star(img, 24, 24, 8, 3, Color(1.0, 0.98, 0.78))
+		"holy":
+			_fill_round(img, Color(0.2, 0.14, 0.04, 1.0))
+			_star(img, 24, 24, 15, 6, Color(1.0, 0.9, 0.42))
+			_disc(img, 24, 24, 5, Color(1.0, 0.97, 0.78))
 		_:
 			_fill_round(img, Color(0.16, 0.16, 0.2, 1.0))
 			_disc(img, 24, 24, 10, Color(0.85, 0.85, 0.9))
@@ -206,6 +452,36 @@ static func _bolt(img: Image, color: Color) -> void:
 		Vector2(30, 24), Vector2(22, 24), Vector2(32, 8)
 	]
 	_poly(img, pts, color)
+
+
+static func _encore(img: Image) -> void:
+	var gold := Color(1.0, 0.84, 0.38)
+	var light := Color(1.0, 0.95, 0.7)
+	for y in 48:
+		for x in 48:
+			var d := Vector2(float(x) - 24.0, float(y) - 24.0).length()
+			if d < 14.2 or d > 17.8:
+				continue
+			if x > 26 and y < 20:
+				continue
+			img.set_pixel(x, y, gold)
+	_poly(img, [Vector2(24, 7), Vector2(36, 15), Vector2(24, 22)], light)
+
+
+static func _target_reticle(img: Image, ink: Color, glow: Color) -> void:
+	_ring_pixels(img, 24, 24, 16, ink)
+	_ring_pixels(img, 24, 24, 10, glow)
+	_disc(img, 24, 24, 2, glow)
+	for i in range(6, 12):
+		img.set_pixel(24, i, glow)
+		img.set_pixel(24, 47 - i, glow)
+		img.set_pixel(i, 24, glow)
+		img.set_pixel(47 - i, 24, glow)
+	for i in range(13, 18):
+		img.set_pixel(24, i, ink)
+		img.set_pixel(24, 47 - i, ink)
+		img.set_pixel(i, 24, ink)
+		img.set_pixel(47 - i, 24, ink)
 
 
 static func _shield(img: Image, color: Color) -> void:

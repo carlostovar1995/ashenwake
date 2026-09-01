@@ -9,7 +9,9 @@ const _MP_BLUE := Color(0.22, 0.40, 0.78)
 const _BOSS_RED := Color(0.52, 0.16, 0.15)
 const _SHIELD_GRAY := Color(0.86, 0.90, 0.96, 0.95)
 const _SLOT_HOVER := Color(1.42, 1.26, 0.72)
+const _RECAST_GOLD := Color(1.0, 0.84, 0.32)
 const _SPARK_PX := 32.0
+const _METER_REFRESH_INTERVAL := 0.10
 
 var _lobby: Control
 var _ip: LineEdit
@@ -45,12 +47,14 @@ var _ability_panels: Array[Panel] = []
 var _ability_cds: Array[Label] = []
 var _ability_names: Array[Label] = []
 var _ability_clocks: Array[TextureProgressBar] = []
+var _recast_rings: Array[Control] = []
 var _passive_panel: Panel
 var _passive_name: Label
 var _hover_passive: bool = false
 var _cd_clock_tex: Texture2D
-var _class_buttons: Dictionary = {}
 var _boss_buttons: Dictionary = {}
+var _play_button: Button
+var _play_popup: PopupPanel
 var _ally_rows: Array[Control] = []
 var _ally_bars: Array[ProgressBar] = []
 var _ally_shields: Array[ColorRect] = []
@@ -79,6 +83,8 @@ var _target_name: Label
 var _target_hp: ProgressBar
 var _target_shield: ColorRect
 var _target_hp_label: Label
+var _target_threat_box: VBoxContainer
+var _target_threat_rows: Array[Dictionary] = []
 var _target_status_row: HBoxContainer
 var _target_status_icons: Array[Panel] = []
 var _target_debuffs: Array[Dictionary] = []
@@ -94,6 +100,7 @@ var _meter_col_rate: Label
 var _meter_rows: Array[Dictionary] = []
 var _meter_handle: Control
 var _meter_locked: bool = false
+var _meter_refresh_acc: float = _METER_REFRESH_INTERVAL
 var _player_handle: Control
 var _player_locked: bool = false
 var _target_handle: Control
@@ -127,11 +134,16 @@ var _hero_detail_page: Control
 var _hero_clip_list: VBoxContainer
 var _hero_open_group: Dictionary = {}
 var _hero_audio_live: bool = false
+var _balance_flat_menu: Control
+var _balance_pct_menu: Control
+var _balance_flat_list: VBoxContainer
+var _balance_pct_list: VBoxContainer
 var _hover_meter_unit: Unit
 var _meter_break: Panel
 var _meter_break_title: Label
 var _meter_break_rows: Array[Dictionary] = []
 var _hud_tex_cache: Dictionary = {}
+var _fps_label: Label
 
 
 func _ready() -> void:
@@ -170,7 +182,9 @@ func _exit_tree() -> void:
 
 
 func _process(delta: float) -> void:
+	_tick_fps()
 	if _combat.visible:
+		_meter_refresh_acc += delta
 		_refresh_combat()
 		_tick_hud_life(delta)
 		if _tip and _tip.visible:
@@ -186,7 +200,6 @@ func _process(delta: float) -> void:
 				_place_target_status_tip()
 			elif _tip_follow_mouse:
 				_place_status_tip()
-		_refresh_meter_breakdown()
 		if _edit_mode:
 			_sync_edit_handles()
 	if Input.is_action_just_pressed("restart") and ArenaState.outcome != "":
@@ -218,6 +231,12 @@ func _input(event: InputEvent) -> void:
 
 
 func handle_escape() -> bool:
+	if _balance_flat_menu and _balance_flat_menu.visible:
+		_close_balance()
+		return true
+	if _balance_pct_menu and _balance_pct_menu.visible:
+		_close_balance()
+		return true
 	if _hero_audio_menu and _hero_audio_menu.visible:
 		if _hero_audio_live and GameSession.fight_started:
 			_dismiss_hero_audio_live()
@@ -236,6 +255,9 @@ func handle_escape() -> bool:
 		_resume_game()
 		return true
 	if GameSession.fight_started and ArenaState.outcome == "":
+		var pin := get_tree().get_first_node_in_group("player_input")
+		if pin and pin.has_method("try_cancel_cast") and bool(pin.call("try_cancel_cast")):
+			return true
 		_open_pause_menu()
 		return true
 	return false
@@ -320,26 +342,30 @@ func _refresh_combat() -> void:
 				_ability_panels[i].visible = false
 				if i < _ability_clocks.size():
 					_ability_clocks[i].visible = false
+				_refresh_recast_fx(i, false)
 				continue
 			_ability_panels[i].visible = true
 			var ab: AbilityDef = u.abilities[i]
+			var recast_ready := u.has_recast_ready(i)
+			var recast_fx := u.has_recast_prompt(i) if u.has_method("has_recast_prompt") else (recast_ready or u.has_aura(i))
 			var ability_cd: float = u.cooldown_left[i] if i < u.cooldown_left.size() else 0.0
 			var gcd: float = u.gcd_display_left(i)
 			var display_cd := maxf(ability_cd, gcd)
 			var display_duration := u.cooldown_duration(i) if ability_cd >= gcd else u.gcd_clock_duration()
-			_ability_cds[i].text = ab.hotkey if ability_cd <= 0.0 else "%0.1f" % ability_cd
+			_ability_cds[i].text = ab.hotkey if ability_cd <= 0.0 or recast_fx else "%0.1f" % ability_cd
 			if i < _ability_names.size():
 				_ability_names[i].text = ab.display_name
 				_ability_names[i].modulate = ab.color.lightened(0.25)
 			var icon_id := ab.icon_id if not ab.icon_id.is_empty() else ab.id
-			var infusion_tag := "" if ab.grant_all_infusions else u.infusion_icon_tag()
+			var infusion_tag := ab.icon_infusion_tag
 			_paint_ability_art(_ability_panels[i], icon_id, infusion_tag)
-			if ability_cd > 0.0:
+			if ability_cd > 0.0 or recast_fx:
 				_ability_panels[i].modulate = Color(1, 1, 1, 1)
 			else:
 				_ability_panels[i].modulate = Color(1, 1, 1, 1) if u.can_prepare_cast(i) else Color(0.5, 0.5, 0.55)
 			_glow_slot(_ability_panels[i], _hover_ability == i)
 			_refresh_ability_clock(i, display_cd, display_duration)
+			_refresh_recast_fx(i, recast_fx)
 		_refresh_passive_slot()
 	for i in _ally_bars.size():
 		if i >= ArenaState.allies.size():
@@ -347,7 +373,8 @@ func _refresh_combat() -> void:
 			continue
 		var ally: Unit = ArenaState.allies[i]
 		_ally_bars[i].get_parent().visible = true
-		_ally_names[i].text = ally.unit_name + ("  [YOU]" if ally == GameSession.active_unit else "") + ("  [TANK]" if ally.immortal else "")
+		var tank_tag := ally.immortal and ally.visual_path != CharacterCatalog.TRAINING_DUMMY
+		_ally_names[i].text = ally.unit_name + ("  [YOU]" if ally == GameSession.active_unit else "") + ("  [TANK]" if tank_tag else "")
 		_apply_hp_with_shield(_ally_bars[i], _ally_shields[i] if i < _ally_shields.size() else null, ally)
 		_ally_names[i].modulate = Color(1, 0.85, 0.4) if ally == GameSession.active_unit else Color.WHITE
 		var row := _ally_rows[i] if i < _ally_rows.size() else _ally_bars[i].get_parent() as Control
@@ -359,7 +386,7 @@ func _refresh_combat() -> void:
 	_refresh_boss_debuffs()
 	_refresh_player_buffs()
 	_refresh_target_frame()
-	_refresh_combat_meter()
+	_refresh_combat_meter_if_due()
 
 
 func _build() -> void:
@@ -378,8 +405,10 @@ func _build() -> void:
 	_build_pause_menu()
 	_build_settings_menu()
 	_build_hero_audio_menu()
+	_build_balance_menus()
 	_build_edit_toolbar()
 	_build_reload_button()
+	_build_fps_counter()
 	_build_training_tools()
 
 
@@ -889,6 +918,7 @@ func _make_bar_slot(key: String, name: String, color: Color, with_clock: bool) -
 		l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.95))
 		l.add_theme_constant_override("outline_size", 7)
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		l.z_index = 8
 		p.add_child(l)
 	var n := Label.new()
 	n.name = "Name"
@@ -906,11 +936,13 @@ func _refresh_ability_clock(index: int, remaining: float, duration: float) -> vo
 	var clock := _ability_clocks[index]
 	if remaining <= 0.04 or duration <= 0.04:
 		clock.visible = false
+		clock.tint_progress = Color(0.015, 0.02, 0.035, 0.82)
 		return
 	var ratio := clampf(remaining / duration, 0.0, 1.0)
 	clock.visible = true
 	clock.value = ratio
 	clock.radial_initial_angle = fmod((1.0 - ratio) * 360.0, 360.0)
+	clock.tint_progress = Color(0.015, 0.02, 0.035, 0.82)
 
 
 func _build_lobby() -> void:
@@ -925,109 +957,118 @@ func _build_lobby() -> void:
 	_lobby.add_child(dim)
 
 	var card := Panel.new()
-	card.anchor_left = 0.5
-	card.anchor_right = 0.5
-	card.anchor_top = 0.5
-	card.anchor_bottom = 0.5
-	card.offset_left = -560
-	card.offset_right = 560
-	card.offset_top = -400
-	card.offset_bottom = 400
+	card.set_anchors_preset(Control.PRESET_FULL_RECT)
+	card.offset_left = 24
+	card.offset_right = -24
+	card.offset_top = 16
+	card.offset_bottom = -16
+	card.clip_contents = true
 	card.add_theme_stylebox_override("panel", _dialog_style())
 	_lobby.add_child(card)
 
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	box.offset_left = 24
-	box.offset_right = -24
-	box.offset_top = 20
-	box.offset_bottom = -20
-	box.add_theme_constant_override("separation", 10)
+	box.offset_left = 20
+	box.offset_right = -20
+	box.offset_top = 14
+	box.offset_bottom = -16
+	box.add_theme_constant_override("separation", 8)
 	card.add_child(box)
 
 	var title := Label.new()
-	title.text = "BOSS FIGHTER"
+	title.text = "ASHENWAKE"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_gold_label(title, 42)
+	_gold_label(title, 34)
 	box.add_child(title)
 
 	var pick := Label.new()
-	pick.text = "CHARACTER"
+	pick.text = "SPELLBOOK"
 	pick.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_gold_label(pick, 15)
+	_gold_label(pick, 14)
 	box.add_child(pick)
-	box.add_child(_build_class_row())
-
-	var boss_pick := Label.new()
-	boss_pick.text = "DESTINATION"
-	boss_pick.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_gold_label(boss_pick, 15)
-	box.add_child(boss_pick)
-	box.add_child(_build_boss_row())
+	var workshop := SpellWorkshop.new()
+	workshop.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	workshop.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(workshop)
 
 	var actions := HBoxContainer.new()
-	actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	actions.add_theme_constant_override("separation", 12)
+	actions.add_theme_constant_override("separation", 10)
 	box.add_child(actions)
-	var play := _btn("PLAY", _play_selected_destination)
-	play.custom_minimum_size = Vector2(300, 46)
-	actions.add_child(play)
 	var settings := _btn("Settings", func() -> void:
 		_open_settings(false)
 	)
-	settings.custom_minimum_size = Vector2(150, 46)
+	settings.custom_minimum_size = Vector2(160, 44)
 	actions.add_child(settings)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_child(spacer)
+	_play_button = _btn("PLAY", _open_play_menu)
+	_play_button.custom_minimum_size = Vector2(220, 48)
+	actions.add_child(_play_button)
+	_build_play_popup()
 
 
-func _build_class_row() -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 14)
-	for kit in ClassCatalog.all():
-		var art_file: String = String({
-			"elemental": "boss_game_ember.png",
-			"healer": "boss_game_ember.png",
-			"arcane": "boss_game_spark.png",
-			"dark": "boss_game_hex.png",
-		}.get(kit.id, "boss_game_ember.png"))
-		var b := _selection_card(
-			art_file,
-			kit.champion_name.to_upper(),
-			kit.display_name.to_upper() if kit.available else "COMING SOON",
-			Vector2(205, 250)
-		)
-		b.disabled = not kit.available
-		if b.disabled:
-			b.modulate = Color(0.52, 0.54, 0.60, 0.82)
-		var class_id: String = kit.id
-		b.pressed.connect(func() -> void:
-			_select_class(class_id)
-		)
-		row.add_child(b)
-		_class_buttons[kit.id] = b
-	_select_class(GameSession.selected_class_id)
-	return row
-
-
-func _build_boss_row() -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 14)
+func _build_play_popup() -> void:
+	_play_popup = PopupPanel.new()
+	_play_popup.exclusive = true
+	_play_popup.unresizable = true
+	var panel := StyleBoxFlat.new()
+	panel.bg_color = Color(0.03, 0.035, 0.05, 0.98)
+	panel.border_color = Color(1.0, 0.80, 0.30, 0.95)
+	panel.set_border_width_all(2)
+	panel.set_corner_radius_all(6)
+	panel.content_margin_left = 10
+	panel.content_margin_right = 10
+	panel.content_margin_top = 10
+	panel.content_margin_bottom = 10
+	_play_popup.add_theme_stylebox_override("panel", panel)
+	add_child(_play_popup)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	_play_popup.add_child(col)
+	var head := Label.new()
+	head.text = "DESTINATION"
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_gold_label(head, 14)
+	col.add_child(head)
 	var destinations := [
 		{"id": "training", "name": "TRAINING ARENA", "image": "boss_game_training_arena.png"},
 		{"id": "colossus", "name": "COLOSSUS", "image": "boss_game_colossus.png"},
 		{"id": "dawnwarden", "name": "DAWNWARDEN", "image": "boss_game_dawnwarden.png"},
 	]
 	for info in destinations:
-		var b := _selection_card(String(info["image"]), String(info["name"]), "", Vector2(300, 172))
 		var destination_id: String = info["id"]
+		var b := _selection_card(String(info["image"]), String(info["name"]), "", Vector2(320, 92))
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(func() -> void:
-			_select_destination(destination_id)
+			_pick_destination_and_play(destination_id)
 		)
-		row.add_child(b)
+		col.add_child(b)
 		_boss_buttons[destination_id] = b
 	_select_destination(GameSession.selected_destination_id)
-	return row
+
+
+func _open_play_menu() -> void:
+	if GameSession.fight_started:
+		_on_session_started()
+		return
+	if _play_popup == null or _play_button == null:
+		_play_selected_destination()
+		return
+	_select_destination(GameSession.selected_destination_id)
+	var size := Vector2(344, 360)
+	var rect := _play_button.get_global_rect()
+	var pos := Vector2(rect.position.x + rect.size.x - size.x, rect.position.y - size.y - 8.0)
+	pos.x = maxf(16.0, pos.x)
+	pos.y = maxf(16.0, pos.y)
+	_play_popup.popup(Rect2i(Vector2i(pos), Vector2i(size)))
+
+
+func _pick_destination_and_play(destination_id: String) -> void:
+	_select_destination(destination_id)
+	if _play_popup:
+		_play_popup.hide()
+	_play_selected_destination()
 
 
 func _selection_card(image_file: String, title_text: String, subtitle_text: String, card_size: Vector2) -> Button:
@@ -1114,16 +1155,6 @@ func _select_destination(destination_id: String) -> void:
 	for id in _boss_buttons.keys():
 		var b: Button = _boss_buttons[id]
 		_set_selection_card_selected(b, id == destination_id)
-
-
-func _select_class(class_id: String) -> void:
-	var kit: ChampionClass = ClassCatalog.get_by_id(class_id)
-	if not kit.available:
-		return
-	GameSession.selected_class_id = class_id
-	for id in _class_buttons.keys():
-		var b: Button = _class_buttons[id]
-		_set_selection_card_selected(b, id == class_id)
 
 
 func _play_selected_destination() -> void:
@@ -1407,14 +1438,15 @@ func _build_action_bar() -> void:
 	abilities.add_theme_constant_override("separation", 8)
 	abilities.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_action_tray.add_child(abilities)
-	_passive_panel = _make_bar_slot("", "Attenuate", Color(0.95, 0.78, 0.32), false)
+	_passive_panel = _make_bar_slot("", "", Color(0.95, 0.78, 0.32), false)
+	_passive_panel.visible = false
 	abilities.add_child(_passive_panel)
 	_passive_name = _passive_panel.get_node("Name") as Label
 	var keys := ["Q", "W", "E", "R", "D", "F"]
-	var names := ["Firebolt", "Freeze", "Thunder Wave", "Meteor", "Chilled Ground", "Overcharge"]
+	var names := ["Fire Bolt", "Storm Missiles", "Frost Field", "Frost Bolt", "Fire Missiles", "Holy Field"]
 	var colors := [
 		Color(1.0, 0.45, 0.12), Color(0.45, 0.8, 1.0), Color(0.75, 0.85, 1.0),
-		Color(1.0, 0.35, 0.08), Color(0.4, 0.78, 1.0), Color(0.95, 0.85, 0.4),
+		Color(1.0, 0.35, 0.08), Color(0.95, 0.84, 0.38), Color(0.88, 0.9, 0.98),
 	]
 	for i in 6:
 		var p := _make_bar_slot(keys[i], names[i], colors[i], true)
@@ -1423,6 +1455,7 @@ func _build_action_bar() -> void:
 		_ability_cds.append(p.get_node("Key") as Label)
 		_ability_names.append(p.get_node("Name") as Label)
 		_ability_clocks.append(p.get_node("Clock") as TextureProgressBar)
+	_ensure_recast_overlays()
 
 
 func _build_combat_meter() -> void:
@@ -1562,21 +1595,35 @@ func _build_combat_meter() -> void:
 	_build_meter_breakdown()
 
 
+func _refresh_combat_meter_if_due() -> void:
+	if _meter_refresh_acc < _METER_REFRESH_INTERVAL:
+		return
+	_meter_refresh_acc = fmod(_meter_refresh_acc, _METER_REFRESH_INTERVAL)
+	_refresh_combat_meter()
+	if _meter_break != null and _meter_break.visible:
+		_refresh_meter_breakdown()
+
+
 func _refresh_combat_meter() -> void:
 	if _meter == null:
 		return
+	_meter_refresh_acc = 0.0
 	var healing := CombatMeter.mode == CombatMeter.Mode.HEALING
+	var rows := CombatMeter.ranked_rows()
+	var total := 0.0
+	for data in rows:
+		total += float(data.get("amount", 0.0))
+	var elapsed := maxf(CombatMeter.elapsed(), 1.0)
 	_meter_title.text = CombatMeter.mode_title()
 	_meter_time.text = CombatMeter.format_time(CombatMeter.elapsed())
 	var rate_label := "HPS" if healing else "DPS"
 	if _meter_col_rate:
 		_meter_col_rate.text = rate_label
 	_meter_total.text = "%s   %s %s" % [
-		CombatMeter.format_amount(CombatMeter.total_amount()),
+		CombatMeter.format_amount(total),
 		rate_label,
-		CombatMeter.format_amount(CombatMeter.overall_rate()),
+		CombatMeter.format_amount(total / elapsed),
 	]
-	var rows := CombatMeter.ranked_rows()
 	for i in _meter_rows.size():
 		var widgets: Dictionary = _meter_rows[i]
 		var row: Control = widgets["row"]
@@ -1691,7 +1738,10 @@ func _refresh_meter_breakdown() -> void:
 		var color: Color = data["color"]
 		(widgets["fill"] as StyleBoxFlat).bg_color = Color(color.r, color.g, color.b, 0.9)
 		(widgets["bar"] as ProgressBar).value = float(data["share"])
-		(widgets["icon"] as TextureRect).texture = _StatusIcons.texture_for(String(data["icon"]))
+		(widgets["icon"] as TextureRect).texture = _StatusIcons.texture_for_ability(
+			String(data["icon"]),
+			String(data.get("infusion_tag", ""))
+		)
 		(widgets["name"] as Label).text = String(data["name"])
 		(widgets["stats"] as Label).text = "%s  %d%%" % [
 			CombatMeter.format_amount(float(data["amount"])),
@@ -2091,9 +2141,6 @@ func _load_hud_layout() -> void:
 			if section == "target4":
 				_load_frame_layout(cfg, section, _target_frame)
 			_target_locked = bool(cfg.get_value(section, "locked", false))
-			const TARGET_H := 4.0 + 20.0 + 4.0
-			if absf((_target_frame.offset_bottom - _target_frame.offset_top) - TARGET_H) > 1.0:
-				_target_frame.offset_bottom = _target_frame.offset_top + TARGET_H
 			_apply_frame_lock(_target_handle, _target_locked)
 			_sync_target_status_row()
 	_sync_edit_handles()
@@ -2169,6 +2216,21 @@ func _build_target_frame() -> void:
 	_target_hp_label.z_index = 2
 	_target_hp.add_child(_target_hp_label)
 
+	_target_threat_box = VBoxContainer.new()
+	_target_threat_box.anchor_left = 0.0
+	_target_threat_box.anchor_right = 1.0
+	_target_threat_box.anchor_top = 0.0
+	_target_threat_box.anchor_bottom = 1.0
+	_target_threat_box.offset_left = PAD
+	_target_threat_box.offset_right = -PAD
+	_target_threat_box.offset_top = PAD + BAR + 2.0
+	_target_threat_box.offset_bottom = -PAD
+	_target_threat_box.add_theme_constant_override("separation", 1)
+	_target_threat_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_target_frame.add_child(_target_threat_box)
+	for i in 5:
+		_target_threat_rows.append(_make_target_threat_row())
+
 	_target_status_row = HBoxContainer.new()
 	_target_status_row.anchor_left = 0.0
 	_target_status_row.anchor_right = 0.0
@@ -2198,6 +2260,7 @@ func _refresh_target_frame() -> void:
 			_target_hp_label.text = "72/100"
 		if _target_status_row:
 			_target_status_row.visible = false
+		_set_target_threat_rows([])
 		_target_debuffs.clear()
 		_hover_target_status = -1
 		return
@@ -2209,13 +2272,105 @@ func _refresh_target_frame() -> void:
 	_paint_flat_bar(_target_hp, _BOSS_RED if enemy else _HP_GREEN)
 	_apply_hp_with_shield(_target_hp, _target_shield, t)
 	_target_hp_label.text = "%d/%d" % [int(t.health), int(t.max_health)]
+	if enemy:
+		_set_target_threat_rows(ThreatTable.ranked_rows(t))
+	else:
+		_set_target_threat_rows([])
 	_refresh_target_debuffs(t)
+
+
+func _make_target_threat_row() -> Dictionary:
+	var row := Control.new()
+	row.custom_minimum_size = Vector2(0, 14)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.visible = false
+	var bar := ProgressBar.new()
+	bar.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bar.show_percentage = false
+	bar.max_value = 1.0
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.add_theme_stylebox_override("background", _flat_trough())
+	var fill := _flat_fill(Color(0.78, 0.58, 0.22, 0.9))
+	bar.add_theme_stylebox_override("fill", fill)
+	row.add_child(bar)
+	var name_lbl := _meter_row_label(HORIZONTAL_ALIGNMENT_LEFT)
+	name_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	name_lbl.offset_left = 4
+	name_lbl.offset_right = -52
+	name_lbl.add_theme_font_size_override("font_size", 10)
+	row.add_child(name_lbl)
+	var amount := _meter_row_label(HORIZONTAL_ALIGNMENT_RIGHT)
+	amount.set_anchors_preset(Control.PRESET_FULL_RECT)
+	amount.offset_left = -56
+	amount.offset_right = -2
+	amount.add_theme_font_size_override("font_size", 10)
+	row.add_child(amount)
+	_target_threat_box.add_child(row)
+	return {"row": row, "bar": bar, "fill": fill, "name": name_lbl, "amount": amount}
+
+
+func _set_target_threat_rows(rows: Array[Dictionary]) -> void:
+	var shown := 0
+	for i in _target_threat_rows.size():
+		var widgets: Dictionary = _target_threat_rows[i]
+		var row: Control = widgets["row"]
+		if i >= rows.size():
+			row.visible = false
+			continue
+		var data: Dictionary = rows[i]
+		row.visible = true
+		shown += 1
+		var color: Color = data.get("color", Color(0.45, 0.55, 0.78))
+		if data.get("is_you", false):
+			color = color.lightened(0.12)
+		var fill: StyleBoxFlat = widgets["fill"]
+		fill.bg_color = Color(color.r, color.g, color.b, 0.92)
+		(widgets["bar"] as ProgressBar).value = float(data.get("share", 0.0))
+		var nm := String(data.get("name", ""))
+		if data.get("is_aggro", false):
+			nm = "● " + nm
+		if data.get("is_you", false):
+			nm += " *"
+		(widgets["name"] as Label).text = nm
+		(widgets["name"] as Label).modulate = Color(1.0, 0.92, 0.55) if data.get("is_you", false) else Color.WHITE
+		(widgets["amount"] as Label).text = CombatMeter.format_amount(float(data.get("amount", 0.0)))
+	_resize_target_frame(shown)
+
+
+func _resize_target_frame(threat_rows: int) -> void:
+	if _target_frame == null:
+		return
+	const PAD := 4.0
+	const BAR := 20.0
+	const ROW := 15.0
+	var extra := 0.0 if threat_rows <= 0 else 2.0 + float(threat_rows) * ROW
+	var h := PAD + BAR + extra + PAD
+	_target_frame.offset_bottom = _target_frame.offset_top + h
+	_sync_target_status_row()
+
+
+func _merge_status_lists(primary: Array[Dictionary], extra: Array[Dictionary]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var seen: Dictionary = {}
+	for list in [primary, extra]:
+		for raw in list:
+			var data: Dictionary = raw
+			var id := String(data.get("id", ""))
+			if id.is_empty() or seen.has(id):
+				continue
+			seen[id] = true
+			out.append(data)
+	return out
 
 
 func _refresh_target_debuffs(t: Unit) -> void:
 	if _target_status_row == null:
 		return
-	_target_debuffs = t.collect_debuffs()
+	var you := GameSession.active_unit as Unit
+	if you != null and t.team == you.team:
+		_target_debuffs = _merge_status_lists(t.collect_buffs(), t.collect_nameplate_debuffs())
+	else:
+		_target_debuffs = t.collect_nameplate_debuffs()
 	_target_status_row.visible = _target_frame.visible and not _target_debuffs.is_empty()
 	while _target_status_icons.size() < _target_debuffs.size():
 		_make_target_status_icon()
@@ -2429,16 +2584,8 @@ func _enable_passive_hover() -> void:
 func _refresh_passive_slot() -> void:
 	if _passive_panel == null:
 		return
-	var kit: ChampionClass = ClassCatalog.get_by_id(GameSession.selected_class_id)
-	var has_passive := kit != null and not kit.passive_name.is_empty()
-	_passive_panel.visible = has_passive
-	if not has_passive:
-		_hover_passive = false
-		return
-	if _passive_name:
-		_passive_name.text = kit.passive_name
-	var icon_id := kit.passive_icon if kit and not kit.passive_icon.is_empty() else "attenuate"
-	_paint_ability_art(_passive_panel, icon_id)
+	_passive_panel.visible = false
+	_hover_passive = false
 
 
 func _paint_ability_art(panel: Panel, icon_id: String, infusion_tag: String = "") -> void:
@@ -2452,17 +2599,8 @@ func _paint_ability_art(panel: Panel, icon_id: String, infusion_tag: String = ""
 
 
 func _show_passive_tip() -> void:
-	if _tip == null or not _hover_passive:
-		return
-	var kit: ChampionClass = ClassCatalog.get_by_id(GameSession.selected_class_id)
-	var text := kit.passive_tooltip() if kit else ""
-	if text.is_empty():
+	if _tip:
 		_tip.visible = false
-		return
-	_tip_label.text = text
-	_tip.visible = true
-	_tip_follow_mouse = false
-	_place_passive_tip()
 
 
 func _build_ability_tip() -> void:
@@ -2586,9 +2724,9 @@ func _make_status_icon(row: HBoxContainer, kind: String, idx: int) -> Panel:
 	stacks.anchor_right = 0.0
 	stacks.anchor_bottom = 1.0
 	stacks.offset_left = 1
-	stacks.offset_top = -15
-	stacks.offset_right = 34
-	stacks.offset_bottom = 1
+	stacks.offset_top = -16
+	stacks.offset_right = 40
+	stacks.offset_bottom = 2
 	stacks.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	stacks.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	stacks.add_theme_font_size_override("font_size", 11)
@@ -2596,6 +2734,7 @@ func _make_status_icon(row: HBoxContainer, kind: String, idx: int) -> Panel:
 	stacks.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.95))
 	stacks.add_theme_constant_override("outline_size", 4)
 	stacks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stacks.z_index = 8
 	stacks.visible = false
 	p.add_child(stacks)
 	row.add_child(p)
@@ -2696,11 +2835,7 @@ func _paint_status_icon(icon: Panel, data: Dictionary) -> void:
 	_refresh_status_clock(icon.get_node_or_null("Clock") as TextureProgressBar, remaining, duration)
 	var stacks := icon.get_node_or_null("Stacks") as Label
 	if stacks:
-		var badge := String(data.get("badge", ""))
-		if badge.is_empty():
-			var count := int(data.get("stacks", 0))
-			if count > 0:
-				badge = "%d" % count
+		var badge := _StatusIcons.stack_text(data)
 		if not badge.is_empty():
 			stacks.visible = true
 			stacks.text = badge
@@ -2716,7 +2851,7 @@ func _refresh_boss_debuffs() -> void:
 	if boss == null or not is_instance_valid(boss) or boss.is_dead:
 		_boss_debuffs.clear()
 	else:
-		_boss_debuffs = boss.collect_debuffs()
+		_boss_debuffs = boss.collect_nameplate_debuffs()
 	while _boss_status_icons.size() < _boss_debuffs.size():
 		_make_boss_status_icon()
 	for i in _boss_status_icons.size():
@@ -2740,7 +2875,7 @@ func _refresh_player_buffs() -> void:
 	if u == null or not is_instance_valid(u) or u.is_dead:
 		_player_buffs.clear()
 	else:
-		_player_buffs = u.collect_buffs()
+		_player_buffs = _merge_status_lists(u.collect_buffs(), u.collect_nameplate_debuffs())
 	_player_buff_row.visible = not _player_buffs.is_empty()
 	while _player_buff_icons.size() < _player_buffs.size():
 		_make_player_buff_icon()
@@ -3001,7 +3136,7 @@ func _build_pause_menu() -> void:
 
 
 func _build_settings_menu() -> void:
-	var ui := _make_modal("SETTINGS", Vector2(540, 760))
+	var ui := _make_modal("SETTINGS", Vector2(540, 860))
 	_settings_menu = ui["root"] as Control
 	_settings_menu.z_index = 110
 	var box := ui["box"] as VBoxContainer
@@ -3076,12 +3211,31 @@ func _build_settings_menu() -> void:
 		_save_settings()
 	)
 	box.add_child(smart)
+	var numbers := CheckBox.new()
+	numbers.text = "Damage Numbers"
+	numbers.button_pressed = GameSession.show_damage_numbers
+	numbers.focus_mode = Control.FOCUS_NONE
+	numbers.tooltip_text = "Show floating damage and healing numbers on hits."
+	numbers.add_theme_font_size_override("font_size", 14)
+	numbers.add_theme_color_override("font_color", Color(0.94, 0.94, 0.96))
+	numbers.add_theme_color_override("font_hover_color", _GOLD)
+	numbers.toggled.connect(func(pressed: bool) -> void:
+		GameSession.show_damage_numbers = pressed
+		_save_settings()
+	)
+	box.add_child(numbers)
 	var smart_note := Label.new()
 	smart_note.text = "Press or click a spell while hovering a target to fire it. Hold Shift to aim first."
 	smart_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	smart_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	smart_note.modulate = Color(0.72, 0.75, 0.82)
 	box.add_child(smart_note)
+	box.add_child(_btn("Spell & Effect Bases", func() -> void:
+		_open_balance("flat")
+	))
+	box.add_child(_btn("Spell & Effect % Increases", func() -> void:
+		_open_balance("pct")
+	))
 
 	var interface_title := Label.new()
 	interface_title.text = "Interface"
@@ -3183,6 +3337,126 @@ func _close_hero_audio() -> void:
 	if _hero_audio_menu:
 		_hero_audio_menu.visible = false
 	_sync_hero_audio_window()
+	if _settings_menu:
+		_settings_menu.visible = true
+	if _settings_from_pause and GameSession.fight_started:
+		get_tree().paused = true
+
+
+func _build_balance_menus() -> void:
+	_balance_flat_menu = _make_balance_menu("SPELL & EFFECT BASES", "flat")
+	_balance_pct_menu = _make_balance_menu("SPELL & EFFECT % INCREASES", "pct")
+
+
+func _make_balance_menu(title_text: String, kind: String) -> Control:
+	var ui := _make_modal(title_text, Vector2(720, 760))
+	var root := ui["root"] as Control
+	root.z_index = 120
+	var box := ui["box"] as VBoxContainer
+	var note := Label.new()
+	if kind == "flat":
+		note.text = "Hit, tick, shield, and flat effect numbers. Extra % lives on the other page. Changes apply immediately."
+	else:
+		note.text = "Percent added to each base, plus infusion and effect percents. 20 means +20%."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.modulate = Color(0.72, 0.75, 0.82)
+	box.add_child(note)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	box.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 8)
+	scroll.add_child(list)
+	if kind == "flat":
+		_balance_flat_list = list
+	else:
+		_balance_pct_list = list
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+	box.add_child(actions)
+	var reset := _btn("Reset This Page", func() -> void:
+		CombatBalance.reset_kind(kind)
+		_fill_balance_list(kind)
+	)
+	reset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_child(reset)
+	var back := _btn("Back", _close_balance)
+	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_child(back)
+	return root
+
+
+func _fill_balance_list(kind: String) -> void:
+	var list := _balance_flat_list if kind == "flat" else _balance_pct_list
+	if list == null:
+		return
+	for child in list.get_children():
+		child.queue_free()
+	var last_group := ""
+	for row in CombatBalance.rows_of(kind):
+		var group := String(row.get("group", ""))
+		if group != last_group:
+			last_group = group
+			var heading := Label.new()
+			heading.text = group
+			_gold_label(heading, 16)
+			list.add_child(heading)
+		list.add_child(_balance_row(row, kind))
+
+
+func _balance_row(row: Dictionary, kind: String) -> Control:
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 10)
+	var name := Label.new()
+	name.text = String(row.get("label", ""))
+	name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_white_label(name, 14)
+	line.add_child(name)
+	var spin := SpinBox.new()
+	spin.custom_minimum_size.x = 140
+	spin.focus_mode = Control.FOCUS_CLICK
+	spin.select_all_on_focus = true
+	var id := String(row["id"])
+	if kind == "pct":
+		spin.min_value = float(row["lo"]) * 100.0
+		spin.max_value = float(row["hi"]) * 100.0
+		spin.step = 1.0
+		spin.suffix = "%"
+		spin.value = CombatBalance.get_value(id) * 100.0
+		spin.value_changed.connect(func(v: float) -> void:
+			CombatBalance.set_value(id, v / 100.0)
+		)
+	else:
+		spin.min_value = float(row["lo"])
+		spin.max_value = float(row["hi"])
+		spin.step = float(row["step"])
+		spin.value = CombatBalance.get_value(id)
+		spin.value_changed.connect(func(v: float) -> void:
+			CombatBalance.set_value(id, v)
+		)
+	line.add_child(spin)
+	return line
+
+
+func _open_balance(kind: String) -> void:
+	if _settings_menu:
+		_settings_menu.visible = false
+	_fill_balance_list(kind)
+	if kind == "flat" and _balance_flat_menu:
+		_balance_flat_menu.visible = true
+	elif kind == "pct" and _balance_pct_menu:
+		_balance_pct_menu.visible = true
+	if _settings_from_pause and GameSession.fight_started:
+		get_tree().paused = true
+
+
+func _close_balance() -> void:
+	if _balance_flat_menu:
+		_balance_flat_menu.visible = false
+	if _balance_pct_menu:
+		_balance_pct_menu.visible = false
 	if _settings_menu:
 		_settings_menu.visible = true
 	if _settings_from_pause and GameSession.fight_started:
@@ -3478,6 +3752,10 @@ func _open_settings(from_pause: bool) -> void:
 		_pause_menu.visible = false
 	if _hero_audio_menu:
 		_hero_audio_menu.visible = false
+	if _balance_flat_menu:
+		_balance_flat_menu.visible = false
+	if _balance_pct_menu:
+		_balance_pct_menu.visible = false
 	_settings_menu.visible = true
 	if _settings_edit_button:
 		_settings_edit_button.disabled = not GameSession.fight_started
@@ -3488,6 +3766,10 @@ func _open_settings(from_pause: bool) -> void:
 func _close_settings() -> void:
 	if _hero_audio_menu:
 		_hero_audio_menu.visible = false
+	if _balance_flat_menu:
+		_balance_flat_menu.visible = false
+	if _balance_pct_menu:
+		_balance_pct_menu.visible = false
 	if _settings_menu:
 		_settings_menu.visible = false
 	if _settings_from_pause and GameSession.fight_started:
@@ -3551,6 +3833,7 @@ func _load_settings() -> void:
 		_master_volume = clampf(float(cfg.get_value("audio", "master_volume", _master_volume)), 0.0, 1.0)
 		_fullscreen = bool(cfg.get_value("display", "fullscreen", _fullscreen))
 		GameSession.smart_cast = bool(cfg.get_value("combat", "smart_cast", GameSession.smart_cast))
+		GameSession.show_damage_numbers = bool(cfg.get_value("combat", "show_damage_numbers", GameSession.show_damage_numbers))
 	_apply_settings()
 
 
@@ -3560,6 +3843,7 @@ func _save_settings() -> void:
 	cfg.set_value("audio", "master_volume", _master_volume)
 	cfg.set_value("display", "fullscreen", _fullscreen)
 	cfg.set_value("combat", "smart_cast", GameSession.smart_cast)
+	cfg.set_value("combat", "show_damage_numbers", GameSession.show_damage_numbers)
 	cfg.save("user://settings.cfg")
 
 
@@ -3568,10 +3852,38 @@ func _apply_settings() -> void:
 	if master >= 0:
 		AudioServer.set_bus_mute(master, _master_volume <= 0.001)
 		AudioServer.set_bus_volume_db(master, linear_to_db(maxf(_master_volume, 0.001)))
-	if DisplayServer.get_name().to_lower() != "headless":
+	if DisplayServer.get_name().to_lower() != "headless" and not OS.has_feature("editor"):
 		var mode := DisplayServer.WINDOW_MODE_FULLSCREEN if _fullscreen else DisplayServer.WINDOW_MODE_WINDOWED
 		if DisplayServer.window_get_mode() != mode:
 			DisplayServer.window_set_mode(mode)
+
+
+func _build_fps_counter() -> void:
+	_fps_label = Label.new()
+	_fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fps_label.anchor_left = 0.0
+	_fps_label.anchor_top = 0.0
+	_fps_label.anchor_right = 0.0
+	_fps_label.anchor_bottom = 0.0
+	_fps_label.offset_left = 10.0
+	_fps_label.offset_top = 8.0
+	_fps_label.offset_right = 96.0
+	_fps_label.offset_bottom = 28.0
+	_fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_fps_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_fps_label.add_theme_font_size_override("font_size", 13)
+	_fps_label.add_theme_color_override("font_color", Color(0.92, 0.94, 0.98, 0.90))
+	_fps_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.88))
+	_fps_label.add_theme_constant_override("outline_size", 4)
+	_fps_label.text = "0 FPS"
+	_fps_label.z_index = 80
+	add_child(_fps_label)
+
+
+func _tick_fps() -> void:
+	if _fps_label == null:
+		return
+	_fps_label.text = "%d FPS" % int(Engine.get_frames_per_second())
 
 
 func _build_reload_button() -> void:
@@ -3621,11 +3933,12 @@ func _unit_portrait_tex(u: Unit) -> Texture2D:
 	if u == null:
 		return null
 	if u == GameSession.active_unit:
-		var kit: ChampionClass = ClassCatalog.get_by_id(GameSession.selected_class_id)
-		var icon_id := "attenuate"
-		if kit and not kit.passive_icon.is_empty():
-			icon_id = kit.passive_icon
-		return _StatusIcons.texture_for(icon_id)
+		if not u.abilities.is_empty():
+			var ab: AbilityDef = u.abilities[0]
+			var icon_id := ab.icon_id if not ab.icon_id.is_empty() else ab.id
+			if not icon_id.is_empty():
+				return _StatusIcons.texture_for(icon_id)
+		return _StatusIcons.texture_for("firebolt")
 	if not u.abilities.is_empty():
 		var ab: AbilityDef = u.abilities[0]
 		var icon_id := ab.icon_id if not ab.icon_id.is_empty() else ab.id
@@ -3640,6 +3953,89 @@ func _glow_slot(panel: Panel, on: bool) -> void:
 	var frame := panel.get_node_or_null("Frame") as CanvasItem
 	if frame:
 		frame.modulate = _SLOT_HOVER if on else Color.WHITE
+
+
+func _ensure_recast_overlays() -> void:
+	if _combat == null:
+		return
+	while _recast_rings.size() < _ability_panels.size():
+		_recast_rings.append(_make_recast_overlay())
+
+
+func _make_recast_overlay() -> Control:
+	var ring := Panel.new()
+	ring.name = "RecastRing"
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ring.clip_contents = false
+	ring.z_index = 40
+	ring.visible = false
+	_paint_recast_ring(ring)
+	_combat.add_child(ring)
+	_ensure_recast_spark(ring)
+	return ring
+
+
+func _paint_recast_ring(ring: Control) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0)
+	style.border_color = _RECAST_GOLD
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(8)
+	ring.add_theme_stylebox_override("panel", style)
+	var tag := ring.get_node_or_null("Tag")
+	if tag is CanvasItem:
+		(tag as CanvasItem).visible = false
+
+
+func _ensure_recast_spark(ring: Control) -> TextureRect:
+	if ring == null:
+		return null
+	var spark := ring.get_node_or_null("Spark") as TextureRect
+	if spark == null:
+		spark = _make_spark()
+		spark.name = "Spark"
+		spark.z_index = 2
+		ring.add_child(spark)
+	return spark
+
+
+func _refresh_recast_fx(index: int, ready: bool) -> void:
+	_ensure_recast_overlays()
+	if index < 0 or index >= _recast_rings.size() or index >= _ability_panels.size():
+		return
+	var ring := _recast_rings[index]
+	var slot := _ability_panels[index]
+	if ring == null or slot == null:
+		return
+	var spark := _ensure_recast_spark(ring)
+	if not ready or not slot.visible or not slot.is_visible_in_tree():
+		ring.visible = false
+		if spark:
+			spark.visible = false
+		return
+	_paint_recast_ring(ring)
+	var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.007)
+	var pad := 4.0
+	var gr := slot.get_global_rect()
+	ring.visible = true
+	ring.global_position = gr.position - Vector2(pad, pad)
+	ring.size = gr.size + Vector2(pad, pad) * 2.0
+	ring.modulate = Color(1.0, 1.0, 1.0, 0.72 + 0.28 * pulse)
+	if spark == null:
+		return
+	var spark_px := 26.0
+	spark.visible = true
+	spark.size = Vector2(spark_px, spark_px)
+	spark.pivot_offset = Vector2(spark_px, spark_px) * 0.5
+	var beat := 1.04 + 0.10 * sin(Time.get_ticks_msec() * 0.014)
+	spark.scale = Vector2(beat, beat)
+	var ang := Time.get_ticks_msec() * 0.001 * TAU / 1.7
+	var rx := maxf(ring.size.x * 0.5 - 3.0, 8.0)
+	var ry := maxf(ring.size.y * 0.5 - 3.0, 8.0)
+	spark.position = Vector2(
+		ring.size.x * 0.5 + cos(ang) * rx - spark_px * 0.5,
+		ring.size.y * 0.5 + sin(ang) * ry - spark_px * 0.5
+	)
 
 
 func _make_spark() -> TextureRect:

@@ -15,6 +15,9 @@ var _dash_left: float = 0.0
 var _dash_duration: float = 0.0
 var _dash_from: Vector3 = Vector3.ZERO
 var _dash_to: Vector3 = Vector3.ZERO
+var _los_target: Node3D
+var _los_ok: bool = true
+var _los_left: float = 0.0
 
 @onready var unit: Unit = get_parent()
 @onready var agent: NavigationAgent3D = unit.get_node("NavigationAgent3D")
@@ -117,6 +120,15 @@ func is_traveling() -> bool:
 func has_line_of_sight(target: Node3D) -> bool:
 	if target == null or not is_instance_valid(target):
 		return false
+	if target == _los_target and _los_left > 0.0:
+		return _los_ok
+	_los_target = target
+	_los_left = 0.15
+	_los_ok = _ray_line_of_sight(target)
+	return _los_ok
+
+
+func _ray_line_of_sight(target: Node3D) -> bool:
 	var space := unit.get_world_3d().direct_space_state
 	if space == null:
 		return true
@@ -140,8 +152,12 @@ func has_line_of_sight(target: Node3D) -> bool:
 
 
 func tick(delta: float, want_move: bool, face_override: Vector3 = Vector3.ZERO) -> void:
+	if _los_left > 0.0:
+		_los_left = maxf(0.0, _los_left - delta)
 	if _dashing:
 		_tick_dodge(delta)
+		return
+	if unit.tick_wind_displace(delta):
 		return
 	var desired := Vector3.ZERO
 	if want_move and has_target and not arrived():

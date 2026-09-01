@@ -4,6 +4,13 @@ extends RefCounted
 const SHADER := preload("res://scripts/visual/ground_indicator.gdshader")
 const FILL_ALPHA := 0.18
 const OUTLINE_ALPHA := 0.95
+const ZONE_FILL_ALPHA := 0.06
+const ZONE_OUTLINE_ALPHA := 0.35
+const ZONE_OUTLINE_WIDTH := 0.045
+const ZONE_EMISSION := 0.35
+const AURA_HINT_FILL := 0.03
+const AURA_RING_FILL := 0.07
+const AURA_HINT_OUTLINE := 0.22
 const RIBBON := 0.13
 const LINE_WIDTH := RIBBON * 2.0
 
@@ -17,11 +24,37 @@ static func shader_mat(color: Color, circle: bool, size: Vector2 = Vector2.ONE) 
 	mat.shader = SHADER
 	mat.render_priority = 8
 	mat.set_shader_parameter("color", Color(color.r, color.g, color.b, 1.0))
+	mat.set_shader_parameter("rim_color", Color(color.r, color.g, color.b, 1.0))
 	mat.set_shader_parameter("fill_alpha", FILL_ALPHA)
 	mat.set_shader_parameter("outline_alpha", OUTLINE_ALPHA)
 	mat.set_shader_parameter("outline_width", outline_width())
+	mat.set_shader_parameter("emission_strength", 1.0)
 	mat.set_shader_parameter("shape_mode", 0 if circle else 1)
 	mat.set_shader_parameter("quad_size", size)
+	mat.set_shader_parameter("inner_ratio", 0.0)
+	return mat
+
+
+static func set_inner_hole(mat: Material, inner: float, outer: float) -> void:
+	var sh := mat as ShaderMaterial
+	if sh == null:
+		return
+	var o := maxf(outer, 0.05)
+	sh.set_shader_parameter("inner_ratio", clampf(inner / o, 0.0, 0.97) if inner > 0.05 else 0.0)
+
+
+static func zone_mat(
+	color: Color,
+	radius: float = 1.0,
+	fill: float = ZONE_FILL_ALPHA,
+	outline: float = ZONE_OUTLINE_ALPHA
+) -> ShaderMaterial:
+	var r := maxf(radius, 0.05)
+	var mat := shader_mat(color, true, Vector2(r, r))
+	mat.set_shader_parameter("fill_alpha", fill)
+	mat.set_shader_parameter("outline_alpha", outline)
+	mat.set_shader_parameter("outline_width", ZONE_OUTLINE_WIDTH)
+	mat.set_shader_parameter("emission_strength", ZONE_EMISSION)
 	return mat
 
 
@@ -132,12 +165,26 @@ static func cone_outline_mesh(angle: float, lengths: PackedFloat32Array, y: floa
 	return st.commit()
 
 
-static func tint_shader(mat: Material, color: Color) -> void:
+static func set_rim(mat: Material, rim: Color) -> void:
 	var sh := mat as ShaderMaterial
 	if sh:
-		sh.set_shader_parameter("color", Color(color.r, color.g, color.b, 1.0))
+		sh.set_shader_parameter("rim_color", Color(rim.r, rim.g, rim.b, 1.0))
+
+
+static func tint_shader(mat: Material, color: Color, rim: Color = Color(0, 0, 0, 0)) -> void:
+	var sh := mat as ShaderMaterial
+	if sh:
+		var c := Color(color.r, color.g, color.b, 1.0)
+		sh.set_shader_parameter("color", c)
+		sh.set_shader_parameter("rim_color", Color(rim.r, rim.g, rim.b, 1.0) if rim.a > 0.02 else c)
 		sh.set_shader_parameter("outline_width", outline_width())
 		sh.set_shader_parameter("outline_alpha", OUTLINE_ALPHA)
+
+
+static func tint_palette(mat: Material, pal: Dictionary) -> void:
+	var core := pal.get("core", pal.get("primary", Color.WHITE)) as Color
+	var rim := pal.get("rim", pal.get("secondary", core)) as Color
+	tint_shader(mat, core, rim)
 
 
 static func tint_standard(mat: Material, color: Color, alpha: float) -> void:

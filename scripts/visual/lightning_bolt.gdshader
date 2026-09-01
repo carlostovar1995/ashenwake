@@ -11,12 +11,12 @@ void vertex() {
 void fragment() {
 	float edge = 1.0 - abs(UV.y - 0.5) * 2.0;
 	edge = max(edge, 0.0);
-	float core = pow(edge, 3.8);
-	float glow = pow(edge, 1.15);
-	float flicker = 0.82 + 0.18 * sin(TIME * 42.0 + UV.x * 18.0);
-	vec3 col = v_col.rgb * (glow * 0.7 + core * 2.1) * flicker;
+	float core = pow(edge, 5.4);
+	float glow = pow(edge, 2.4);
+	float flicker = 0.78 + 0.22 * sin(TIME * 58.0 + UV.x * 22.0);
+	vec3 col = v_col.rgb * (glow * 0.45 + core * 2.6) * flicker;
 	ALBEDO = col;
-	ALPHA = (glow * 0.5 + core) * fade * v_col.a;
-	EMISSION = col * (1.1 + core);
+	ALPHA = (glow * 0.28 + core) * fade * v_col.a;
+	EMISSION = col * (1.25 + core * 1.4);
 }
 

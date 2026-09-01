@@ -1,0 +1,15 @@
+---
+description: Update the Ashenwake OneNote storyboard when gameplay or design changes ship
+alwaysApply: true
+---
+
+# OneNote storyboard
+
+After a meaningful shipped change (combat, spells, targeting, arena, UI the player sees), update **Carlos's Notebook → Notes** via desktop OneNote COM. Do not leave the notebook stale.
+
+- Link: `Onenote.url`
+- Helper: `scripts/windows/Update-AshenwakeOneNote.ps1`
+- Append a dated line: `.\scripts\windows\Update-AshenwakeOneNote.ps1 -AppendBuildNote "what shipped"`
+- Patch a design page: `.\scripts\windows\Update-AshenwakeOneNote.ps1 -ReplaceInPage "Status Effects" -Old "old text" -New "new text"`
+
+Write on the matching page (Spell Bases, Spell Infusions, Spell Augmentations, Status Effects, Spell crafting). Use **Build notes** for implementation status. Keep Carlos's wording; add shipped names and numbers. Do not invent lore. Skip docs-only or local-only edits.

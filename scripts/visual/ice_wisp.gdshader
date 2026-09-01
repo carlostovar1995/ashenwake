@@ -12,5 +12,5 @@ void fragment() {
 	vec3 col = color.rgb * (0.85 + core * 1.6);
 	ALBEDO = col;
 	ALPHA = (body * 0.75 + core * 0.5) * color.a;
-	EMISSION = col * 1.4;
+	EMISSION = col * 2.4;
 }

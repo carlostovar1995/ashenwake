@@ -1,27 +1,6 @@
 #!/usr/bin/env bash
-# Copy the Sync Boss Fighter shortcut to the Windows desktop.
-# Run once in Ubuntu:  ./scripts/windows/install-desktop-shortcut.sh
-set -euo pipefail
-
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PS1="${ROOT}/scripts/windows/install-desktop-shortcut.ps1"
-
-if [[ ! -f "$PS1" ]]; then
-  echo "Missing $PS1" >&2
-  exit 1
-fi
-
-WIN_PS1="$(wslpath -w "$PS1")"
-DISTRO="${WSL_DISTRO_NAME:-}"
-if [[ -z "$DISTRO" ]]; then
-  echo "WSL_DISTRO_NAME is missing. Open the Ubuntu app from Start and run this script there." >&2
-  exit 1
-fi
-
-echo "Installing desktop shortcut (hint: ${DISTRO}; Windows will verify the real name)"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$WIN_PS1" \
-  -DistroHint "$DISTRO" \
-  -LinuxUser "$USER"
-
-echo
-echo "Old launchers were removed. Look for the new 'Sync Boss Fighter'."
+# Daily sync is native Windows now. Do not install from WSL.
+echo "Ashenwake sync is a Windows shortcut, not a WSL script."
+echo "In PowerShell, from the Ashenwake folder:"
+echo "  powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\install-desktop-shortcut.ps1"
+exit 1

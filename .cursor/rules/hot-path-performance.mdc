@@ -1,0 +1,38 @@
+---
+description: Hot-path performance architecture for combat, VFX, targeting, and HUD
+globs: scripts/{visual,units,combat,ui,autoload,arena,spells}/**/*.gd
+alwaysApply: false
+---
+
+# Hot-path performance
+
+Ashenwake combat must stay bounded under pack + overlapping-AoE stress. Do not reintroduce per-frame scans, unique materials, or unbounded `new()`/`queue_free()` on hit/tick/FX paths.
+
+## Pools and lifecycle
+
+- Pool repeating FX, labels, and projectiles. Warm up in `Arena._ready`. Steal oldest when full; never grow unbounded.
+- Prune with `is_instance_valid` before reuse. Arena reload must not leave the static pool pointing at freed nodes.
+- Cap spawn rate (token bucket). Dropping a visual must not drop damage, status, or meter.
+
+## Geometry and materials
+
+- Build CPU meshes once (spawn / hop reveal). Do not `SurfaceTool.commit()` every `_process`.
+- Snapshot NPC endpoints. Follow only `GameSession.active_unit` origins, and only at ~10 Hz.
+- Share `ShaderMaterial` / particle resources. Cache split-color combat-text materials; never one unique material per label.
+
+## Simulation and queries
+
+- Use `ArenaState.units_near(point, radius)` instead of scanning `ArenaState.units`.
+- Batch same-source same-window procs (shock chains) and keep summed damage. Time-slice AoE pulses and chain flushes with a per-physics-frame budget.
+- One runner ticks many instances. Do not give each damage number, bolt, or meter row its own `_process`.
+
+## HUD and combat text
+
+- Index live combat text (periodic / cast / queue). Do not linear-scan `_live` on every hit.
+- Throttle HUD rebuilds (~10 Hz). Dirty-flag, then refresh.
+
+## When adding a system
+
+Ask: what is the 60-dummy × 5-AoE cost? If it is `O(zones × units × hops)` per tick or allocates per hit, batch, index, pool, or budget it before shipping.
+
+Reference implementations: `thunder_wave_fx.gd`, `damage_number.gd`, `ground_aoe_fx.gd`, `arena_state.units_near`, shock-chain flush on `unit.gd`.

@@ -1,5 +1,5 @@
 {
-  "name": "Godot game-sync",
+  "name": "Ashenwake",
   "build": {
     "dockerfile": "Dockerfile",
     "context": ".."

@@ -16,6 +16,7 @@ var extras: PackedInt32Array = PackedInt32Array()
 var overheat_cast_id: int = -1
 var infusion_double: int = 0
 var combust_mult: float = 2.0
+var combat_text_cast_id: int = -1
 
 var _land: Vector3
 var _start: Vector3
@@ -25,7 +26,15 @@ var _marker_mat: StandardMaterial3D
 var _hit: bool = false
 
 
-static func drop(p_caster: Node, point: Vector3, ab: AbilityDef, p_damage: float, p_radius: float, p_extras: PackedInt32Array, p_overheat_cast_id: int = -1, p_infusion_double: int = 0, p_combust_mult: float = 2.0) -> Node3D:
+func _ability_color() -> Color:
+	if ability == null:
+		return Color(1.0, 0.42, 0.12)
+	if ability.vfx_primary.a > 0.02:
+		return ability.vfx_primary
+	return ability.color
+
+
+static func drop(p_caster: Node, point: Vector3, ab: AbilityDef, p_damage: float, p_radius: float, p_extras: PackedInt32Array, p_overheat_cast_id: int = -1, p_infusion_double: int = 0, p_combust_mult: float = 2.0, p_combat_text_cast_id: int = -1) -> Node3D:
 	var fx := new()
 	fx.caster = p_caster
 	fx.ability = ab
@@ -35,6 +44,7 @@ static func drop(p_caster: Node, point: Vector3, ab: AbilityDef, p_damage: float
 	fx.overheat_cast_id = p_overheat_cast_id
 	fx.infusion_double = p_infusion_double
 	fx.combust_mult = p_combust_mult
+	fx.combat_text_cast_id = p_combat_text_cast_id
 	fx._land = Vector3(point.x, 0.28, point.z)
 	var inbound := Vector3.FORWARD
 	if p_caster and is_instance_valid(p_caster):
@@ -63,15 +73,25 @@ func _build() -> void:
 	var rock_scale := maxf(radius * ROCK_TO_MARKER / CORE_MESH_RADIUS, 0.55)
 	_rock.scale = Vector3.ONE * rock_scale
 	_orient_rock()
-	var vfx := AbilityFx.attach(AbilityFx.FIRE_PROJECTILE, _rock, {
+	var rock_cfg := {
 		"scale": 1.12,
 		"yaw_offset": -PI * 0.5,
-	})
+	}
+	if ability:
+		if ability.vfx_primary.a > 0.0:
+			rock_cfg["primary_color"] = ability.vfx_primary
+		if ability.vfx_secondary.a > 0.0:
+			rock_cfg["secondary_color"] = ability.vfx_secondary
+		if ability.vfx_tertiary.a > 0.0:
+			rock_cfg["tertiary_color"] = ability.vfx_tertiary
+	var vfx := AbilityFx.attach(AbilityFx.FIRE_PROJECTILE, _rock, rock_cfg)
 	if vfx:
 		# Fire trail sits on the smaller rock; keep the tail from stretching as far.
 		vfx.scale = Vector3(0.52, 1.12, 1.12)
 		if vfx.has_method("open"):
 			vfx.call("open")
+	if ability:
+		SpellVfx.attach_to_node(_rock, ability, 0.55)
 	var charge_vol := clampf((radius - 2.0) / 3.4, 0.0, 1.0)
 	# Clip opens with ~1s of travel; start it on drop so the boom lands with the hit.
 	AudioManager.play_at("meteor.impact", _land, {"volume_db": lerpf(-2.0, 3.0, charge_vol)})
@@ -95,7 +115,8 @@ func _make_marker() -> void:
 	_marker.mesh = cyl
 	_marker.position = Vector3(0.0, 0.05, 0.0)
 	_marker_mat = StandardMaterial3D.new()
-	_marker_mat.albedo_color = Color(1.0, 0.42, 0.12, 0.42)
+	var mark := _ability_color()
+	_marker_mat.albedo_color = Color(mark.r, mark.g, mark.b, 0.42)
 	_marker_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_marker_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_marker_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -112,9 +133,10 @@ func _make_core() -> void:
 	core.mesh = sm
 	core.position = Vector3(0.0, 0.0, -0.15)
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.18, 0.06, 0.02)
+	var tint := _ability_color()
+	mat.albedo_color = tint.darkened(0.55)
 	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.38, 0.08)
+	mat.emission = tint
 	mat.emission_energy_multiplier = 3.4
 	mat.roughness = 0.85
 	core.material_override = mat
@@ -122,11 +144,7 @@ func _make_core() -> void:
 
 
 func _make_light() -> void:
-	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.55, 0.18)
-	light.light_energy = 4.2 + radius * 1.15
-	light.omni_range = radius * 3.2
-	_rock.add_child(light)
+	FxHeroLights.bind(_rock, _ability_color(), 3.4, radius * 2.4)
 
 
 func _set_flight(t: float) -> void:
@@ -152,7 +170,8 @@ func _process(_delta: float) -> void:
 	if _hit or _marker_mat == null:
 		return
 	var pulse := 0.34 + 0.16 * sin(Time.get_ticks_msec() * 0.014)
-	_marker_mat.albedo_color = Color(1.0, 0.42, 0.12, pulse)
+	var mark := _ability_color()
+	_marker_mat.albedo_color = Color(mark.r, mark.g, mark.b, pulse)
 
 
 func _impact() -> void:
@@ -163,7 +182,7 @@ func _impact() -> void:
 		_rock.visible = false
 	_spawn_impact_blast()
 	if is_instance_valid(caster) and ability and caster.has_method("_ground_burst"):
-		caster._ground_burst(_land, ability, damage, radius, extras, overheat_cast_id, infusion_double, combust_mult)
+		caster._ground_burst(_land, ability, damage, radius, extras, overheat_cast_id, infusion_double, combust_mult, combat_text_cast_id)
 	else:
 		AbilityFx.play_at(AbilityFx.GROUND_EXPLOSION, _land, {
 			"scale": maxf(radius / 5.0, 0.35),
@@ -192,20 +211,16 @@ func _spawn_impact_blast() -> void:
 	mi.sorting_offset = 1.5
 	var mat := ShaderMaterial.new()
 	mat.shader = _BURST_SHADER
-	mat.set_shader_parameter("core_color", Color(1.0, 0.94, 0.48, 1.0))
-	mat.set_shader_parameter("fire_color", Color(1.0, 0.38, 0.06, 1.0))
-	mat.set_shader_parameter("rim_color", Color(0.72, 0.08, 0.12, 0.95))
+	var tint := _ability_color()
+	mat.set_shader_parameter("core_color", tint.lightened(0.45))
+	mat.set_shader_parameter("fire_color", tint)
+	mat.set_shader_parameter("rim_color", tint.darkened(0.35))
 	mat.set_shader_parameter("grow", 0.16)
 	mat.set_shader_parameter("fade", 1.0)
 	mi.material_override = mat
 	mi.mesh = _blast_disc(radius)
 	fx.add_child(mi)
-	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.5, 0.16)
-	light.light_energy = 10.0 + radius * 1.4
-	light.omni_range = radius * 2.6
-	light.position = Vector3(0.0, 0.55, 0.0)
-	fx.add_child(light)
+	FxHeroLights.pulse(_land, _ability_color(), 5.5, radius * 2.2, 0.4)
 	var tw := fx.create_tween()
 	tw.tween_method(func(v: float) -> void:
 		if is_instance_valid(mat):
@@ -214,8 +229,6 @@ func _spawn_impact_blast() -> void:
 	tw.tween_method(func(v: float) -> void:
 		if is_instance_valid(mat):
 			mat.set_shader_parameter("fade", v)
-		if is_instance_valid(light):
-			light.light_energy = (10.0 + radius * 1.4) * v
 	, 1.0, 0.0, 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(fx.queue_free)
 

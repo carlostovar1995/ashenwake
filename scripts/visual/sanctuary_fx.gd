@@ -17,6 +17,9 @@ var tick_damage: float = 8.0
 var tick_shield: float = 15.0
 var shield_duration: float = 3.0
 var ability_id: String = "sanctuary"
+var element: int = AbilityDef.Element.NONE
+var extra_elements: PackedInt32Array = PackedInt32Array()
+var combat_text_cast_id: int = -1
 
 var _elapsed: float = 0.0
 var _tick_acc: float = 0.0
@@ -24,9 +27,7 @@ var _shield_acc: float = 0.0
 var _ticks: int = 0
 var _max_ticks: int = 16
 var _allies_pulsed: bool = false
-var _fill_mat: StandardMaterial3D
-var _ring_mat: ShaderMaterial
-var _light: OmniLight3D
+var _zone_mat: ShaderMaterial
 var _closing: bool = false
 
 
@@ -39,7 +40,10 @@ static func spawn(
 	p_damage: float,
 	p_shield: float,
 	p_shield_duration: float,
-	p_ability_id: String = "sanctuary"
+	p_ability_id: String = "sanctuary",
+	p_element: int = AbilityDef.Element.NONE,
+	p_extras: PackedInt32Array = PackedInt32Array(),
+	p_combat_text_cast_id: int = -1
 ):
 	var z := new()
 	z.source = caster
@@ -50,6 +54,9 @@ static func spawn(
 	z.tick_shield = p_shield
 	z.shield_duration = p_shield_duration
 	z.ability_id = p_ability_id if not p_ability_id.is_empty() else "sanctuary"
+	z.element = p_element
+	z.extra_elements = p_extras
+	z.combat_text_cast_id = p_combat_text_cast_id
 	z._max_ticks = maxi(int(round(z.duration / z.tick_interval)), 1)
 	z.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	var parent: Node = ArenaState.arena if ArenaState.arena else Engine.get_main_loop().root
@@ -61,32 +68,16 @@ static func spawn(
 
 
 func _build() -> void:
-	var fill := MeshInstance3D.new()
-	fill.mesh = GroundIndicator.circle_mesh()
-	fill.scale = Vector3(radius, 1.0, radius)
-	fill.extra_cull_margin = 16.0
-	_fill_mat = GroundIndicator.fill_mat(GOLD)
-	_fill_mat.render_priority = DRAW_PRIORITY
-	fill.material_override = _fill_mat
-	GroundIndicator.prepare(fill)
-	add_child(fill)
-
-	var ring := MeshInstance3D.new()
-	ring.mesh = GroundIndicator.circle_mesh()
-	ring.scale = Vector3(radius, 1.0, radius)
-	ring.extra_cull_margin = 16.0
-	_ring_mat = GroundIndicator.shader_mat(GOLD, true)
-	_ring_mat.render_priority = DRAW_PRIORITY + 1
-	ring.material_override = _ring_mat
-	GroundIndicator.prepare(ring)
-	add_child(ring)
-
-	_light = OmniLight3D.new()
-	_light.light_color = Color(1.0, 0.88, 0.48)
-	_light.light_energy = 2.4
-	_light.omni_range = radius * 1.35
-	_light.position.y = 0.85
-	add_child(_light)
+	var disc := MeshInstance3D.new()
+	disc.mesh = GroundIndicator.circle_mesh()
+	disc.scale = Vector3(radius, 1.0, radius)
+	disc.extra_cull_margin = 16.0
+	_zone_mat = GroundIndicator.zone_mat(GOLD, radius)
+	_zone_mat.render_priority = DRAW_PRIORITY
+	disc.material_override = _zone_mat
+	GroundIndicator.prepare(disc)
+	add_child(disc)
+	FxHeroLights.bind(self, Color(1.0, 0.88, 0.48), 1.2, radius * 1.15)
 
 
 func _physics_process(delta: float) -> void:
@@ -129,7 +120,7 @@ func _pulse_enemies() -> void:
 			continue
 		if not _has_los(u):
 			continue
-		u.receive_ability_hit(source, AbilityDef.Element.NONE, tick_damage, 0.0, PackedInt32Array(), true, false, true, -1, 0, ability_id)
+		u.receive_ability_hit(source, element, tick_damage, 0.0, extra_elements, true, false, true, -1, 0, ability_id, combat_text_cast_id)
 
 
 func _pulse_allies() -> void:
@@ -150,6 +141,7 @@ func _pulse_allies() -> void:
 func _refresh_dr() -> void:
 	if source == null or not is_instance_valid(source) or source.is_dead:
 		return
+	var hit_caster := false
 	for other in ArenaState.units:
 		var u := other as Unit
 		if u == null or not is_instance_valid(u) or u.is_dead:
@@ -158,7 +150,11 @@ func _refresh_dr() -> void:
 			continue
 		if not _contains(u):
 			continue
+		if u == source:
+			hit_caster = true
 		u.apply_damage_reduction(DR_PERCENT, DR_REFRESH)
+	if not hit_caster:
+		source.apply_damage_reduction(DR_PERCENT, DR_REFRESH)
 
 
 func _contains(u: Unit) -> bool:
@@ -190,13 +186,7 @@ func _close() -> void:
 
 
 func _set_fade(t: float) -> void:
-	if _fill_mat:
-		var c := _fill_mat.albedo_color
-		c.a = GroundIndicator.FILL_ALPHA * t
-		_fill_mat.albedo_color = c
-		_fill_mat.emission_energy_multiplier = 0.85 * t
-	if _ring_mat:
-		_ring_mat.set_shader_parameter("fill_alpha", GroundIndicator.FILL_ALPHA * t)
-		_ring_mat.set_shader_parameter("outline_alpha", GroundIndicator.OUTLINE_ALPHA * t)
-	if _light:
-		_light.light_energy = 2.4 * t
+	if _zone_mat:
+		_zone_mat.set_shader_parameter("fill_alpha", GroundIndicator.ZONE_FILL_ALPHA * t)
+		_zone_mat.set_shader_parameter("outline_alpha", GroundIndicator.ZONE_OUTLINE_ALPHA * t)
+		_zone_mat.set_shader_parameter("emission_strength", GroundIndicator.ZONE_EMISSION * t)

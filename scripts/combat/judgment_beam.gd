@@ -18,7 +18,6 @@ var _beam_mesh: BoxMesh
 var _mat: StandardMaterial3D
 var _tick_timer: float = 0.0
 var _glow: MeshInstance3D
-var _light: OmniLight3D
 var _ray_sfx: int = 0
 var _laser: MeshInstance3D
 var _laser_mesh: BoxMesh
@@ -77,12 +76,7 @@ func _ready() -> void:
 	_glow.material_override = glow_mat
 	_glow.visible = false
 	add_child(_glow)
-	_light = OmniLight3D.new()
-	_light.light_color = Color(1.0, 0.78, 0.22)
-	_light.light_energy = 1.1
-	_light.omni_range = 6.0
-	_light.position.y = 1.2
-	add_child(_light)
+	FxHeroLights.bind(self, Color(1.0, 0.78, 0.22), 1.6, 6.0)
 	_laser_mesh = BoxMesh.new()
 	_laser_mesh.size = Vector3(0.05, 0.05, 1.0)
 	_laser = MeshInstance3D.new()
@@ -184,9 +178,9 @@ func _apply_tick() -> void:
 	var arena := ArenaState.arena as Arena
 	var player_tick := PLAYER_TOTAL / float(TICKS)
 	if arena == null:
-		target.take_damage(player_tick, source)
+		target.apply_world_hit(player_tick, source, "hit", "judgment", -1, true)
 		return
-	var hit := arena.spell_wall_hit(source.global_position, target.global_position, [source.get_rid(), target.get_rid()])
+	var hit := _cover_hit()
 	if not hit.is_empty():
 		var col = hit.get("collider")
 		if col is ArenaPillar:
@@ -200,16 +194,54 @@ func _apply_tick() -> void:
 						"lifetime": 0.7,
 					})
 				return
-	target.take_damage(player_tick, source)
+		if col is SpellWall:
+			var wall := col as SpellWall
+			if wall.blocks_shot(source):
+				if wall.can_be_damaged_by(source):
+					wall.take_hit(wall.max_health / float(TICKS), hit.get("position", wall.global_position), source, "hit")
+					if tick_index == 0 or tick_index == 5:
+						AbilityFx.play_at(AbilityFx.FIRE_AREA, wall.aim_point(source.global_position) + Vector3(0, 0.4, 0), {
+							"area_radius": 1.6,
+							"scale": 0.7,
+							"lifetime": 0.7,
+						})
+				return
+	target.apply_world_hit(player_tick, source, "hit", "judgment", -1, true)
 	if tick_index == 0:
 		AbilityFx.play_at(AbilityFx.GROUND_EXPLOSION, target.global_position, {"scale": 0.85, "lifetime": 1.2})
+
+
+func _cover_hit() -> Dictionary:
+	var arena := ArenaState.arena as Arena
+	if arena == null or source == null or target == null:
+		return {}
+	if not is_instance_valid(source) or not is_instance_valid(target):
+		return {}
+	return arena.spell_wall_hit(source.global_position, target.global_position, [source.get_rid(), target.get_rid()])
+
+
+func _beam_end() -> Vector3:
+	var to := target.global_position + Vector3(0, 1.05, 0)
+	var hit := _cover_hit()
+	if hit.is_empty():
+		return to
+	var col = hit.get("collider")
+	var blocked := false
+	if col is ArenaPillar:
+		blocked = (col as ArenaPillar).living
+	elif col is SpellWall:
+		blocked = (col as SpellWall).blocks_shot(source)
+	if not blocked:
+		return to
+	var at: Vector3 = hit.get("position", to)
+	return Vector3(at.x, to.y, at.z)
 
 
 func _update_visual() -> void:
 	if source == null or target == null or not is_instance_valid(source) or not is_instance_valid(target):
 		return
 	var from := source.global_position + Vector3(0, 1.35, 0)
-	var to := target.global_position + Vector3(0, 1.05, 0)
+	var to := _beam_end() if firing else target.global_position + Vector3(0, 1.05, 0)
 	var delta := to - from
 	delta.y = 0.0
 	var length := maxf(delta.length(), 0.2)
@@ -232,9 +264,6 @@ func _update_visual() -> void:
 		if _mat:
 			_mat.albedo_color.a = 0.92
 			_mat.emission_energy_multiplier = 8.5
-		if _light:
-			_light.light_energy = 8.0
-			_light.omni_range = 10.0
 		return
 	var lock_u := clampf(elapsed / WARNING, 0.0, 1.0)
 	var pulse := 0.55 + 0.45 * sin(elapsed * 18.0)
@@ -250,10 +279,6 @@ func _update_visual() -> void:
 		_pip.scale = Vector3.ONE * (0.7 + 0.55 * lock_u + 0.12 * pulse)
 	if _pip_mat:
 		_pip_mat.emission_energy_multiplier = 4.0 + 7.0 * lock_u
-	if _light:
-		_light.light_energy = 0.8 + 2.4 * lock_u
-		_light.omni_range = 5.0 + 3.0 * lock_u
-		_light.position = Vector3(0, 1.2, -length * 0.5)
 
 
 func _play_fire_fx() -> void:

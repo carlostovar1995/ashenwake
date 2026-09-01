@@ -27,6 +27,9 @@ var _freeze_mat: ShaderMaterial
 var _hover_on: bool = false
 var _infusion_on: bool = false
 var _frozen: bool = false
+var _on_screen: bool = true
+
+static var _recolor_cache: Dictionary = {}
 
 const _HOVER_SHADER := preload("res://scripts/visual/hover_outline.gdshader")
 const _INFUSION_SHADER := preload("res://scripts/visual/infusion_tint.gdshader")
@@ -72,20 +75,12 @@ func setup(unit: Unit, model_path: String, model_scale: float, yaw: float = PI, 
 	if not _player.animation_finished.is_connected(_on_animation_finished):
 		_player.animation_finished.connect(_on_animation_finished)
 	_play_loco(false)
+	_setup_screen_lod()
 
 
 func _sharpen_meshes(n: Node) -> void:
 	if n is GeometryInstance3D:
-		(n as GeometryInstance3D).lod_bias = -4.0
-	if n is MeshInstance3D:
-		var mi := n as MeshInstance3D
-		var count := mi.mesh.get_surface_count() if mi.mesh else 0
-		for i in count:
-			var mat := mi.get_active_material(i)
-			if mat is BaseMaterial3D:
-				var bm := (mat as BaseMaterial3D).duplicate() as BaseMaterial3D
-				bm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-				mi.set_surface_override_material(i, bm)
+		(n as GeometryInstance3D).lod_bias = 1.0
 	for c in n.get_children():
 		_sharpen_meshes(c)
 
@@ -183,8 +178,10 @@ func _pick(names: PackedStringArray, hints: Array) -> StringName:
 func _alias(src: StringName, dest: String) -> StringName:
 	if src == &"" or _player == null or not _player.has_animation(src):
 		return src
-	var lib := _player.get_animation_library(&"")
-	if lib == null:
+	var lib: AnimationLibrary
+	if _player.has_animation_library(&""):
+		lib = _player.get_animation_library(&"")
+	else:
 		lib = AnimationLibrary.new()
 		_player.add_animation_library(&"", lib)
 	if not lib.has_animation(dest):
@@ -200,7 +197,36 @@ func _set_loop(clip: StringName, loop: bool) -> void:
 		anim.loop_mode = Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
 
 
+func _setup_screen_lod() -> void:
+	if _unit == null or _unit.is_boss or _unit.is_champion:
+		return
+	var n := VisibleOnScreenNotifier3D.new()
+	n.aabb = AABB(Vector3(-1.4, -0.2, -1.4), Vector3(2.8, 3.4, 2.8))
+	add_child(n)
+	n.screen_entered.connect(_on_screen_entered)
+	n.screen_exited.connect(_on_screen_exited)
+
+
+func _on_screen_entered() -> void:
+	_on_screen = true
+	set_process(true)
+	if _player:
+		_player.active = true
+		_player.speed_scale = 1.0
+
+
+func _on_screen_exited() -> void:
+	if _unit != null and (_unit.is_boss or _unit.is_champion or _unit.is_dead):
+		return
+	_on_screen = false
+	if _player:
+		_player.active = false
+	set_process(false)
+
+
 func _process(delta: float) -> void:
+	if not _on_screen:
+		return
 	if _unit == null or _player == null:
 		return
 	if _unit.is_dead:
@@ -528,3 +554,50 @@ func _find_skel(n: Node) -> Skeleton3D:
 		if found:
 			return found
 	return null
+
+
+func set_stealthed(on: bool) -> void:
+	_fade_model(self, 0.80 if on else 0.0)
+
+
+func recolor(color: Color, emit: float = 1.8) -> void:
+	for mi in _hover_meshes:
+		if not is_instance_valid(mi) or mi.mesh == null:
+			continue
+		for i in mi.mesh.get_surface_count():
+			var mat := mi.get_active_material(i)
+			if mat is BaseMaterial3D:
+				var key := "%d|%.3f|%.3f|%.3f|%.2f" % [mat.get_instance_id(), color.r, color.g, color.b, emit]
+				var bm: BaseMaterial3D
+				if _recolor_cache.has(key):
+					bm = _recolor_cache[key]
+				else:
+					bm = (mat as BaseMaterial3D).duplicate() as BaseMaterial3D
+					bm.albedo_color = color
+					bm.emission_enabled = true
+					bm.emission = color
+					bm.emission_energy_multiplier = emit
+					_recolor_cache[key] = bm
+				mi.set_surface_override_material(i, bm)
+			elif mat is ShaderMaterial:
+				var key := "s%d|%.3f|%.3f|%.3f" % [mat.get_instance_id(), color.r, color.g, color.b]
+				var sm: ShaderMaterial
+				if _recolor_cache.has(key):
+					sm = _recolor_cache[key]
+				else:
+					sm = (mat as ShaderMaterial).duplicate() as ShaderMaterial
+					if sm.get_shader_parameter("albedo") != null:
+						sm.set_shader_parameter("albedo", color)
+					if sm.get_shader_parameter("albedo_color") != null:
+						sm.set_shader_parameter("albedo_color", color)
+					if sm.get_shader_parameter("emission") != null:
+						sm.set_shader_parameter("emission", color)
+					_recolor_cache[key] = sm
+				mi.set_surface_override_material(i, sm)
+
+
+func _fade_model(n: Node, fade: float) -> void:
+	if n is GeometryInstance3D:
+		(n as GeometryInstance3D).transparency = fade
+	for c in n.get_children():
+		_fade_model(c, fade)

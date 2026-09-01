@@ -1,21 +1,15 @@
 ---
-description: Windows + Origin CLI — never use PowerShell for origin install
+description: Windows + GitHub daily workflow — Ashenwake lives on this PC, not Ubuntu
 alwaysApply: true
 ---
 
-# Windows Origin CLI
+# Windows + GitHub
 
-- Origin CLI is macOS, Linux, and **WSL only**. It does not run in PowerShell or cmd.
-- If the user is at `PS C:\...>` or an error is `sh is not recognized`, tell them to run `wsl` first (or `scripts/setup-windows.ps1`). Do not ask them to pipe `install.sh` to `sh` in PowerShell.
-- After `install.sh`, `~/.local/bin` is often missing from PATH. Immediately have them run `scripts/ensure-origin-path.sh` or:
-
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-- Then `origin auth login` and `origin repo clone carlos-tovar/game-sync`.
-- To bring the local Godot game in, run `scripts/import-local-godot.sh --push` from WSL with the Windows path converted to `/mnt/c/...`. Do not ask them to copy files by hand unless the script fails.
-- Day-to-day Godot and Cursor stay on Windows. WSL is only for Origin/git when Windows git cannot talk to Origin.
-- After gameplay edits, `./scripts/push-both.sh` so Origin (Cursor Agents) and GitHub (non-Cursor clones) stay in sync. GitHub remote: `carlostovar1995/game-sync`. If it is missing, run `scripts/setup-github-remote.sh` in WSL after `gh auth login`.
-- Docs: https://cursor.com/docs/origin/cli
+- The working copy is `C:\Users\carlo\OneDrive\Desktop\Projects\Ashenwake`.
+- GitHub is the only daily remote: `https://github.com/carlostovar1995/ashenwake.git`.
+- Open this folder in Cursor and Godot. Do not open `\\wsl$\Ubuntu\home\carlo\game-sync` or `~/game-sync`.
+- End of a session: `git add`, commit, `git push origin`. On the laptop: `git pull` in a local clone of the same repo.
+- The desktop shortcut **Sync Ashenwake** runs `scripts/windows/Sync-Ashenwake.ps1` (native PowerShell). Do not send the user into WSL to sync.
+- Do not ask them to pipe Origin `install.sh` to `sh` in PowerShell. Origin CLI is optional leftover kit, not the daily loop.
+- Do not run `scripts/push-both.sh` or treat Cursor Origin as upstream.
+- Windows `git` and `gh` talk to GitHub directly. The WSL `github-git.sh` helper is not required.

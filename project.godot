@@ -14,23 +14,21 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
-config/name="Boss Fighter"
+config/name="Ashenwake"
 config/description="5vBoss fighter with League of Legends-style controls"
 config/version="0.1.1"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
-config/icon="res://icon.svg"
-
-[audio]
-
-buses/default_bus_layout="res://default_bus_layout.tres"
+config/icon="res://assets/ui/ashenwake_icon.png"
 
 [autoload]
 
 GameSession="*res://scripts/autoload/game_session.gd"
 ArenaState="*res://scripts/autoload/arena_state.gd"
 CombatMeter="*res://scripts/autoload/combat_meter.gd"
+ThreatTable="*res://scripts/autoload/threat_table.gd"
 AudioManager="*res://scripts/autoload/audio_manager.gd"
+MCPRuntime="*uid://w8oi7y0aqm6n"
 
 [display]
 
@@ -39,12 +37,17 @@ window/size/viewport_height=1080
 window/size/window_width_override=1600
 window/size/window_height_override=900
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg")
+
 [layer_names]
 
 3d_physics/layer_1="world"
 3d_physics/layer_2="units"
 3d_physics/layer_3="projectiles"
 3d_physics/layer_4="click_floor"
+3d_physics/layer_5="spell_barrier"
 
 [physics]
 

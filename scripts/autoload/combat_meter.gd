@@ -51,6 +51,7 @@ func overall_rate() -> float:
 
 
 func ranked_rows() -> Array[Dictionary]:
+	_prune_dead()
 	var bag: Dictionary = _healing if mode == Mode.HEALING else _damage
 	var rows: Array[Dictionary] = []
 	var seen: Dictionary = {}
@@ -58,8 +59,10 @@ func ranked_rows() -> Array[Dictionary]:
 		seen[u] = true
 		rows.append(_row_for(u, float(bag.get(u, 0.0))))
 	for u in bag.keys():
-		if u is Unit and is_instance_valid(u) and not seen.has(u):
-			rows.append(_row_for(u, float(bag[u])))
+		var unit := _alive_unit(u)
+		if unit == null or seen.has(unit):
+			continue
+		rows.append(_row_for(unit, float(bag[unit])))
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var da := float(a["amount"])
 		var db := float(b["amount"])
@@ -168,27 +171,52 @@ func spell_breakdown(u: Unit) -> Array[Dictionary]:
 		total += float(spells[id])
 	for id in spells.keys():
 		var amount := float(spells[id])
+		var spell_id := String(id)
+		var ab := _ability_for_spell(u, spell_id)
+		var icon := ab.icon_id if ab != null and not ab.icon_id.is_empty() else _spell_icon(spell_id)
 		rows.append({
-			"id": String(id),
-			"name": _spell_name(u, String(id)),
-			"icon": _spell_icon(String(id)),
+			"id": spell_id,
+			"name": ab.display_name if ab != null and not ab.display_name.is_empty() else _spell_name(u, spell_id),
+			"icon": icon,
+			"infusion_tag": ab.icon_infusion_tag if ab != null else "",
 			"amount": amount,
 			"rate": amount / maxf(_elapsed, 1.0),
 			"share": amount / maxf(total, 1.0),
-			"color": _spell_color(String(id)),
+			"color": ab.color if ab != null else _spell_color(spell_id),
 		})
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return float(a["amount"]) > float(b["amount"])
 	)
+	_disambiguate_spell_names(u, rows)
 	return rows
 
 
+func _disambiguate_spell_names(u: Unit, rows: Array[Dictionary]) -> void:
+	var counts: Dictionary = {}
+	for row in rows:
+		var n := String(row["name"])
+		counts[n] = int(counts.get(n, 0)) + 1
+	for row in rows:
+		if int(counts.get(String(row["name"]), 0)) < 2:
+			continue
+		var ab := _ability_for_spell(u, String(row["id"]))
+		if ab == null or ab.hotkey.is_empty():
+			continue
+		row["name"] = "%s  [%s]" % [row["name"], ab.hotkey]
+
+
+func _ability_for_spell(u: Unit, id: String) -> AbilityDef:
+	if not is_instance_valid(u):
+		return null
+	return u.ability_for_combat_id(id)
+
+
 func _spell_name(u: Unit, id: String) -> String:
-	if u and is_instance_valid(u):
-		for ab in u.abilities:
-			if ab and ab.id == id:
-				return ab.display_name
-	match id:
+	var ab := _ability_for_spell(u, id)
+	if ab != null and not ab.display_name.is_empty():
+		return ab.display_name
+	var key := AbilityDef.base_from_combat_id(id)
+	match key:
 		"firebolt":
 			return "Firebolt"
 		"ice_blast":
@@ -203,6 +231,10 @@ func _spell_name(u: Unit, id: String) -> String:
 			return "Overcharge"
 		"burn", "fire_tick":
 			return "Burn"
+		"afflicted", "shadow_tick":
+			return "Afflicted"
+		"rejuvenation":
+			return "Rejuvenation"
 		"combust":
 			return "Combust"
 		"auto":
@@ -218,11 +250,12 @@ func _spell_name(u: Unit, id: String) -> String:
 		"other", "hit":
 			return "Other"
 		_:
-			return id.capitalize()
+			return key.capitalize() if not key.is_empty() else "Other"
 
 
 func _spell_icon(id: String) -> String:
-	match id:
+	var key := AbilityDef.base_from_combat_id(id)
+	match key:
 		"combust":
 			return "combust"
 		"burn", "fire_tick":
@@ -231,25 +264,42 @@ func _spell_icon(id: String) -> String:
 			return "auto"
 		"ice_tick":
 			return "chilled_ground"
-		"storm_tick", "storm":
+		"storm_tick", "storm", "lightning", "lightning_tick":
 			return "thunder_wave"
+		"afflicted", "shadow", "shadow_tick":
+			return "afflicted"
+		"rejuvenation", "nature", "nature_tick":
+			return "rejuvenation"
+		"divine", "divine_tick":
+			return "divine"
+		"protection", "protection_tick":
+			return "protection"
 		"fire":
 			return "firebolt"
 		"ice":
 			return "ice_blast"
 		"q", "w", "e", "r":
-			return id
+			return key
 		_:
-			return id
+			return key if not key.is_empty() else id
 
 
 func _spell_color(id: String) -> Color:
-	match id:
+	var key := AbilityDef.base_from_combat_id(id)
+	match key:
 		"firebolt", "meteor", "burn", "combust", "fire", "fire_tick", "e":
 			return Color(1.0, 0.48, 0.14)
 		"ice_blast", "chilled_ground", "ice", "ice_tick":
 			return Color(0.45, 0.82, 1.0)
-		"thunder_wave", "storm", "storm_tick":
+		"thunder_wave", "storm", "storm_tick", "lightning", "lightning_tick":
+			return Color(0.78, 0.68, 1.0)
+		"afflicted", "shadow", "shadow_tick":
+			return Color(0.72, 0.38, 0.95)
+		"rejuvenation", "nature", "nature_tick":
+			return Color(0.42, 0.88, 0.42)
+		"divine", "divine_tick", "holy":
+			return Color(1.0, 0.86, 0.38)
+		"protection", "protection_tick":
 			return Color(0.78, 0.86, 1.0)
 		"auto":
 			return Color(1.0, 0.88, 0.4)
@@ -263,12 +313,36 @@ func _spell_color(id: String) -> Color:
 
 func _raid_members() -> Array[Unit]:
 	var out: Array[Unit] = []
-	if ArenaState.champion and is_instance_valid(ArenaState.champion):
-		out.append(ArenaState.champion)
+	var champ := _alive_unit(ArenaState.champion)
+	if champ:
+		out.append(champ)
 	for ally in ArenaState.allies:
-		if ally is Unit and is_instance_valid(ally):
-			out.append(ally)
+		var u := _alive_unit(ally)
+		if u:
+			out.append(u)
 	return out
+
+
+func _alive_unit(u: Variant) -> Unit:
+	if not is_instance_valid(u):
+		return null
+	return u as Unit
+
+
+func _prune_dead() -> void:
+	_prune_bag(_damage)
+	_prune_bag(_healing)
+	_prune_bag(_damage_spells)
+	_prune_bag(_heal_spells)
+
+
+func _prune_bag(bag: Dictionary) -> void:
+	var dead: Array = []
+	for u in bag.keys():
+		if not is_instance_valid(u):
+			dead.append(u)
+	for u in dead:
+		bag.erase(u)
 
 
 func _ensure(u: Unit) -> void:
@@ -285,6 +359,14 @@ func _ensure(u: Unit) -> void:
 
 
 func _row_for(u: Unit, amount: float) -> Dictionary:
+	if not is_instance_valid(u):
+		return {
+			"unit": null,
+			"name": "Unknown",
+			"amount": amount,
+			"color": Color(0.42, 0.52, 0.7),
+			"is_you": false,
+		}
 	return {
 		"unit": u,
 		"name": u.unit_name if u else "Unknown",
