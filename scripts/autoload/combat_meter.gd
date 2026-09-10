@@ -162,32 +162,42 @@ func _add_spell(bag: Dictionary, src: Unit, spell_id: String, amount: float) -> 
 	spells[key] = float(spells.get(key, 0.0)) + amount
 
 
+func spell_display(u: Unit, spell_id: String) -> Dictionary:
+	var ab := _ability_for_spell(u, spell_id)
+	return {
+		"id": spell_id,
+		"name": ab.display_name if ab != null and not ab.display_name.is_empty() else _spell_name(u, spell_id),
+		"icon": ab.icon_id if ab != null and not ab.icon_id.is_empty() else _spell_icon(spell_id),
+		"infusion_tag": ab.icon_infusion_tag if ab != null else "",
+		"color": ab.color if ab != null else _spell_color(spell_id),
+	}
+
+
+func decorate_spell_rows(u: Unit, rows: Array[Dictionary]) -> void:
+	_disambiguate_spell_names(u, rows)
+
+
 func spell_breakdown(u: Unit) -> Array[Dictionary]:
 	var bag: Dictionary = _heal_spells if mode == Mode.HEALING else _damage_spells
-	var spells: Dictionary = bag.get(u, {})
+	return rows_from_spells(u, bag.get(u, {}), _elapsed)
+
+
+func rows_from_spells(u: Unit, spells: Dictionary, elapsed: float) -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
 	var total := 0.0
 	for id in spells.keys():
 		total += float(spells[id])
 	for id in spells.keys():
 		var amount := float(spells[id])
-		var spell_id := String(id)
-		var ab := _ability_for_spell(u, spell_id)
-		var icon := ab.icon_id if ab != null and not ab.icon_id.is_empty() else _spell_icon(spell_id)
-		rows.append({
-			"id": spell_id,
-			"name": ab.display_name if ab != null and not ab.display_name.is_empty() else _spell_name(u, spell_id),
-			"icon": icon,
-			"infusion_tag": ab.icon_infusion_tag if ab != null else "",
-			"amount": amount,
-			"rate": amount / maxf(_elapsed, 1.0),
-			"share": amount / maxf(total, 1.0),
-			"color": ab.color if ab != null else _spell_color(spell_id),
-		})
+		var meta := spell_display(u, String(id))
+		meta["amount"] = amount
+		meta["rate"] = amount / maxf(elapsed, 1.0)
+		meta["share"] = amount / maxf(total, 1.0)
+		rows.append(meta)
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return float(a["amount"]) > float(b["amount"])
 	)
-	_disambiguate_spell_names(u, rows)
+	decorate_spell_rows(u, rows)
 	return rows
 
 
@@ -235,8 +245,28 @@ func _spell_name(u: Unit, id: String) -> String:
 			return "Afflicted"
 		"rejuvenation":
 			return "Rejuvenation"
-		"combust":
-			return "Combust"
+		"seed_splash":
+			return "Seed Splash"
+		"seed_bloom":
+			return "Seed Bloom"
+		"judge_mend":
+			return "Judged"
+		"sunder_break":
+			return "Sunder"
+		"seed":
+			return "Initial Aggro"
+		"taunt":
+			return "Taunt"
+		"redirect":
+			return "Redirect"
+		"undertow":
+			return "Undertow"
+		"anointed":
+			return "Anointed"
+		"shock_chain":
+			return "Shock Chain"
+		"sanctuary":
+			return "Sanctuary"
 		"auto":
 			return "Auto Attack"
 		"q":
@@ -256,8 +286,6 @@ func _spell_name(u: Unit, id: String) -> String:
 func _spell_icon(id: String) -> String:
 	var key := AbilityDef.base_from_combat_id(id)
 	match key:
-		"combust":
-			return "combust"
 		"burn", "fire_tick":
 			return "burn"
 		"auto":
@@ -270,6 +298,20 @@ func _spell_icon(id: String) -> String:
 			return "afflicted"
 		"rejuvenation", "nature", "nature_tick":
 			return "rejuvenation"
+		"seed_splash", "seed_bloom":
+			return "seeded"
+		"judge_mend":
+			return "judged"
+		"sunder_break":
+			return "sundered"
+		"seed", "taunt", "redirect":
+			return "protection"
+		"undertow":
+			return "wind"
+		"anointed", "sanctuary":
+			return "divine"
+		"shock_chain":
+			return "thunder_wave"
 		"divine", "divine_tick":
 			return "divine"
 		"protection", "protection_tick":
@@ -287,7 +329,7 @@ func _spell_icon(id: String) -> String:
 func _spell_color(id: String) -> Color:
 	var key := AbilityDef.base_from_combat_id(id)
 	match key:
-		"firebolt", "meteor", "burn", "combust", "fire", "fire_tick", "e":
+		"firebolt", "meteor", "burn", "fire", "fire_tick", "e":
 			return Color(1.0, 0.48, 0.14)
 		"ice_blast", "chilled_ground", "ice", "ice_tick":
 			return Color(0.45, 0.82, 1.0)
@@ -295,12 +337,16 @@ func _spell_color(id: String) -> Color:
 			return Color(0.78, 0.68, 1.0)
 		"afflicted", "shadow", "shadow_tick":
 			return Color(0.72, 0.38, 0.95)
-		"rejuvenation", "nature", "nature_tick":
+		"rejuvenation", "nature", "nature_tick", "seed_splash", "seed_bloom":
 			return Color(0.42, 0.88, 0.42)
-		"divine", "divine_tick", "holy":
+		"divine", "divine_tick", "holy", "judge_mend":
 			return Color(1.0, 0.86, 0.38)
-		"protection", "protection_tick":
+		"protection", "protection_tick", "sunder_break", "seed", "taunt", "redirect":
 			return Color(0.78, 0.86, 1.0)
+		"undertow":
+			return Color(0.72, 0.88, 0.62)
+		"anointed", "sanctuary":
+			return Color(1.0, 0.86, 0.38)
 		"auto":
 			return Color(1.0, 0.88, 0.4)
 		"overcharge":

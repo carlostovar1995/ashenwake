@@ -1,0 +1,32 @@
+---
+description: Proof requirements for deletion and behavior-preserving fragile-core extraction
+globs: "{scripts,scenes,assets,_incoming,tools}/**/*"
+alwaysApply: false
+---
+
+# Cleanup protocol
+
+## Prove deletion first
+
+1. Search the repository for the path, class name, UID, signal, input action, group, and likely dynamic-load forms.
+2. Check `project.godot`, autoloads, preloads/loads, scene/resource dependencies, persistence migrations, and editor/tool entry points.
+3. Identify the canonical replacement for duplicates; prove all live references use it.
+4. Run `scripts/windows/Verify-Ashenwake.ps1` before deletion and again after it.
+5. If evidence is incomplete, leave the item and record the uncertainty. File age, naming, or apparent duplication is not proof.
+
+## Extract fragile core safely
+
+Fragile core includes `Unit`, HUD, `SpellWall`, `SpellRecipe -> AbilityDef` compilation, `CombatBalance`, `ThreatTable`, and the controller order queue.
+
+1. Characterize current behavior and ordering with focused coverage before moving code.
+2. Extract one responsibility behind a typed owner API; wire one caller/domain at a time.
+3. Preserve scene paths, UIDs, signals, save migrations, defaults, timing, queue order, damage/proc order, and exact targeting semantics.
+4. Do not combine extraction with renames, broad deletion, speculative optimization, or behavior redesign.
+5. Re-run the verifier and focused local playtest after every extraction. Combat/VFX/HUD work also passes the 60-dummy manual gate.
+
+## Keep changes reviewable
+
+- Work one domain at a time and inspect the diff for unrelated formatting or generated churn.
+- Prefer several verified steps to one large rewrite.
+- Preserve stable architectural anchors unless characterization proves a change is required.
+- Optimize only from before/after profiler evidence; cleanup metrics alone do not justify runtime redesign.

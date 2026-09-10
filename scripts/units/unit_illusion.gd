@@ -69,13 +69,10 @@ static func nearby_enemies(around: Unit, radius: float, caster: Unit, count: int
 	if around == null or not is_instance_valid(around) or caster == null or count <= 0:
 		return out
 	var choices: Array[Unit] = []
-	for other in ArenaState.units:
-		var u := other as Unit
+	for u in ArenaState.units_near(around.global_position, radius):
 		if u == null or not is_instance_valid(u) or u.is_dead:
 			continue
 		if u == around or u.team == caster.team:
-			continue
-		if around.global_position.distance_to(u.global_position) > radius:
 			continue
 		choices.append(u)
 	choices.shuffle()
@@ -110,33 +107,3 @@ static func apply_shield_stealth(target: Unit, ab: AbilityDef, duration: float) 
 	if target == null or not has_illusion(ab) or ab.delivery != AbilityDef.Delivery.SHIELD:
 		return
 	target.apply_stealth(maxf(duration, 0.4))
-
-
-static func cluster_center(units: Array) -> Vector3:
-	var acc := Vector3.ZERO
-	var n := 0
-	for item in units:
-		var u := item as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
-		acc += u.global_position
-		n += 1
-	if n <= 0:
-		return Vector3.ZERO
-	acc /= float(n)
-	acc.y = 0.0
-	return acc
-
-
-static func scatter_from(u: Unit, center: Vector3, _fallback: Vector3 = Vector3.ZERO) -> void:
-	if u == null or u.is_dead:
-		return
-	var away := Vector3(u.global_position.x - center.x, 0.0, u.global_position.z - center.z)
-	if away.length_squared() < 0.010:
-		return
-	UnitWind.knockback(
-		u,
-		away,
-		CombatBalance.flat("illusion.ray.push"),
-		CombatBalance.flat("illusion.ray.push.time")
-	)

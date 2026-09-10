@@ -266,6 +266,14 @@ static func _draw_icon(img: Image, icon_id: String) -> void:
 		"fire_infused", "burn":
 			_fill_round(img, Color(0.28, 0.08, 0.02, 1.0))
 			_flame(img, Color(1.0, 0.42, 0.08), Color(1.0, 0.82, 0.22))
+		"singe":
+			_fill_round(img, Color(0.32, 0.1, 0.02, 1.0))
+			_flame(img, Color(1.0, 0.55, 0.12), Color(1.0, 0.88, 0.32))
+			_slash(img, Color(1.0, 0.78, 0.28))
+		"scorch":
+			_fill_round(img, Color(0.22, 0.06, 0.02, 1.0))
+			_disc(img, 24, 30, 10, Color(0.72, 0.22, 0.06))
+			_flame(img, Color(1.0, 0.38, 0.08), Color(1.0, 0.72, 0.18))
 		"ice_infused", "chilled":
 			_fill_round(img, Color(0.06, 0.16, 0.28, 1.0))
 			_snow(img, Color(0.72, 0.94, 1.0))
@@ -288,13 +296,42 @@ static func _draw_icon(img: Image, icon_id: String) -> void:
 			_fill_round(img, Color(0.05, 0.16, 0.08, 1.0))
 			_disc(img, 24, 28, 8, Color(0.32, 0.72, 0.28))
 			_star(img, 24, 18, 10, 4, Color(0.7, 1.0, 0.45))
+		"lifebloom":
+			_fill_round(img, Color(0.04, 0.18, 0.08, 1.0))
+			_disc(img, 24, 26, 10, Color(0.38, 0.88, 0.32))
+			_star(img, 24, 16, 11, 5, Color(0.82, 1.0, 0.48))
+		"drought":
+			_fill_round(img, Color(0.18, 0.12, 0.04, 1.0))
+			_disc(img, 24, 28, 8, Color(0.55, 0.38, 0.16))
+			_slash(img, Color(0.78, 0.42, 0.22))
+		"rooted":
+			_fill_round(img, Color(0.08, 0.14, 0.06, 1.0))
+			_disc(img, 24, 32, 9, Color(0.28, 0.42, 0.16))
+			_star(img, 24, 18, 8, 3, Color(0.42, 0.62, 0.22))
+		"stormbond":
+			_fill_round(img, Color(0.08, 0.12, 0.22, 1.0))
+			_bolt(img, Color(0.62, 0.82, 1.0))
+			_disc(img, 24, 30, 6, Color(0.32, 0.72, 0.38))
+		"seeded":
+			_fill_round(img, Color(0.05, 0.16, 0.08, 1.0))
+			_disc(img, 16, 30, 5, Color(0.28, 0.62, 0.22))
+			_disc(img, 32, 28, 5, Color(0.42, 0.82, 0.32))
+			_disc(img, 24, 16, 6, Color(0.7, 1.0, 0.45))
 		"divine", "holy_blessing":
 			_fill_round(img, Color(0.2, 0.14, 0.04, 1.0))
 			_star(img, 24, 24, 15, 6, Color(1.0, 0.9, 0.42))
 			_disc(img, 24, 24, 5, Color(1.0, 0.97, 0.78))
+		"judged":
+			_fill_round(img, Color(0.2, 0.14, 0.04, 1.0))
+			_star(img, 24, 24, 15, 6, Color(1.0, 0.9, 0.42))
+			_slash(img, Color(0.95, 0.38, 0.32))
 		"protection":
 			_fill_round(img, Color(0.1, 0.14, 0.22, 1.0))
 			_shield(img, Color(0.78, 0.86, 1.0))
+		"sundered":
+			_fill_round(img, Color(0.1, 0.14, 0.22, 1.0))
+			_shield(img, Color(0.78, 0.86, 1.0))
+			_slash(img, Color(0.95, 0.38, 0.32))
 		"altered_fire":
 			_fill_round(img, Color(0.28, 0.08, 0.02, 1.0))
 			_flame(img, Color(1.0, 0.42, 0.08), Color(1.0, 0.82, 0.22))
@@ -308,18 +345,15 @@ static func _draw_icon(img: Image, icon_id: String) -> void:
 			_fill_round(img, Color(0.1, 0.04, 0.16, 1.0))
 			_disc(img, 24, 24, 11, Color(0.42, 0.16, 0.62))
 			_disc(img, 24, 24, 5, Color(0.78, 0.42, 1.0))
-		"encore":
+		"encore", "recast":
 			_fill_round(img, Color(0.2, 0.12, 0.04, 1.0))
-			_encore(img)
+			_recast_mark(img)
 		"ward":
 			_fill_round(img, Color(0.22, 0.14, 0.04, 1.0))
 			_shield(img, Color(1.0, 0.72, 0.28))
 		"slow":
 			_fill_round(img, Color(0.08, 0.14, 0.24, 1.0))
 			_chevrons(img, Color(0.62, 0.84, 1.0))
-		"umbral":
-			_fill_round(img, Color(0.05, 0.06, 0.14, 1.0))
-			_umbral(img)
 		"firebolt":
 			_fill_round(img, Color(0.28, 0.07, 0.02, 1.0))
 			_firebolt(img)
@@ -341,9 +375,6 @@ static func _draw_icon(img: Image, icon_id: String) -> void:
 		"auto":
 			_fill_round(img, Color(0.16, 0.12, 0.06, 1.0))
 			_auto_attack(img)
-		"combust":
-			_fill_round(img, Color(0.3, 0.06, 0.02, 1.0))
-			_flame(img, Color(1.0, 0.28, 0.04), Color(1.0, 0.78, 0.18))
 		"atonement":
 			_fill_round(img, Color(0.18, 0.14, 0.05, 1.0))
 			_atonement(img)
@@ -355,6 +386,9 @@ static func _draw_icon(img: Image, icon_id: String) -> void:
 			_shield(img, Color(0.92, 0.94, 1.0))
 		"judgment":
 			_fill_round(img, Color(0.2, 0.14, 0.04, 1.0))
+			_judgment(img)
+		"solar_brand":
+			_fill_round(img, Color(0.22, 0.08, 0.04, 1.0))
 			_judgment(img)
 		"bastion":
 			_fill_round(img, Color(0.16, 0.14, 0.06, 1.0))
@@ -370,6 +404,81 @@ static func _draw_icon(img: Image, icon_id: String) -> void:
 			_fill_round(img, Color(0.2, 0.14, 0.04, 1.0))
 			_star(img, 24, 24, 15, 6, Color(1.0, 0.9, 0.42))
 			_disc(img, 24, 24, 5, Color(1.0, 0.97, 0.78))
+		"volley":
+			_fill_round(img, Color(0.12, 0.16, 0.28, 1.0))
+			_disc(img, 16, 24, 5, Color(0.72, 0.86, 1.0))
+			_disc(img, 24, 18, 5, Color(0.82, 0.92, 1.0))
+			_disc(img, 32, 24, 5, Color(0.72, 0.86, 1.0))
+		"fan":
+			_fill_round(img, Color(0.10, 0.14, 0.26, 1.0))
+			_disc(img, 14, 30, 5, Color(0.72, 0.86, 1.0))
+			_disc(img, 24, 14, 5, Color(0.88, 0.95, 1.0))
+			_disc(img, 34, 30, 5, Color(0.72, 0.86, 1.0))
+		"pierce":
+			_fill_round(img, Color(0.18, 0.1, 0.06, 1.0))
+			_bolt(img, Color(1.0, 0.82, 0.42))
+		"focus":
+			_fill_round(img, Color(0.16, 0.08, 0.18, 1.0))
+			_disc(img, 24, 24, 12, Color(0.72, 0.42, 0.9))
+			_disc(img, 24, 24, 5, Color(1.0, 0.86, 0.55))
+		"spread":
+			_fill_round(img, Color(0.08, 0.16, 0.18, 1.0))
+			_disc(img, 24, 24, 16, Color(0.42, 0.78, 0.82))
+			_disc(img, 24, 24, 8, Color(0.72, 0.95, 0.9))
+		"lingering":
+			_fill_round(img, Color(0.06, 0.16, 0.14, 1.0))
+			_disc(img, 24, 24, 14, Color(0.28, 0.62, 0.55))
+			_disc(img, 24, 24, 7, Color(0.62, 0.95, 0.82))
+		"ritual":
+			_fill_round(img, Color(0.18, 0.08, 0.16, 1.0))
+			_star(img, 24, 24, 16, 6, Color(0.92, 0.55, 1.0))
+		"momentum":
+			_fill_round(img, Color(0.08, 0.14, 0.24, 1.0))
+			_chevrons(img, Color(0.62, 0.88, 1.0))
+		"siphon":
+			_fill_round(img, Color(0.22, 0.06, 0.1, 1.0))
+			_disc(img, 24, 24, 10, Color(0.92, 0.28, 0.42))
+			_disc(img, 24, 24, 4, Color(1.0, 0.72, 0.78))
+		"cleave":
+			_fill_round(img, Color(0.2, 0.12, 0.04, 1.0))
+			_flame(img, Color(1.0, 0.55, 0.18), Color(1.0, 0.86, 0.4))
+		"execute":
+			_fill_round(img, Color(0.22, 0.04, 0.04, 1.0))
+			_star(img, 24, 24, 15, 5, Color(1.0, 0.32, 0.28))
+		"gambit":
+			_fill_round(img, Color(0.16, 0.14, 0.04, 1.0))
+			_star(img, 24, 24, 14, 6, Color(1.0, 0.86, 0.32))
+			_disc(img, 24, 24, 4, Color(1.0, 0.96, 0.7))
+		"heartbeat":
+			_fill_round(img, Color(0.22, 0.06, 0.1, 1.0))
+			_disc(img, 24, 24, 8, Color(1.0, 0.42, 0.48))
+			_ring_pixels(img, 24, 24, 14, Color(1.0, 0.72, 0.78))
+		"slow_burn":
+			_fill_round(img, Color(0.18, 0.08, 0.04, 1.0))
+			_flame(img, Color(1.0, 0.48, 0.16), Color(1.0, 0.82, 0.32))
+		"anchor":
+			_fill_round(img, Color(0.1, 0.12, 0.16, 1.0))
+			_disc(img, 24, 30, 8, Color(0.62, 0.72, 0.82))
+			_disc(img, 24, 16, 5, Color(0.92, 0.95, 1.0))
+		"aftershock":
+			_fill_round(img, Color(0.16, 0.06, 0.18, 1.0))
+			_star(img, 24, 24, 15, 5, Color(0.92, 0.55, 1.0))
+			_disc(img, 24, 24, 4, Color(1.0, 0.86, 0.55))
+		"crowd":
+			_fill_round(img, Color(0.08, 0.14, 0.12, 1.0))
+			_disc(img, 16, 26, 6, Color(0.55, 0.88, 0.72))
+			_disc(img, 32, 26, 6, Color(0.55, 0.88, 0.72))
+			_disc(img, 24, 16, 6, Color(0.82, 0.98, 0.88))
+		"stillness":
+			_fill_round(img, Color(0.08, 0.1, 0.18, 1.0))
+			_disc(img, 24, 24, 12, Color(0.42, 0.55, 0.82))
+			_disc(img, 24, 24, 4, Color(0.88, 0.92, 1.0))
+		"menace":
+			_fill_round(img, Color(0.22, 0.08, 0.04, 1.0))
+			_chevrons(img, Color(1.0, 0.55, 0.28))
+		"subtlety":
+			_fill_round(img, Color(0.08, 0.1, 0.16, 1.0))
+			_disc(img, 24, 24, 10, Color(0.42, 0.52, 0.72))
 		_:
 			_fill_round(img, Color(0.16, 0.16, 0.2, 1.0))
 			_disc(img, 24, 24, 10, Color(0.85, 0.85, 0.9))
@@ -454,7 +563,7 @@ static func _bolt(img: Image, color: Color) -> void:
 	_poly(img, pts, color)
 
 
-static func _encore(img: Image) -> void:
+static func _recast_mark(img: Image) -> void:
 	var gold := Color(1.0, 0.84, 0.38)
 	var light := Color(1.0, 0.95, 0.7)
 	for y in 48:
@@ -535,20 +644,6 @@ static func _stamp(img: Image, x: int, y: int, color: Color) -> void:
 	if x < 0 or y < 0 or x >= 48 or y >= 48:
 		return
 	img.set_pixel(x, y, color)
-
-
-static func _umbral(img: Image) -> void:
-	_disc(img, 24, 24, 16, Color(0.1, 0.14, 0.28))
-	_disc(img, 24, 24, 11, Color(0.05, 0.07, 0.16))
-	_disc(img, 24, 24, 6, Color(0.02, 0.03, 0.08))
-	for y in range(10, 39):
-		for x in range(10, 39):
-			var v := Vector2(float(x - 24), float(y - 24))
-			var d := v.length()
-			if d < 15.2 and d > 12.4:
-				var ang := atan2(v.x, -v.y)
-				if ang > -0.55 and ang < 2.35:
-					img.set_pixel(x, y, Color(0.42, 0.52, 0.85))
 
 
 static func _slash(img: Image, color: Color) -> void:

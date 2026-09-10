@@ -12,6 +12,7 @@ const LAYER_WORLD := 1
 const LAYER_BARRIER := 16
 const _BAR_W := 1.48
 const _BAR_H := 0.11
+const _AURA_REFRESH_INTERVAL := 0.1
 const _SpellBaseFx := preload("res://scripts/visual/spell_base_fx.gd")
 const GroundIndicator := preload("res://scripts/visual/ground_indicator.gd")
 const _DamageNumber := preload("res://scripts/visual/damage_number.gd")
@@ -19,7 +20,6 @@ const _UnitController := preload("res://scripts/units/unit_controller.gd")
 const _UnitMovement := preload("res://scripts/units/movement.gd")
 const _AutoAttack := preload("res://scripts/combat/auto_attack.gd")
 const _HoverOutline := preload("res://scripts/visual/hover_outline.gdshader")
-const _HoverFrameShader := preload("res://scripts/visual/hover_frame.gdshader")
 
 var source: Unit
 var ability: AbilityDef
@@ -56,7 +56,6 @@ var _fire_on: Dictionary = {}
 var _illusion_role: String = ""
 var _illusion_outlet: SpellWall
 var _illusion_queue: Array[Dictionary] = []
-var _illusion_moves_left: int = 0
 var _portal_frame: MeshInstance3D
 var _portal_rim_mat: StandardMaterial3D
 var _seg_health: Array[float] = []
@@ -73,8 +72,12 @@ var _targeted: bool = false
 var _hover_color: Color = Color(1.0, 0.82, 0.28, 0.92)
 var _hover_mat: ShaderMaterial = null
 var _bar_frame: MeshInstance3D = null
+var _aura_refresh_acc: float = _AURA_REFRESH_INTERVAL
+var bramble_acc: float = 0.0
+var bramble_root_acc: float = 0.0
 
 static var _illusion_inlets: Dictionary = {}
+static var _live_walls: Array[SpellWall] = []
 
 
 static func spawn(caster: Unit, point: Vector3, ab: AbilityDef, extras: PackedInt32Array, ice_id: int, double_mask: int, text_cast_id: int = -1) -> SpellWall:
@@ -105,6 +108,7 @@ static func spawn(caster: Unit, point: Vector3, ab: AbilityDef, extras: PackedIn
 		wall.duration = CombatBalance.flat("wall.divine.time")
 	elif SpellWallLayout.style_id(ab) == "protection":
 		wall.duration = CombatBalance.flat("wall.protection.time") + 0.35
+	TalentCombat.on_wall_spawned(wall)
 	var physical := SpellWallLayout.is_physical(ab)
 	var style := SpellWallLayout.style_id(ab)
 	wall.allegiance = SpellWallLayout.allegiance(ab)
@@ -131,6 +135,10 @@ static func spawn(caster: Unit, point: Vector3, ab: AbilityDef, extras: PackedIn
 	var fallback := caster.facing_dir() if caster != null and is_instance_valid(caster) else Vector3(0, 0, -1)
 	var from := caster.global_position if caster != null and is_instance_valid(caster) else point
 	var dir := SpellWallLayout.aim_dir(from, point, fallback)
+	if style == "illusion" and caster != null and is_instance_valid(caster):
+		var aimed := caster.take_illusion_exit_dir()
+		if aimed.length_squared() > 0.0001:
+			dir = aimed
 	if style == "protection" and caster != null and is_instance_valid(caster):
 		caster.add_child(wall)
 		wall.top_level = true
@@ -150,6 +158,7 @@ static func spawn(caster: Unit, point: Vector3, ab: AbilityDef, extras: PackedIn
 	wall._build()
 	wall._attach_target_proxy()
 	wall.add_to_group("spell_walls")
+	_live_walls.append(wall)
 	if style == "ice":
 		wall._spawn_ice_zones()
 	if style == "protection":
@@ -158,6 +167,9 @@ static func spawn(caster: Unit, point: Vector3, ab: AbilityDef, extras: PackedIn
 		if caster != null and is_instance_valid(caster):
 			wall.add_collision_exception_with(caster)
 		wall._follow_protection()
+		wall._ignore_unit_collision()
+		if not ArenaState.unit_registered.is_connected(wall._ignore_one_unit):
+			ArenaState.unit_registered.connect(wall._ignore_one_unit)
 	if style == "fire":
 		wall.add_to_group("spell_fire_walls")
 	elif style == "wind":
@@ -174,6 +186,7 @@ func take_hit(amount: float, at: Vector3 = Vector3.ZERO, from: Unit = null, hit_
 	if not living or amount <= 0.0 or not can_be_damaged_by(from):
 		return
 	health = maxf(0.0, health - amount)
+	TalentCombat.on_wall_hit(self, amount)
 	_refresh()
 	_sync_proxy()
 	var kind := hit_kind if not hit_kind.is_empty() else "hit"
@@ -222,11 +235,12 @@ func detonate(broken: bool = false) -> void:
 		return
 	var pos := Vector3(global_position.x, 0.12, global_position.z)
 	if _is_physical() and source != null and is_instance_valid(source) and ability != null:
-		source._ground_burst(pos, ability, blast_damage, blast_radius, extras, overheat_cast_id, infusion_double, 2.0, combat_text_cast_id)
+		source._ground_burst(pos, ability, blast_damage, blast_radius, extras, overheat_cast_id, infusion_double, combat_text_cast_id)
 	queue_free()
 
 
 func _exit_tree() -> void:
+	_live_walls.erase(self)
 	_release_proxy()
 	if source != null and is_instance_valid(source) and source._spell_wall == self:
 		source._spell_wall = null
@@ -237,6 +251,13 @@ func _physics_process(delta: float) -> void:
 		return
 	_orient_bar()
 	_elapsed += delta
+	TalentCombat.tick_wall(self, delta)
+	var refresh_aura := false
+	if _is_nature() or _is_divine():
+		_aura_refresh_acc += delta
+		if _aura_refresh_acc >= _AURA_REFRESH_INTERVAL:
+			_aura_refresh_acc = fmod(_aura_refresh_acc, _AURA_REFRESH_INTERVAL)
+			refresh_aura = true
 	if _is_protection():
 		_tick_protection_turn(delta)
 		_follow_protection()
@@ -249,9 +270,9 @@ func _physics_process(delta: float) -> void:
 		_apply_grow(1.0 - pow(1.0 - _grow_t, 3.0))
 		if _is_physical() and not _is_nature():
 			_push_overlaps()
-		if _is_nature():
+		if _is_nature() and refresh_aura:
 			_tick_nature_walk()
-		if _is_divine() and _grow_t > 0.35:
+		if _is_divine() and _grow_t > 0.35 and refresh_aura:
 			_refresh_divine_dr()
 		if _grow_t >= 1.0:
 			_growing = false
@@ -266,7 +287,8 @@ func _physics_process(delta: float) -> void:
 			_flicker_portal()
 		elif _is_divine():
 			_flicker_divine()
-			_refresh_divine_dr()
+			if refresh_aura:
+				_refresh_divine_dr()
 		return
 	if _is_ice():
 		_tick_ice_zones(delta)
@@ -275,7 +297,8 @@ func _physics_process(delta: float) -> void:
 		return
 	if _is_nature():
 		_tick_nature_grove(delta)
-		_tick_nature_walk()
+		if refresh_aura:
+			_tick_nature_walk()
 		return
 
 
@@ -467,42 +490,14 @@ func _build_bar() -> void:
 
 
 func _make_bar_quad(quad_name: String, size: Vector2, color: Color, z: float) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.name = quad_name
-	var mesh := QuadMesh.new()
-	mesh.size = size
-	mi.mesh = mesh
-	mi.position.z = z
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
-	mat.no_depth_test = true
-	mat.disable_receive_shadows = true
-	mat.render_priority = 8
-	mi.material_override = mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return mi
+	return WorldUiMesh.quad(quad_name, size, color, 8, false, z)
 
 
 func _make_bar_hover_frame() -> void:
 	if _bar_root == null:
 		return
-	_bar_frame = MeshInstance3D.new()
-	_bar_frame.name = "HoverFrame"
-	var quad := QuadMesh.new()
-	quad.size = Vector2(1, 1)
-	_bar_frame.mesh = quad
+	_bar_frame = WorldUiMesh.hover_frame("HoverFrame", _hover_color, 0.024, false, 12)
 	_bar_frame.position.z = 0.008
-	var mat := ShaderMaterial.new()
-	mat.shader = _HoverFrameShader
-	mat.set_shader_parameter("outline_color", _hover_color)
-	mat.set_shader_parameter("border", 0.024)
-	mat.set_shader_parameter("billboard", false)
-	mat.render_priority = 12
-	_bar_frame.material_override = mat
-	_bar_frame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_bar_frame.visible = false
 	_bar_root.add_child(_bar_frame)
 
 
@@ -641,12 +636,7 @@ func _apply_grow(u: float) -> void:
 
 func _push_overlaps() -> void:
 	var arena := ArenaState.arena as Arena
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
-		if u.is_structure:
-			continue
+	for u in ArenaState.units_near(global_position, SpellWallLayout.query_radius(ability), false, true, true):
 		var dest := _nudge_out(u)
 		if dest == u.global_position:
 			continue
@@ -759,6 +749,50 @@ func is_cover_solid() -> bool:
 	return living and collision_layer != 0
 
 
+func blocks_movement() -> bool:
+	if not living or _is_protection():
+		return false
+	return (collision_layer & LAYER_WORLD) != 0
+
+
+func append_movement_blockers(blockers: Array[Dictionary]) -> void:
+	if not blocks_movement():
+		return
+	if _is_ice():
+		blockers.append({
+			"xform": self,
+			"half": Vector3(
+				SpellWallLayout.ice_length(ability) * 0.5,
+				SpellWallLayout.height_of(ability) * 0.5,
+				SpellWallLayout.ice_radius(ability)
+			),
+		})
+		return
+	if _is_lightning():
+		var radius := SpellWallLayout.lightning_radius(ability)
+		blockers.append({
+			"xform": self,
+			"half": Vector3(radius, SpellWallLayout.height_of(ability) * 0.5, radius),
+		})
+		return
+	for i in _shapes.size():
+		var shape := _shapes[i]
+		if shape == null or not is_instance_valid(shape) or shape.disabled:
+			continue
+		var half := Vector3.ZERO
+		if i < _full_sizes.size():
+			var full := _full_sizes[i]
+			half = Vector3(full.x * 0.5, full.y * 0.5, full.z * 0.5)
+		elif shape.shape is BoxShape3D:
+			half = (shape.shape as BoxShape3D).size * 0.5
+		elif shape.shape is CylinderShape3D:
+			var cyl := shape.shape as CylinderShape3D
+			half = Vector3(cyl.radius, cyl.height * 0.5, cyl.radius)
+		else:
+			continue
+		blockers.append({"xform": shape, "half": half})
+
+
 func cover_half() -> float:
 	if _is_ice():
 		return maxf(SpellWallLayout.ice_radius(ability), 0.45)
@@ -818,13 +852,11 @@ func _proxy_team() -> int:
 
 static func living_walls() -> Array[SpellWall]:
 	var out: Array[SpellWall] = []
-	var tree := Engine.get_main_loop()
-	if not (tree is SceneTree):
-		return out
-	for node in (tree as SceneTree).get_nodes_in_group("spell_walls"):
-		if node == null or not is_instance_valid(node) or not (node is SpellWall):
+	for i in range(_live_walls.size() - 1, -1, -1):
+		var wall := _live_walls[i]
+		if wall == null or not is_instance_valid(wall):
+			_live_walls.remove_at(i)
 			continue
-		var wall := node as SpellWall
 		if wall.living:
 			out.append(wall)
 	return out
@@ -1163,15 +1195,21 @@ func _follow_protection() -> void:
 	var origin := Vector3(source.global_position.x, height * 0.5, source.global_position.z)
 	global_transform = Transform3D(SpellWallLayout.wall_basis(dir), origin)
 	PhysicsServer3D.body_set_state(get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, global_transform)
-	_ignore_unit_collision()
 
 
 func _ignore_unit_collision() -> void:
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u):
-			continue
-		add_collision_exception_with(u)
+	for other in ArenaState.living_allies():
+		_ignore_one_unit(other)
+	for other in ArenaState.living_enemies():
+		_ignore_one_unit(other)
+	for other in ArenaState.structures():
+		_ignore_one_unit(other)
+
+
+func _ignore_one_unit(unit: Unit) -> void:
+	if unit == null or not is_instance_valid(unit):
+		return
+	add_collision_exception_with(unit)
 
 
 func _build_divine() -> void:
@@ -1227,10 +1265,7 @@ func _refresh_divine_dr() -> void:
 	if amount <= 0.0:
 		return
 	var pos := global_position
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
+	for u in ArenaState.units_near(pos, SpellWallLayout.divine_radius(ability), false, true, true):
 		if u.team != source.team:
 			continue
 		if not SpellWallLayout.contains_point(pos, Vector3(0, 0, -1), ability, u.global_position, u.radius):
@@ -1259,13 +1294,7 @@ func _is_ally_of(u: Unit) -> bool:
 static func append_pass_excludes(exclude: Array[RID], shot_source: Unit) -> void:
 	if shot_source == null:
 		return
-	var tree := Engine.get_main_loop()
-	if not (tree is SceneTree):
-		return
-	for node in (tree as SceneTree).get_nodes_in_group("spell_walls"):
-		if node == null or not is_instance_valid(node) or not (node is SpellWall):
-			continue
-		var wall := node as SpellWall
+	for wall in living_walls():
 		if not wall.lets_through(shot_source):
 			continue
 		exclude.append(wall.get_rid())
@@ -1367,17 +1396,14 @@ func _tick_nature_grove(delta: float) -> void:
 func _tick_nature_walk() -> void:
 	if source == null or not is_instance_valid(source):
 		return
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead or u.is_structure:
-			continue
+	for u in ArenaState.units_near(global_position, SpellWallLayout.query_radius(ability), false, true, true):
 		if u.team == source.team:
 			continue
-		if _unit_on_hedge(u):
+		if unit_on_hedge(u):
 			u.refresh_nature_hedge_slow()
 
 
-func _unit_on_hedge(u: Unit) -> bool:
+func unit_on_hedge(u: Unit) -> bool:
 	var pos := u.global_position
 	var pad := u.radius
 	for shape in _shapes:
@@ -1402,19 +1428,12 @@ func _pulse_nature_heal(broken: bool) -> void:
 	if source == null or not is_instance_valid(source) or ability == null:
 		return
 	var raw := CombatBalance.flat("wall.nature.blast") if broken else CombatBalance.flat("wall.nature.tick")
-	var amt := source._scaled(raw)
+	var amt := source._scaled(raw) * TalentCombat.nature_zone_heal_mult(source, true)
 	if amt <= 0.0:
 		return
 	var rad := SpellWallLayout.nature_radius(ability)
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
+	for u in ArenaState.units_near(global_position, rad, false, true, true):
 		if u.team != source.team:
-			continue
-		var to := u.global_position - global_position
-		to.y = 0.0
-		if to.length() > rad + u.radius:
 			continue
 		u.apply_support_hit(source, amt, 0.0, 0.0, true, AbilityDef.combat_id_of(ability, "wall"), 0.0, extras, ability.element if ability else AbilityDef.Element.NONE, combat_text_cast_id, false)
 
@@ -1477,26 +1496,13 @@ func _register_illusion() -> void:
 		return
 	var id := source.get_instance_id()
 	var inlet := _living_illusion_inlet(id)
-	if inlet != null and inlet != self:
-		if _illusion_outlet_live(inlet) and inlet._illusion_moves_left > 0:
-			_bind_as_outlet(inlet)
-			var old := inlet._illusion_outlet
-			inlet._illusion_outlet = self
-			if old != null and is_instance_valid(old) and old.living and old != self:
-				old.detonate(false)
-			inlet._illusion_moves_left -= 1
-			inlet._offer_outlet_recast()
-			return
-		if not _illusion_outlet_live(inlet):
-			_bind_as_outlet(inlet)
-			inlet._illusion_outlet = self
-			inlet._illusion_moves_left = maxi(int(round(CombatBalance.flat("wall.illusion.moves"))), 0)
-			inlet._flush_illusion()
-			inlet._offer_outlet_recast()
-			return
+	if inlet != null and inlet != self and not _illusion_outlet_live(inlet):
+		_bind_as_outlet(inlet)
+		inlet._illusion_outlet = self
+		inlet._flush_illusion()
+		return
 	detonate_owned_by(source, self)
 	_illusion_role = "inlet"
-	_illusion_moves_left = 0
 	_illusion_inlets[id] = self
 	_tint_portal()
 
@@ -1507,15 +1513,7 @@ func _bind_as_outlet(inlet: SpellWall) -> void:
 	_tint_portal()
 
 
-func _offer_outlet_recast() -> void:
-	if _illusion_moves_left <= 0:
-		return
-	if source == null or not is_instance_valid(source):
-		return
-	source._arm_illusion_portal_recast(maxf(duration - _elapsed, 0.05))
-
-
-func _living_illusion_inlet(caster_id: int) -> SpellWall:
+static func _living_illusion_inlet(caster_id: int) -> SpellWall:
 	var raw = _illusion_inlets.get(caster_id)
 	if raw == null or not is_instance_valid(raw) or not (raw is SpellWall):
 		return null
@@ -1532,18 +1530,11 @@ static func _illusion_outlet_live(inlet: SpellWall) -> bool:
 	return outlet != null and is_instance_valid(outlet) and outlet.living
 
 
-static func outlet_moves_left(caster: Unit) -> int:
+static func needs_outlet(caster: Unit) -> bool:
 	if caster == null or not is_instance_valid(caster):
-		return 0
-	var raw = _illusion_inlets.get(caster.get_instance_id())
-	if raw == null or not is_instance_valid(raw) or not (raw is SpellWall):
-		return 0
-	var inlet := raw as SpellWall
-	if not inlet.living:
-		return 0
-	if not _illusion_outlet_live(inlet):
-		return 0
-	return inlet._illusion_moves_left
+		return false
+	var inlet := _living_illusion_inlet(caster.get_instance_id())
+	return inlet != null and not _illusion_outlet_live(inlet)
 
 
 func _release_illusion() -> void:
@@ -1554,7 +1545,6 @@ func _release_illusion() -> void:
 			source._clear_recast()
 	_illusion_queue.clear()
 	_illusion_outlet = null
-	_illusion_moves_left = 0
 
 
 func _tint_portal() -> void:
@@ -1586,7 +1576,6 @@ func absorb_projectile(shot: Projectile) -> void:
 	if not living or shot == null or _illusion_role == "outlet":
 		return
 	var snap := shot.snapshot()
-	snap["inlet_forward"] = emit_dir()
 	snap["height"] = shot.global_position.y
 	if _illusion_outlet != null and is_instance_valid(_illusion_outlet) and _illusion_outlet.living:
 		_emit_illusion(snap, 0.0)
@@ -1624,9 +1613,12 @@ func _spawn_illusion_shot(snap: Dictionary) -> void:
 	if caster == null or not is_instance_valid(caster):
 		return
 	var cfg := snap.duplicate(true)
-	var out_dir := _portal_exit_dir(snap, gate)
+	var out_dir := gate.emit_dir()
 	cfg["direction"] = out_dir
 	cfg["portal_exit"] = true
+	cfg["homing"] = null
+	cfg["arc_width"] = 0.0
+	cfg["arc_side"] = 0.0
 	if converted:
 		cfg["heal_allies"] = false
 		cfg["heal"] = 0.0
@@ -1636,31 +1628,12 @@ func _spawn_illusion_shot(snap: Dictionary) -> void:
 		cfg["blessing_power"] = 0.0
 		cfg["ally_cast"] = false
 		cfg["hit_cooldown_reduction"] = 0.0
-		var home = cfg.get("homing")
-		if home is Unit and is_instance_valid(home) and home.team == owner.team:
-			cfg["homing"] = null
-			cfg["arc_width"] = 0.0
 	var origin := gate.emit_point_along(out_dir, float(snap.get("height", -1.0)))
 	var shot := Projectile._make(caster, origin, cfg, true)
 	if shot:
 		shot._portal_hops = int(snap.get("portal_hops", 0)) + 1
 		if converted:
 			shot.source = owner
-
-
-func _portal_exit_dir(snap: Dictionary, gate: SpellWall) -> Vector3:
-	var incoming := Vector3(snap.get("direction", Vector3.FORWARD))
-	incoming.y = 0.0
-	if incoming.length_squared() < 0.0001:
-		return gate.emit_dir()
-	incoming = incoming.normalized()
-	var inlet_fwd := Vector3(snap.get("inlet_forward", incoming))
-	inlet_fwd.y = 0.0
-	if inlet_fwd.length_squared() < 0.0001:
-		return incoming
-	inlet_fwd = inlet_fwd.normalized()
-	var yaw := inlet_fwd.signed_angle_to(incoming, Vector3.UP)
-	return gate.emit_dir().rotated(Vector3.UP, yaw)
 
 
 func emit_dir() -> Vector3:
@@ -1670,8 +1643,6 @@ func emit_dir() -> Vector3:
 		dir = Vector3(0, 0, -1)
 	else:
 		dir = dir.normalized()
-	if _illusion_role == "outlet":
-		dir = -dir
 	return dir
 
 
@@ -1696,14 +1667,8 @@ func emit_point_along(dir: Vector3, height: float = -1.0) -> Vector3:
 
 
 static func protection_hit(from: Vector3, to: Vector3, pad: float = 0.12) -> SpellWall:
-	var tree := Engine.get_main_loop()
-	if not (tree is SceneTree):
-		return null
-	for node in (tree as SceneTree).get_nodes_in_group("spell_protection_walls"):
-		if node == null or not is_instance_valid(node) or not (node is SpellWall):
-			continue
-		var wall := node as SpellWall
-		if not wall.living:
+	for wall in living_walls():
+		if not wall._is_protection():
 			continue
 		if wall.covers_segment(from, to, pad):
 			return wall
@@ -1711,14 +1676,8 @@ static func protection_hit(from: Vector3, to: Vector3, pad: float = 0.12) -> Spe
 
 
 static func illusion_inlet_hit(from: Vector3, to: Vector3, pad: float = 0.12) -> SpellWall:
-	var tree := Engine.get_main_loop()
-	if not (tree is SceneTree):
-		return null
-	for node in (tree as SceneTree).get_nodes_in_group("spell_illusion_walls"):
-		if node == null or not is_instance_valid(node) or not (node is SpellWall):
-			continue
-		var wall := node as SpellWall
-		if not wall.living:
+	for wall in living_walls():
+		if not wall._is_illusion():
 			continue
 		if wall._illusion_role == "outlet":
 			continue
@@ -1730,15 +1689,10 @@ static func illusion_inlet_hit(from: Vector3, to: Vector3, pad: float = 0.12) ->
 static func detonate_owned_by(caster: Unit, keep: SpellWall = null) -> void:
 	if caster == null:
 		return
-	var tree := Engine.get_main_loop()
-	if not (tree is SceneTree):
-		return
-	var nodes: Array = (tree as SceneTree).get_nodes_in_group("spell_illusion_walls")
-	for node in nodes:
-		if node == null or not is_instance_valid(node) or not (node is SpellWall):
+	for wall in living_walls():
+		if not wall._is_illusion():
 			continue
-		var wall := node as SpellWall
-		if wall == keep or not wall.living:
+		if wall == keep:
 			continue
 		if wall.source != caster:
 			continue
@@ -1752,10 +1706,7 @@ func _tick_fire_line(delta: float) -> void:
 	if bonus <= 0.0:
 		return
 	var seen: Dictionary = {}
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
+	for u in ArenaState.units_near(global_position, SpellWallLayout.query_radius(ability), false, true, true):
 		if u.team == source.team:
 			continue
 		if not _enemy_on_fire(u, delta):
@@ -1843,14 +1794,8 @@ func covers_segment(from: Vector3, to: Vector3, pad: float = 0.0) -> bool:
 
 
 static func wind_hit(from: Vector3, to: Vector3, pad: float = 0.12) -> SpellWall:
-	var tree := Engine.get_main_loop()
-	if not (tree is SceneTree):
-		return null
-	for node in (tree as SceneTree).get_nodes_in_group("spell_wind_walls"):
-		if node == null or not is_instance_valid(node) or not (node is SpellWall):
-			continue
-		var wall := node as SpellWall
-		if not wall.living:
+	for wall in living_walls():
+		if not wall._is_wind():
 			continue
 		if wall.covers_segment(from, to, pad):
 			return wall
@@ -1860,15 +1805,9 @@ static func wind_hit(from: Vector3, to: Vector3, pad: float = 0.12) -> SpellWall
 static func fire_shot_bonus(from: Vector3, to: Vector3, pad: float = 0.12, shot_source = null) -> float:
 	if not is_instance_valid(shot_source):
 		shot_source = null
-	var tree := Engine.get_main_loop()
-	if not (tree is SceneTree):
-		return 0.0
 	var bonus := 0.0
-	for node in (tree as SceneTree).get_nodes_in_group("spell_fire_walls"):
-		if node == null or not is_instance_valid(node) or not (node is SpellWall):
-			continue
-		var wall := node as SpellWall
-		if not wall.living:
+	for wall in living_walls():
+		if not wall._is_fire():
 			continue
 		if shot_source != null and wall.source != null and is_instance_valid(wall.source) and wall.source.team != shot_source.team:
 			continue
@@ -2018,8 +1957,11 @@ func _tick_lightning_totem(delta: float) -> void:
 	if bounce < 1.0:
 		bounce = 7.0
 	var origin := global_position + Vector3(0.0, SpellWallLayout.height_of(ability) * 0.55, 0.0)
-	var dmg := CombatBalance.wall_hit_damage(health)
+	var dmg := health * TalentCombat.totem_first_hop_pct(source)
 	source.chain_lightning_at(origin, target, ability, extras, overheat_cast_id, infusion_double, hops, bounce, combat_text_cast_id, true, dmg, self)
+	var extra_shock := TalentCombat.totem_shock_stacks(source)
+	if extra_shock > 0:
+		target.apply_shock(source, extra_shock)
 	if _mat != null:
 		_mat.emission_energy_multiplier = 4.2
 
@@ -2028,12 +1970,7 @@ func _nearest_lightning_foe(reach: float) -> Unit:
 	var best: Unit = null
 	var best_d := reach
 	var from := global_position
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
-		if u.is_structure:
-			continue
+	for u in ArenaState.units_near(from, reach, false, false, true):
 		if source != null and is_instance_valid(source) and u.team == source.team:
 			continue
 		var to := u.global_position - from
@@ -2085,13 +2022,8 @@ func _pulse_ice_zones() -> void:
 	var extras_el := extras
 	var el := ability.element if ability else AbilityDef.Element.ICE
 	var ab_id := AbilityDef.combat_id_of(ability, "wall")
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
+	for u in ArenaState.units_near(global_position, SpellWallLayout.query_radius(ability), false, true, true):
 		if u.team == source.team:
-			continue
-		if u.is_structure:
 			continue
 		if not _in_ice_zone(u, zone_r):
 			continue
@@ -2119,13 +2051,8 @@ func _shatter_ice() -> void:
 		var pos := to_global(off)
 		pos.y = 0.12
 		_SpellBaseFx.burst(pos, zone_r, ability)
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
+	for u in ArenaState.units_near(global_position, SpellWallLayout.query_radius(ability), false, true, true):
 		if u.team == source.team:
-			continue
-		if u.is_structure:
 			continue
 		if not _in_ice_zone(u, zone_r):
 			continue
@@ -2140,17 +2067,10 @@ func _rupture_shadow() -> void:
 	var pos := Vector3(global_position.x, 0.12, global_position.z)
 	if ability != null:
 		_SpellBaseFx.burst(pos, rad, ability)
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
+	for u in ArenaState.units_near(pos, rad, false, true, true):
 		if u.is_champion:
 			continue
 		if u.team == source.team:
-			continue
-		var to := u.global_position - pos
-		to.y = 0.0
-		if to.length() > rad + u.radius:
 			continue
 		u.apply_afflict_stacks(source, stacks)
 
@@ -2194,13 +2114,5 @@ func _apply_hover_outline() -> void:
 func _sync_bar_hover_frame() -> void:
 	if _bar_frame == null or not is_instance_valid(_bar_frame):
 		return
-	_bar_frame.visible = _targeted
-	if not _targeted:
-		return
 	var size := Vector2(_BAR_W + 0.16, _BAR_H + 0.12)
-	_bar_frame.scale = Vector3(size.x, size.y, 1.0)
-	var mat := _bar_frame.material_override as ShaderMaterial
-	if mat:
-		mat.set_shader_parameter("outline_color", _hover_color)
-		mat.set_shader_parameter("quad_size", size)
-		mat.set_shader_parameter("border", 0.028)
+	WorldUiMesh.place_hover_frame(_bar_frame, _bar_frame.position, size, _targeted, _hover_color, 0.028)

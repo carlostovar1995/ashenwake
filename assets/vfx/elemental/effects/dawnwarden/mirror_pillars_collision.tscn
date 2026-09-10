@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://uceyxm1ucva6"]
+
+[ext_resource type="PackedScene" uid="uid://4eoekeecgfkl" path="res://assets/vfx/elemental/effects/dawnwarden/mirror_base_pieces_mapped.tscn" id="1_kjjm1"]
+[ext_resource type="PackedScene" uid="uid://nbtrburcccoi" path="res://assets/vfx/elemental/effects/dawnwarden/mirror_pieces_mapped.tscn" id="2_qgjxb"]
+[ext_resource type="PackedScene" uid="uid://clws1su7ji7vn" path="res://assets/vfx/elemental/effects/dawnwarden/mirror_pillar_pieces_mapped.tscn" id="3_s6hoi"]
+
+[node name="Node3D" type="Node3D" unique_id=1817921758]
+
+[node name="Mirror Base Pieces" parent="." unique_id=470635601 instance=ExtResource("1_kjjm1")]
+
+[node name="Mirror Pieces" parent="." unique_id=768641730 instance=ExtResource("2_qgjxb")]
+transform = Transform3D(1, 0, 0, 0, 0.9396926, 0.34202012, 0, -0.34202012, 0.9396926, 0, 0.2304728, 0)
+
+[node name="Mirror Pillar Pieces" parent="." unique_id=104047388 instance=ExtResource("3_s6hoi")]

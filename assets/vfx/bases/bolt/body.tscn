@@ -1,0 +1,97 @@
+[gd_scene format=3 uid="uid://bk7n2m8qp4xfw"]
+
+[ext_resource type="Script" uid="uid://c41ntihw8yiem" path="res://scripts/visual/bolt_base_fx.gd" id="1_fx"]
+[ext_resource type="Shader" uid="uid://xl0aelqdmcew" path="res://assets/vfx/bases/bolt/bolt_core.tres" id="2_core"]
+[ext_resource type="Texture2D" uid="uid://6ib4htmvjnmm" path="res://assets/vfx/bases/bolt/t_noise_hu85k.png" id="3_noise"]
+[ext_resource type="ArrayMesh" uid="uid://bwq55tnlitwph" path="res://assets/vfx/bases/bolt/bolt_base.obj" id="4_mesh"]
+[ext_resource type="Shader" uid="uid://cms8tuk1vsbrk" path="res://assets/vfx/bases/bolt/bolt_aura.tres" id="5_aura"]
+[ext_resource type="Texture2D" uid="uid://c53sm3cgdcbc2" path="res://assets/vfx/bases/bolt/t_nkq443.png" id="6_aura_tex"]
+[ext_resource type="Shader" uid="uid://cp0kyh65pkgt" path="res://assets/vfx/bases/bolt/sparkles.tres" id="7_spark"]
+[ext_resource type="Texture2D" uid="uid://c28et8dlqkd5k" path="res://assets/vfx/bases/bolt/t_trail12.png" id="8_trail"]
+
+[sub_resource type="Gradient" id="Gradient_bolt"]
+offsets = PackedFloat32Array(0.010152284, 0.10659899, 0.20304568)
+colors = PackedColorArray(1.353256, 1.353256, 1.353256, 0, 0.14473142, 1.5055057, 1.5720325, 0.40784314, 1.8247963, 0.95835364, 0.26659697, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_bolt"]
+gradient = SubResource("Gradient_bolt")
+use_hdr = true
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_core"]
+render_priority = 1
+shader = ExtResource("2_core")
+shader_parameter/Texture_Panning_Speed = Vector2(0, 1)
+shader_parameter/Wind_Texture = ExtResource("3_noise")
+shader_parameter/Color = SubResource("GradientTexture1D_bolt")
+shader_parameter/Alpha_Scissor = 0.2
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_aura"]
+render_priority = 0
+shader = ExtResource("5_aura")
+shader_parameter/Vector2Parameter = Vector2(0, 1)
+shader_parameter/Wind_Texture = ExtResource("6_aura_tex")
+shader_parameter/Color = SubResource("GradientTexture1D_bolt")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_spark"]
+render_priority = 0
+shader = ExtResource("7_spark")
+shader_parameter/Texture = ExtResource("8_trail")
+
+[sub_resource type="Gradient" id="Gradient_spark"]
+offsets = PackedFloat32Array(0.5060241, 1)
+colors = PackedColorArray(0.8845215, 0.328125, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_spark"]
+gradient = SubResource("Gradient_spark")
+
+[sub_resource type="Curve" id="Curve_spark"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="CurveTexture_spark"]
+curve = SubResource("Curve_spark")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_spark"]
+emission_shape = 1
+emission_sphere_radius = 0.3
+direction = Vector3(0, 0, 0)
+spread = 5.0
+initial_velocity_max = 1.0
+radial_velocity_min = -2.2351742e-05
+radial_velocity_max = 0.99997765
+gravity = Vector3(0, 0, 0)
+scale_min = 0.099999994
+scale_max = 0.5
+scale_curve = SubResource("CurveTexture_spark")
+color_ramp = SubResource("GradientTexture1D_spark")
+
+[sub_resource type="QuadMesh" id="QuadMesh_spark"]
+
+[node name="BoltBase" type="Node3D"]
+script = ExtResource("1_fx")
+
+[node name="Visual" type="Node3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="BoltCore" type="MeshInstance3D" parent="Visual" groups=["fx_body"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.30142617)
+material_override = SubResource("ShaderMaterial_core")
+cast_shadow = 0
+mesh = ExtResource("4_mesh")
+
+[node name="BoltAura" type="MeshInstance3D" parent="Visual" groups=["fx_body"]]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, -0.006515146, 0, 0.24689472)
+material_override = SubResource("ShaderMaterial_aura")
+cast_shadow = 0
+mesh = ExtResource("4_mesh")
+
+[node name="Sparkles" type="GPUParticles3D" parent="Visual" groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.2145102)
+material_override = SubResource("ShaderMaterial_spark")
+cast_shadow = 0
+amount = 200
+lifetime = 1.5
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+local_coords = false
+process_material = SubResource("ParticleProcessMaterial_spark")
+draw_pass_1 = SubResource("QuadMesh_spark")

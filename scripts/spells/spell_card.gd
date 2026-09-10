@@ -45,11 +45,15 @@ static func piece_tooltip(kind: String, id: String, rich: bool = false) -> Strin
 	match kind:
 		"base":
 			var recipe := SpellRecipe.make(id)
-			var ab := SpellCompiler.compile(recipe, "Q")
+			var ab := SpellCompiler.compile_slot(recipe, "Q")
 			if ab == null:
 				return ""
 			var body := _render(ab, recipe, rich, false)
-			return "%s\n%s" % [_paint(ab.display_name, _GOLD, rich), body]
+			var tags := SpellCatalog.tags_for(id)
+			var tag_line := SpellTags.display_line(tags)
+			if tag_line.is_empty():
+				return "%s\n%s" % [_paint(ab.display_name, _GOLD, rich), body]
+			return "%s\n%s\n\n%s" % [_paint(ab.display_name, _GOLD, rich), _paint(tag_line, _BODY, rich), body]
 		"infusion":
 			return _infusion_piece_tooltip(id, rich)
 		"augment":
@@ -79,16 +83,13 @@ static func _augment_piece_tooltip(id: String, rich: bool) -> String:
 	if aug == null:
 		return ""
 	var lines := PackedStringArray([_paint(aug.display_name, _GOLD, rich)])
+	var req := SpellTags.requirement_line(aug)
+	if not req.is_empty():
+		lines.append("")
+		lines.append(_paint(req, _BODY, rich))
 	if not aug.description.is_empty():
 		lines.append("")
 		lines.append(aug.description)
-	var bits := _augment_bits(aug)
-	if not bits.is_empty():
-		lines.append("")
-		for bit in bits:
-			if bit == aug.description:
-				continue
-			lines.append(_paint(bit, _change_color(bit), rich))
 	return "\n".join(lines)
 
 
@@ -115,7 +116,6 @@ static func sections(ab: AbilityDef, recipe: SpellRecipe = null, rich: bool = tr
 		"hit": "",
 		"resist": "",
 		"costs": PackedStringArray(),
-		"infusion_note": "",
 		"infusions": PackedStringArray(),
 		"augments": PackedStringArray(),
 	}
@@ -127,14 +127,6 @@ static func sections(ab: AbilityDef, recipe: SpellRecipe = null, rich: bool = tr
 	out["hit"] = ""
 	out["resist"] = ""
 	out["costs"] = _stat_lines(ab, bare, rich)
-	var ids := recipe.infusion_ids if recipe != null else ab.infusion_ids
-	if not ids.is_empty() and not SpellPower.skips_infusion_damage(ab):
-		var n := 0
-		for id in ids:
-			if SpellCatalog.get_infusion(id) != null:
-				n += 1
-		if n > 0:
-			out["infusion_note"] = _to_base_value(CombatBalance.pct("infusion.base") * float(n))
 	out["infusions"] = _infusions(ab, recipe, rich)
 	out["augments"] = _augments(recipe, rich)
 	return out
@@ -159,12 +151,9 @@ static func _render(ab: AbilityDef, recipe: SpellRecipe, rich: bool, show_infusi
 			lines.append(String(line))
 	if show_infusions:
 		var infusions: PackedStringArray = parts.get("infusions", PackedStringArray())
-		var note := String(parts.get("infusion_note", ""))
-		if not infusions.is_empty() or not note.is_empty():
+		if not infusions.is_empty():
 			lines.append("")
 			lines.append(_paint("Infusions:", _GOLD, rich))
-			if not note.is_empty():
-				lines.append(note)
 			lines.append("")
 			for line in infusions:
 				lines.append(String(line))
@@ -182,7 +171,7 @@ static func _bare_ability(ab: AbilityDef, recipe: SpellRecipe) -> AbilityDef:
 	if recipe == null or recipe.base_id.is_empty():
 		return null
 	var hotkey := ab.hotkey if ab != null and not ab.hotkey.is_empty() else "Q"
-	return SpellCompiler.compile(SpellRecipe.make(recipe.base_id), hotkey)
+	return SpellCompiler.compile_slot(SpellRecipe.make(recipe.base_id), hotkey)
 
 
 static func _primary_amount(ab: AbilityDef) -> int:
@@ -281,12 +270,12 @@ static func _power_lines(ab: AbilityDef, bare: AbilityDef, rich: bool) -> Packed
 				dmg_tick = true
 	var orig := _primary_amount(bare)
 	var lines := PackedStringArray()
-	var dmg_line := _labeled_power("Base damage", dmg, dmg_tick)
+	var dmg_line := _labeled_power("Base Spell power", dmg, dmg_tick)
 	if not dmg_line.is_empty():
 		if orig > 0 and orig != dmg_total:
 			dmg_line = "%s%s" % [dmg_line, _paint(" (Original: %d)" % orig, _BODY, rich)]
 		lines.append(dmg_line)
-	var heal_line := _labeled_power("Base healing", heal, heal_tick)
+	var heal_line := _labeled_power("Base Spell power", heal, heal_tick)
 	if not heal_line.is_empty():
 		lines.append(heal_line)
 	var shield_line := _labeled_power("Shield", shield, shield_tick)
@@ -365,6 +354,8 @@ static func _area_value(ab: AbilityDef) -> float:
 	if ab.splash_radius > 0.05:
 		return ab.splash_radius
 	if ab.delivery == AbilityDef.Delivery.WAVE and ab.skillshot_width > 0.05:
+		return ab.skillshot_width
+	if ab.delivery == AbilityDef.Delivery.RAY and ab.skillshot_width > 0.05:
 		return ab.skillshot_width
 	return 0.0
 
@@ -455,18 +446,24 @@ static func _secs(v: float) -> String:
 
 static func _infusion_stat_bits(inf: SpellInfusion, ab: AbilityDef = null) -> PackedStringArray:
 	var bits: PackedStringArray = PackedStringArray()
-	var base_bits: PackedStringArray = PackedStringArray()
-	if inf.offensive and not is_equal_approx(inf.damage_mult, 1.0) and (ab == null or not SpellPower.skips_infusion_damage(ab)):
-		base_bits = _push_unique(base_bits, _to_base_value(inf.damage_mult - 1.0))
-	if not is_equal_approx(inf.heal_mult, 1.0):
-		base_bits = _push_unique(base_bits, _to_base_value(inf.heal_mult - 1.0))
-	if inf.shield_from_base > 0.02:
-		base_bits = _push_unique(base_bits, _to_base_value(inf.shield_from_base - 1.0))
-	for bit in base_bits:
-		bits.append(bit)
+	var power_frac := _infusion_spell_power_frac(inf, ab)
+	if not is_equal_approx(power_frac, 0.0):
+		bits.append(_to_base_spell_power(power_frac))
 	if not is_equal_approx(inf.cooldown_mult, 1.0):
-		bits.append("%s%% CD" % _signed_pct(inf.cooldown_mult - 1.0))
+		bits.append("%s%% to base CD" % _signed_pct(inf.cooldown_mult - 1.0))
+	if not is_equal_approx(inf.cast_time_mult, 1.0):
+		bits.append("%s%% to base cast time" % _signed_pct(inf.cast_time_mult - 1.0))
 	return bits
+
+
+static func _infusion_spell_power_frac(inf: SpellInfusion, ab: AbilityDef = null) -> float:
+	if inf.shield_from_base > 0.02:
+		return inf.shield_from_base - 1.0
+	if not is_equal_approx(inf.heal_mult, 1.0):
+		return inf.heal_mult - 1.0
+	if inf.offensive and (ab == null or not SpellPower.skips_infusion_damage(ab)):
+		return inf.damage_mult - 1.0
+	return 0.0
 
 
 static func _infusion_bits(inf: SpellInfusion, ab: AbilityDef = null) -> PackedStringArray:
@@ -486,6 +483,7 @@ static func _infusion_bits(inf: SpellInfusion, ab: AbilityDef = null) -> PackedS
 				)
 		"ice":
 			bits.append("inflicts chilled")
+			bits.append("1% slow per stack, freeze at 50")
 			if ab != null and ab.delivery == AbilityDef.Delivery.WALL:
 				bits.append("one ice capsule, shared HP")
 				bits.append("ground frost around it at Burst range")
@@ -496,6 +494,7 @@ static func _infusion_bits(inf: SpellInfusion, ab: AbilityDef = null) -> PackedS
 				bits.append("enemy to both teams")
 		"lightning":
 			bits.append("inflicts shock")
+			bits.append("each hit adds 1 stack, 2 on a crit")
 			if ab != null and ab.delivery == AbilityDef.Delivery.WALL:
 				bits.append("small lightning totem")
 				bits.append(
@@ -529,7 +528,7 @@ static func _infusion_bits(inf: SpellInfusion, ab: AbilityDef = null) -> PackedS
 					AbilityDef.Delivery.MISSILES:
 						bits.append("snares")
 					AbilityDef.Delivery.RAY:
-						bits.append("pushes the target")
+						bits.append("pushes enemies it hits")
 					AbilityDef.Delivery.WAVE:
 						bits.append("thicker and slower")
 					AbilityDef.Delivery.GROUND_AOE:
@@ -548,9 +547,9 @@ static func _infusion_bits(inf: SpellInfusion, ab: AbilityDef = null) -> PackedS
 						pass
 		"shadow":
 			bits.append("inflicts afflict")
-			bits.append("1 damage per stack each second")
-			bits.append("each hit adds 1 stack")
-			bits.append("200 stacks: +20% damage taken")
+			bits.append("1 damage per 4 stacks each second")
+			bits.append("each hit adds 1 stack, 2 on a crit")
+			bits.append("400 stacks max")
 			if ab != null and ab.delivery == AbilityDef.Delivery.WALL:
 				bits.append("%d HP" % int(round(CombatBalance.flat("wall.shadow.hp"))))
 				bits.append(
@@ -561,7 +560,7 @@ static func _infusion_bits(inf: SpellInfusion, ab: AbilityDef = null) -> PackedS
 		"nature":
 			bits.append("inflicts rejuvenation")
 			bits.append(
-				"+%d HPS per stack, refreshes"
+				"+%d HPS per stack, refreshes (2 on a crit)"
 				% int(round(CombatBalance.flat("rejuvenation.hps")))
 			)
 			if ab != null and ab.delivery == AbilityDef.Delivery.WALL:
@@ -598,16 +597,14 @@ static func _infusion_bits(inf: SpellInfusion, ab: AbilityDef = null) -> PackedS
 				)
 				bits.append("you move %d%% slower" % int(round(CombatBalance.pct("wall.protection.slow") * 100.0)))
 		"illusion":
-			if ab != null and ab.delivery == AbilityDef.Delivery.RAY and ab.has_element(AbilityDef.Element.WIND):
-				bits.append("knocks enemies away from the impact")
 			if ab == null:
 				pass
 			elif ab.delivery == AbilityDef.Delivery.WALL:
 				bits.append("cylinder portals")
 				bits.append("recast to place an exit portal")
-				bits.append("recast up to 3 times to move the exit")
-				bits.append("first portal absorbs projectiles")
-				bits.append("exit shoots them out the far side at the same angle")
+				bits.append("confirm the exit direction")
+				bits.append("first portal absorbs projectiles from any angle")
+				bits.append("exit copies them out along the aimed direction")
 				bits.append("enemy shots that exit become yours and only hit enemies")
 				bits.append("shots keep damage, effects, and look")
 				bits.append("lasts 8s")
@@ -637,7 +634,7 @@ static func _infusion_bits(inf: SpellInfusion, ab: AbilityDef = null) -> PackedS
 							% int(round(CombatBalance.pct("illusion.aura.range") * 100.0))
 						)
 					AbilityDef.Delivery.RAY:
-						bits.append("beam bounces")
+						bits.append("one aura pulse of the paired infusion on the first enemy hit")
 					AbilityDef.Delivery.METEOR:
 						bits.append(
 							"%d-meteor line, %d%% smaller"
@@ -677,14 +674,8 @@ static func _augment_bits(aug: SpellAugment) -> PackedStringArray:
 		bits.append("%s%% crit chance" % _signed_pct(aug.crit_chance_mult - 1.0))
 	if aug.crit_damage > 0.05:
 		bits.append("crits deal %d%%" % int(round(aug.crit_damage * 100.0)))
-	if aug.recast:
-		bits.append("recast at %d%% damage" % int(round(aug.recast_damage_mult * 100.0)))
-	if aug.move_while_casting:
-		bits.append("move while casting")
 	if aug.altered:
-		bits.append("ally buff from an offensive infusion")
-	if aug.exclusive or aug.extra_infusions > 0:
-		bits.append("third infusion, exclusive")
+		bits.append("ally buff from Fire/Ice/Lightning/Shadow; enemy Seeded/Judged/Sundered from Nature/Divine/Protection (2 stacks on a crit)")
 	if not is_equal_approx(aug.threat_mult, 1.0):
 		if aug.threat_mult > 1.0:
 			if is_equal_approx(aug.threat_mult, roundf(aug.threat_mult)):
@@ -693,21 +684,53 @@ static func _augment_bits(aug: SpellAugment) -> PackedStringArray:
 				bits.append("%0.1f× threat" % aug.threat_mult)
 		else:
 			bits.append("%d%% threat" % int(round(aug.threat_mult * 100.0)))
+	if not is_equal_approx(aug.damage_mult, 1.0):
+		bits.append("%s%% damage" % _signed_pct(aug.damage_mult - 1.0))
+	if not is_equal_approx(aug.duration_mult, 1.0):
+		bits.append("%s%% duration" % _signed_pct(aug.duration_mult - 1.0))
+	if aug.projectile_bonus > 0:
+		if aug.id == "fan":
+			bits.append("+%d extra beams" % aug.projectile_bonus)
+		elif aug.id == "volley":
+			bits.append("+%d extra shots" % aug.projectile_bonus)
+		else:
+			bits.append("+%d extra bolts" % aug.projectile_bonus)
+	if aug.pierce:
+		bits.append("pierces enemies")
+	if aug.lifesteal > 0.05:
+		bits.append("heal %d%% of damage" % int(round(aug.lifesteal * 100.0)))
+	if aug.execute_health_frac > 0.05:
+		bits.append("+%d%% damage below %d%% HP" % [
+			int(round((aug.execute_damage_mult - 1.0) * 100.0)),
+			int(round(aug.execute_health_frac * 100.0)),
+		])
+	if aug.cleave_ratio > 0.05:
+		bits.append("cleave at %d%%" % int(round(aug.cleave_ratio * 100.0)))
+	if aug.hit_cooldown_reduction > 0.05:
+		bits.append("unique hits refund %0.1fs CD, cap %d%%" % [
+			aug.hit_cooldown_reduction,
+			int(round(aug.hit_cooldown_refund_cap * 100.0)),
+		])
+	if not is_equal_approx(aug.tick_interval_mult, 1.0):
+		bits.append("%s%% pulse time" % _signed_pct(aug.tick_interval_mult - 1.0))
+	if aug.planted:
+		bits.append("stays where toggled")
+	if aug.detonate_on_end > 0.05:
+		bits.append("off detonates at %d%%" % int(round(aug.detonate_on_end * 100.0)))
+	if aug.crowd_bonus > 0.05:
+		bits.append("+%d%% per extra unit, cap %d%%" % [
+			int(round(aug.crowd_bonus * 100.0)),
+			int(round(aug.crowd_bonus_cap * 100.0)),
+		])
+	if aug.stillness_bonus > 0.05:
+		bits.append("+%d%% if standing" % int(round(aug.stillness_bonus * 100.0)))
 	if bits.is_empty() and not aug.description.is_empty():
 		bits.append(aug.description)
 	return bits
 
 
-static func _to_base_value(frac: float) -> String:
-	return "%s%% to base value" % _signed_pct(frac)
-
-
-static func _push_unique(bits: PackedStringArray, phrase: String) -> PackedStringArray:
-	for existing in bits:
-		if existing == phrase:
-			return bits
-	bits.append(phrase)
-	return bits
+static func _to_base_spell_power(frac: float) -> String:
+	return "%s%% to base spell power" % _signed_pct(frac)
 
 
 static func _signed_pct(frac: float) -> String:

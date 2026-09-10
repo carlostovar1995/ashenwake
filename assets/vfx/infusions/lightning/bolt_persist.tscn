@@ -1,0 +1,238 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://assets/vfx/infusions/lightning/spark_dissolve.tres" id="1_dissolve"]
+[ext_resource type="Texture2D" path="res://assets/vfx/infusions/lightning/t_vfx_spark44.jpg" id="2_spark"]
+[ext_resource type="Texture2D" path="res://assets/vfx/infusions/lightning/lightning_bolt.png" id="3_bolt"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_spark"]
+render_priority = 0
+shader = ExtResource("1_dissolve")
+shader_parameter/Wave_Speed = 1.0
+shader_parameter/Wave_Intensity = 0.8
+shader_parameter/Texture = ExtResource("2_spark")
+
+[sub_resource type="Curve" id="Curve_spark_alpha"]
+_data = [Vector2(0, 0), 0.0, 0.0, 0, 0, Vector2(0.0777027, 0.7946428), 0.0, 0.0, 0, 0, Vector2(0.25337836, 0.25), 0.0, 0.0, 0, 0, Vector2(0.38175672, 0.75), 0.0, 0.0, 0, 0, Vector2(0.48986483, 0.15178573), 0.0, 0.0, 0, 0, Vector2(0.55067563, 0.93749994), 0.0, 0.0, 0, 0, Vector2(0.6385135, 0.33035713), 0.0, 0.0, 0, 0, Vector2(0.7601351, 0.6696428), 0.0, 0.0, 0, 0, Vector2(0.81418914, 0.17857146), 0.0, 0.0, 0, 0, Vector2(0.9493243, 0.82142854), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 11
+
+[sub_resource type="CurveTexture" id="CurveTexture_spark_alpha"]
+texture_mode = 1
+curve = SubResource("Curve_spark_alpha")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_spark"]
+emission_shape_scale = Vector3(0.5, 0.5, 1.5)
+emission_shape = 2
+emission_sphere_radius = 0.2
+angle_min = -180.0
+angle_max = 180.0
+direction = Vector3(-1, 0, 0)
+radial_velocity_min = 0.8
+radial_velocity_max = 1.2
+gravity = Vector3(0, 0, 0)
+scale_min = 0.25
+scale_max = 0.5
+color = Color(1.058, 1.285, 1.79, 1)
+alpha_curve = SubResource("CurveTexture_spark_alpha")
+anim_speed_min = 2.0
+anim_speed_max = 2.0
+
+[sub_resource type="QuadMesh" id="QuadMesh_spark"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_trail"]
+render_priority = 0
+shader = ExtResource("1_dissolve")
+shader_parameter/Wave_Speed = 1.0
+shader_parameter/Wave_Intensity = 0.8
+shader_parameter/Texture = ExtResource("2_spark")
+
+[sub_resource type="Curve" id="Curve_trail_alpha"]
+_data = [Vector2(0, 0), 0.0, 0.0, 0, 0, Vector2(0.009009004, 0.68539333), 0.0, 0.0, 0, 0, Vector2(0.09459459, 0.47191018), 0.0, 0.0, 0, 0, Vector2(0.16665669, 0.84269667), 0.0, 0.0, 0, 0, Vector2(0.1891892, 0.033707857), 0.0, 0.0, 0, 0, Vector2(0.23423424, 0.20224726), 0.0, 0.0, 0, 0, Vector2(0.24774775, 0.73033714), 0.0, 0.0, 0, 0, Vector2(0.33783785, 0.6067416), 1.3304027, 1.3304027, 0, 0, Vector2(0.34684685, 0.1685394), 0.0, 0.0, 0, 0, Vector2(0.4009009, 0.3595506), 0.0, 0.0, 0, 0, Vector2(0.43243247, 0.55056185), -1.630942, -1.630942, 0, 0, Vector2(0.44144148, 0.84269667), 0.0, 0.0, 0, 0, Vector2(0.4774775, 0.26966298), 0.15589888, 0.15589888, 0, 0, Vector2(0.5405406, 0.5393259), 0.0, 0.0, 0, 0, Vector2(0.5900901, 0.29213488), 0.0, 0.0, 0, 0, Vector2(0.6081081, 0.6292135), 0.0, 0.0, 0, 0, Vector2(0.6846847, 0.3595506), 0.0, 0.0, 0, 0, Vector2(0.7027027, 0.08988774), -2.3025057, -2.3025057, 0, 0, Vector2(0.72072077, 0.6629214), 0.0, 0.0, 0, 0, Vector2(0.7657658, 0.4044944), 0.0, 0.0, 0, 0, Vector2(0.8063063, 0.15730345), 0.0, 0.0, 0, 0, Vector2(0.82432437, 0.97752815), 0.0, 0.0, 0, 0, Vector2(0.8828829, 0.23595512), 0.0, 0.0, 0, 0, Vector2(1, 0.6741574), 0.0, 0.0, 0, 0]
+point_count = 24
+
+[sub_resource type="CurveTexture" id="CurveTexture_trail_alpha"]
+texture_mode = 1
+curve = SubResource("Curve_trail_alpha")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_trail"]
+lifetime_randomness = 0.1
+emission_shape_scale = Vector3(0.5, 0.5, 1.5)
+emission_shape = 2
+emission_sphere_radius = 0.4
+angle_min = -179.99998
+angle_max = 180.00002
+direction = Vector3(0, 0, 0)
+spread = 15.0
+initial_velocity_min = 5.0
+initial_velocity_max = 5.0
+radial_velocity_min = 0.8
+radial_velocity_max = 1.2
+gravity = Vector3(0, 0, 0)
+scale_min = 0.5
+scale_max = 0.7
+color = Color(6.3571095, 7.6670914, 10.5787325, 1)
+alpha_curve = SubResource("CurveTexture_trail_alpha")
+anim_speed_min = 2.0
+anim_speed_max = 2.0
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_trail2"]
+lifetime_randomness = 0.1
+emission_shape_scale = Vector3(0.5, 0.5, 1.5)
+emission_shape = 2
+emission_sphere_radius = 0.2
+angle_min = -89.99999
+angle_max = 289.40002
+direction = Vector3(0, 0, 0)
+spread = 15.0
+initial_velocity_min = 5.0
+initial_velocity_max = 5.0
+radial_velocity_min = 0.8
+radial_velocity_max = 1.2
+gravity = Vector3(0, 0, 0)
+scale_min = 0.5
+scale_max = 0.7
+color = Color(3.543675, 4.2788773, 5.912981, 1)
+alpha_curve = SubResource("CurveTexture_trail_alpha")
+anim_speed_min = 2.0
+anim_speed_max = 2.0
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_trail3"]
+lifetime_randomness = 0.1
+emission_shape_scale = Vector3(0.5, 0.5, 1.5)
+emission_shape = 2
+emission_sphere_radius = 0.4
+angle_min = -89.99999
+angle_max = 289.40002
+direction = Vector3(0, 0, 0)
+spread = 15.0
+initial_velocity_min = 5.0
+initial_velocity_max = 5.0
+radial_velocity_min = 0.8
+radial_velocity_max = 1.2
+gravity = Vector3(0, 0, 0)
+scale_min = 0.5
+scale_max = 0.7
+color = Color(1.9646881, 2.3773062, 3.2944162, 1)
+alpha_curve = SubResource("CurveTexture_trail_alpha")
+anim_speed_min = 2.0
+anim_speed_max = 2.0
+
+[sub_resource type="QuadMesh" id="QuadMesh_trail"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_arcs"]
+render_priority = 1
+transparency = 1
+blend_mode = 1
+cull_mode = 2
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = ExtResource("3_bolt")
+
+[sub_resource type="Curve" id="Curve_arcs_alpha"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(0.62, 1), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="CurveTexture" id="CurveTexture_arcs_alpha"]
+texture_mode = 1
+curve = SubResource("Curve_arcs_alpha")
+
+[sub_resource type="Gradient" id="Gradient_arcs"]
+offsets = PackedFloat32Array(0, 0.18, 1)
+colors = PackedColorArray(1.35, 1.45, 2.05, 1, 1.172, 1.528, 5.913, 1, 0.35, 0.55, 1.8, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_arcs"]
+gradient = SubResource("Gradient_arcs")
+
+[sub_resource type="Curve" id="Curve_arcs"]
+_data = [Vector2(0, 0.15), 0.0, 0.0, 0, 0, Vector2(0.12, 1), 0.0, 0.0, 0, 0, Vector2(0.72, 0.55), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 4
+
+[sub_resource type="CurveTexture" id="CurveTexture_arcs"]
+curve = SubResource("Curve_arcs")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_arcs"]
+lifetime_randomness = 0.22
+particle_flag_align_y = true
+direction = Vector3(0, 0, 1)
+spread = 30.0
+initial_velocity_min = 8.0
+initial_velocity_max = 12.0
+gravity = Vector3(0, 0, 0)
+damping_min = 0.8
+damping_max = 2.2
+scale_min = 0.55
+scale_max = 1.15
+scale_curve = SubResource("CurveTexture_arcs")
+color = Color(1.9646881, 2.3773062, 3.2944162, 1)
+color_ramp = SubResource("GradientTexture1D_arcs")
+alpha_curve = SubResource("CurveTexture_arcs_alpha")
+
+[sub_resource type="QuadMesh" id="QuadMesh_arcs"]
+size = Vector2(0.07, 0.62)
+
+[node name="LightningBoltPersist" type="Node3D"]
+
+[node name="LightningSparks" type="GPUParticles3D" parent="." groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.003747642)
+material_override = SubResource("ShaderMaterial_spark")
+cast_shadow = 0
+amount = 25
+lifetime = 0.4
+explosiveness = 0.2
+randomness = 0.5
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+local_coords = false
+fixed_fps = 60
+process_material = SubResource("ParticleProcessMaterial_spark")
+draw_pass_1 = SubResource("QuadMesh_spark")
+
+[node name="LightningTrail" type="GPUParticles3D" parent="." groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.2169474)
+material_override = SubResource("ShaderMaterial_trail")
+cast_shadow = 0
+amount = 30
+lifetime = 0.4
+randomness = 0.5
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+local_coords = false
+fixed_fps = 60
+process_material = SubResource("ParticleProcessMaterial_trail")
+draw_pass_1 = SubResource("QuadMesh_trail")
+
+[node name="LightningTrail2" type="GPUParticles3D" parent="." groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08454633)
+material_override = SubResource("ShaderMaterial_trail")
+cast_shadow = 0
+amount = 30
+lifetime = 0.4
+randomness = 0.5
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+local_coords = false
+fixed_fps = 60
+process_material = SubResource("ParticleProcessMaterial_trail2")
+draw_pass_1 = SubResource("QuadMesh_trail")
+
+[node name="LightningTrail3" type="GPUParticles3D" parent="." groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.272054)
+material_override = SubResource("ShaderMaterial_trail")
+cast_shadow = 0
+amount = 30
+lifetime = 0.4
+randomness = 0.5
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+local_coords = false
+fixed_fps = 60
+process_material = SubResource("ParticleProcessMaterial_trail3")
+draw_pass_1 = SubResource("QuadMesh_trail")
+
+[node name="LightningArcs" type="GPUParticles3D" parent="." groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.039093524, 0.03676632, 0.13814446)
+material_override = SubResource("StandardMaterial3D_arcs")
+cast_shadow = 0
+amount = 40
+lifetime = 0.25
+explosiveness = 0.08
+randomness = 0.35
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+local_coords = false
+process_material = SubResource("ParticleProcessMaterial_arcs")
+draw_pass_1 = SubResource("QuadMesh_arcs")

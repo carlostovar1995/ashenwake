@@ -1,58 +1,100 @@
 class_name UnitWind
 extends Object
 
+## Knockback, knockup, ray push, wave-carry, and wind pull. Bosses ignore all of
+## these unless Unit.allow_knock is set for that fight.
+
 
 static func has_wind(ab: AbilityDef) -> bool:
 	return ab != null and ab.has_element(AbilityDef.Element.WIND)
 
 
+static func blocks_knock(u: Unit) -> bool:
+	return u != null and u.is_boss and not u.allow_knock
+
+
 static func knockback(u: Unit, dir: Vector3, distance: float, duration: float) -> void:
 	if u == null or u.is_dead or distance <= 0.04 or duration <= 0.02:
+		return
+	if blocks_knock(u):
+		return
+	if SanctuaryZone.blocks_knockback(u):
+		return
+	if WorldrootZone.blocks_knockback(u):
 		return
 	var flat := Vector3(dir.x, 0.0, dir.z)
 	if flat.length_squared() < 0.0001:
 		return
 	flat = flat.normalized()
-	u._wind_kb_from = u.global_position
-	u._wind_kb_to = _stop_point(u, u.global_position, u.global_position + flat * distance)
-	u._wind_kb_dur = duration
-	u._wind_kb_left = duration
+	var state := _state(u)
+	state.kb_from = u.global_position
+	state.kb_to = _stop_point(u, u.global_position, u.global_position + flat * distance)
+	state.kb_dur = duration
+	state.kb_left = duration
 
 
 static func knockup(u: Unit, height: float, duration: float, fall_speed: float = 1.0) -> void:
 	if u == null or u.is_dead or height <= 0.04 or duration <= 0.04:
 		return
+	if blocks_knock(u):
+		return
 	var rise := duration * 0.5
 	var fall := rise / maxf(fall_speed, 0.05)
-	u._wind_air_peak = height
-	u._wind_air_rise = rise
-	u._wind_air_dur = rise + fall
-	u._wind_air_left = u._wind_air_dur
-	u._wind_ground_y = u.global_position.y
+	var state := _state(u)
+	state.air_peak = height
+	state.air_rise = rise
+	state.air_dur = rise + fall
+	state.air_left = state.air_dur
+	state.ground_y = u.global_position.y
 
 
 static func start_ray_push(u: Unit, caster: Unit) -> void:
 	if u == null or u.is_dead or caster == null:
 		return
-	u._wind_ray_from = caster
-	u._wind_ray_left = 0.35
+	if blocks_knock(u):
+		return
+	var state := _state(u)
+	state.ray_from = caster
+	state.ray_dir = Vector3.ZERO
+	state.ray_left = _ray_push_time()
+
+
+static func start_ray_push_along(u: Unit, from_pos: Vector3, fallback: Vector3 = Vector3.ZERO) -> void:
+	if u == null or u.is_dead:
+		return
+	if blocks_knock(u):
+		return
+	var away := Vector3(u.global_position.x - from_pos.x, 0.0, u.global_position.z - from_pos.z)
+	if away.length_squared() < 0.010:
+		away = Vector3(fallback.x, 0.0, fallback.z)
+	if away.length_squared() < 0.010:
+		return
+	var state := _state(u)
+	state.ray_from = null
+	state.ray_dir = away.normalized()
+	state.ray_left = _ray_push_time()
 
 
 static func start_carry(u: Unit, proj: Projectile) -> void:
 	if u == null or u.is_dead or proj == null:
 		return
-	u._wind_carry = proj
+	if blocks_knock(u):
+		return
+	_state(u).carry = proj
 
 
 static func stop_carry(u: Unit, proj: Projectile) -> void:
 	if u == null:
 		return
-	if u._wind_carry == proj:
-		u._wind_carry = null
+	var state := _state(u)
+	if state.carry == proj:
+		state.carry = null
 
 
 static func pull_toward(u: Unit, center: Vector3, speed: float, delta: float) -> void:
 	if u == null or u.is_dead or speed <= 0.0 or delta <= 0.0:
+		return
+	if blocks_knock(u):
 		return
 	var to := Vector3(center.x - u.global_position.x, 0.0, center.z - u.global_position.z)
 	var dist := to.length()
@@ -67,30 +109,33 @@ static func tick(u: Unit, delta: float) -> bool:
 	if u == null or u.is_dead:
 		_clear(u)
 		return false
+	if blocks_knock(u):
+		_clear(u)
+		return false
+	var state := _state(u)
 	var moved := false
-	if u._wind_air_left > 0.0:
+	if state.air_left > 0.0:
 		moved = true
-		_tick_air(u, delta)
-	if u._wind_kb_left > 0.0:
+		_tick_air(u, state, delta)
+	if state.kb_left > 0.0:
 		moved = true
-		_tick_knockback(u, delta)
-	if u._wind_carry != null:
-		if not is_instance_valid(u._wind_carry) or u._wind_carry._resolved:
-			u._wind_carry = null
+		_tick_knockback(u, state, delta)
+	if state.carry != null:
+		var carry := state.carry
+		if not is_instance_valid(carry) or (carry is Projectile and (carry as Projectile)._resolved):
+			state.carry = null
 		else:
 			moved = true
-			_tick_carry(u, delta)
-	if u._wind_ray_left > 0.0:
-		u._wind_ray_left = maxf(0.0, u._wind_ray_left - delta)
-		var caster := u._wind_ray_from
-		if caster == null or not is_instance_valid(caster) or caster.is_dead:
-			u._wind_ray_left = 0.0
-			u._wind_ray_from = null
-		elif u._wind_ray_left > 0.0:
+			_tick_carry(u, state, delta)
+	if state.ray_left > 0.0:
+		state.ray_left = maxf(0.0, state.ray_left - delta)
+		var away := _ray_push_dir(u, state)
+		if away.length_squared() < 0.0001:
+			state.ray_left = 0.0
+			state.ray_from = null
+			state.ray_dir = Vector3.ZERO
+		elif state.ray_left > 0.0:
 			moved = true
-			var away := Vector3(u.global_position.x - caster.global_position.x, 0.0, u.global_position.z - caster.global_position.z)
-			if away.length_squared() < 0.0001:
-				away = caster.facing_dir()
 			var step := away.normalized() * CombatBalance.flat("wind.ray.drift") * delta
 			u.global_position = _stop_point(u, u.global_position, u.global_position + step)
 	if moved:
@@ -99,46 +144,66 @@ static func tick(u: Unit, delta: float) -> bool:
 	return false
 
 
-static func _tick_air(u: Unit, delta: float) -> void:
-	u._wind_air_left = maxf(0.0, u._wind_air_left - delta)
-	var elapsed := u._wind_air_dur - u._wind_air_left
-	var rise := u._wind_air_rise if u._wind_air_rise > 0.001 else u._wind_air_dur * 0.5
-	var fall := maxf(u._wind_air_dur - rise, 0.001)
+static func _tick_air(u: Unit, state: UnitWindState, delta: float) -> void:
+	state.air_left = maxf(0.0, state.air_left - delta)
+	var elapsed: float = state.air_dur - state.air_left
+	var rise: float = state.air_rise if state.air_rise > 0.001 else state.air_dur * 0.5
+	var fall: float = maxf(state.air_dur - rise, 0.001)
 	var sine_t := 0.0
 	if elapsed <= rise:
 		sine_t = (elapsed / maxf(rise, 0.001)) * 0.5
 	else:
 		sine_t = 0.5 + ((elapsed - rise) / fall) * 0.5
 	sine_t = clampf(sine_t, 0.0, 1.0)
-	var lift := sin(sine_t * PI) * u._wind_air_peak
+	var lift: float = sin(sine_t * PI) * state.air_peak
 	var p := u.global_position
-	p.y = u._wind_ground_y + lift
-	if u._wind_air_left <= 0.0:
-		p.y = u._wind_ground_y
-		u._wind_air_peak = 0.0
-		u._wind_air_rise = 0.0
+	p.y = state.ground_y + lift
+	if state.air_left <= 0.0:
+		p.y = state.ground_y
+		state.air_peak = 0.0
+		state.air_rise = 0.0
 	u.global_position = p
 
 
-static func _tick_knockback(u: Unit, delta: float) -> void:
-	u._wind_kb_left = maxf(0.0, u._wind_kb_left - delta)
-	var t := 1.0 if u._wind_kb_dur <= 0.001 else 1.0 - (u._wind_kb_left / u._wind_kb_dur)
+static func _tick_knockback(u: Unit, state: UnitWindState, delta: float) -> void:
+	state.kb_left = maxf(0.0, state.kb_left - delta)
+	var t: float = 1.0 if state.kb_dur <= 0.001 else 1.0 - (state.kb_left / state.kb_dur)
 	t = clampf(t, 0.0, 1.0)
-	var p := u._wind_kb_from.lerp(u._wind_kb_to, t)
+	var p: Vector3 = state.kb_from.lerp(state.kb_to, t)
 	p.y = u.global_position.y
 	u.global_position = p
 
 
-static func _tick_carry(u: Unit, delta: float) -> void:
-	if u._wind_carry == null:
+static func _tick_carry(u: Unit, state: UnitWindState, delta: float) -> void:
+	var carry := state.carry
+	if carry == null or not (carry is Projectile):
 		return
-	var step := Vector3(u._wind_carry.direction.x, 0.0, u._wind_carry.direction.z)
+	var proj := carry as Projectile
+	var step := Vector3(proj.direction.x, 0.0, proj.direction.z)
 	if step.length_squared() < 0.0001:
 		return
-	step = step.normalized() * u._wind_carry.speed * delta
+	step = step.normalized() * proj.speed * delta
 	var dest := _stop_point(u, u.global_position, u.global_position + step)
 	dest.y = u.global_position.y
 	u.global_position = dest
+
+
+static func _ray_push_dir(u: Unit, state: UnitWindState) -> Vector3:
+	var caster: Unit = state.ray_from
+	if caster != null and is_instance_valid(caster) and not caster.is_dead:
+		var away := Vector3(u.global_position.x - caster.global_position.x, 0.0, u.global_position.z - caster.global_position.z)
+		if away.length_squared() < 0.0001:
+			away = caster.facing_dir()
+		return away
+	return state.ray_dir
+
+
+static func _ray_push_time() -> float:
+	return CombatBalance.flat("wind.ray.time")
+
+
+static func _state(u: Unit) -> UnitWindState:
+	return u.wind
 
 
 static func _stop_point(u: Unit, from: Vector3, dest: Vector3) -> Vector3:
@@ -164,12 +229,7 @@ static func _stop_point(u: Unit, from: Vector3, dest: Vector3) -> Vector3:
 static func _clear(u: Unit) -> void:
 	if u == null:
 		return
-	u._wind_kb_left = 0.0
-	u._wind_air_left = 0.0
-	u._wind_air_rise = 0.0
-	u._wind_ray_left = 0.0
-	u._wind_ray_from = null
-	u._wind_carry = null
+	_state(u).clear()
 
 
 static func apply_on_skillshot(u: Unit, ab: AbilityDef, proj: Projectile) -> void:

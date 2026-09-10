@@ -1,21 +1,21 @@
 extends Node
 
 ## Per-enemy threat tables. Damage writes to that mob; healing splits across engaged enemies.
-## Boss auto-attacks stay on Bulwark while `lock_boss_to_tank` is true (testing).
 
 const DAMAGE_COEFF := 1.0
 const HEAL_COEFF := 0.5
 const MELEE_SNAP := 1.10
 const RANGE_SNAP := 1.30
-const TANK_MULT := 5.0
-const SEED_THREAT := 1.0
+const TANK_MULT := 1.0
+const SEED_THREAT := 120.0
 const CLOSE_RATIO := 0.80
 
-## Flip off after testing so the boss follows the snap rules like adds.
-var lock_boss_to_tank: bool = true
+var lock_boss_to_tank: bool = false
 
 var _tables: Dictionary = {}
 var _aggro: Dictionary = {}
+var _taunts: Dictionary = {}
+var _spells: Dictionary = {}
 
 
 func _ready() -> void:
@@ -28,6 +28,8 @@ func _ready() -> void:
 func reset() -> void:
 	_tables.clear()
 	_aggro.clear()
+	_taunts.clear()
+	_spells.clear()
 
 
 func threat_of(enemy: Unit, unit: Unit) -> float:
@@ -35,6 +37,23 @@ func threat_of(enemy: Unit, unit: Unit) -> float:
 		return 0.0
 	var table: Dictionary = _tables.get(enemy, {})
 	return float(table.get(unit, 0.0))
+
+
+func holds(enemy: Unit, unit: Unit) -> bool:
+	return unit != null and aggro_holder(enemy) == unit
+
+
+func rival_threat(enemy: Unit, unit: Unit) -> float:
+	if enemy == null or unit == null:
+		return 0.0
+	var table: Dictionary = _tables.get(enemy, {})
+	var best := 0.0
+	for key in table.keys():
+		var other := key as Unit
+		if other == null or other == unit or not is_instance_valid(other):
+			continue
+		best = maxf(best, float(table[other]))
+	return best
 
 
 func aggro_holder(enemy: Unit) -> Unit:
@@ -49,12 +68,26 @@ func aggro_holder(enemy: Unit) -> Unit:
 func pick_target(mob: Unit) -> Unit:
 	if mob == null or not is_instance_valid(mob) or mob.is_dead:
 		return null
-	if lock_boss_to_tank and mob.is_boss:
-		var tank := ArenaState.tank()
-		if tank and tank.can_be_aggroed():
-			_aggro[mob] = tank
-			return tank
+	var taunted := _taunt_holder(mob)
+	if taunted != null:
+		_aggro[mob] = taunted
+		return taunted
 	return _snap_target(mob)
+
+
+func _taunt_holder(mob: Unit) -> Unit:
+	if not _taunts.has(mob):
+		return null
+	var row: Dictionary = _taunts[mob]
+	var until := float(row.get("until", 0.0))
+	if Time.get_ticks_msec() * 0.001 >= until:
+		_taunts.erase(mob)
+		return null
+	var holder = row.get("holder")
+	if holder is Unit and is_instance_valid(holder) and (holder as Unit).can_be_aggroed():
+		return holder as Unit
+	_taunts.erase(mob)
+	return null
 
 
 func drop_unit(unit: Unit) -> void:
@@ -63,8 +96,11 @@ func drop_unit(unit: Unit) -> void:
 	for enemy in _tables.keys():
 		var table: Dictionary = _tables[enemy]
 		table.erase(unit)
+		_erase_spell_src(enemy, unit)
 		if _aggro.get(enemy) == unit:
 			_aggro.erase(enemy)
+		if _taunts.get(enemy) is Dictionary and (_taunts[enemy] as Dictionary).get("holder") == unit:
+			_taunts.erase(enemy)
 
 
 func ranked_rows(enemy: Unit) -> Array[Dictionary]:
@@ -111,6 +147,14 @@ func ranked_rows(enemy: Unit) -> Array[Dictionary]:
 	return rows
 
 
+func spell_breakdown(enemy: Unit, src: Unit) -> Array[Dictionary]:
+	if enemy == null or src == null or not is_instance_valid(enemy) or not is_instance_valid(src):
+		return []
+	var by_src: Dictionary = _spells.get(enemy, {})
+	var spells: Dictionary = by_src.get(src, {})
+	return CombatMeter.rows_from_spells(src, spells, CombatMeter.elapsed())
+
+
 func player_view(enemy: Unit) -> Dictionary:
 	var you := GameSession.active_unit as Unit
 	var empty := {
@@ -129,7 +173,7 @@ func player_view(enemy: Unit) -> Dictionary:
 	var rows := ranked_rows(enemy)
 	var holder := aggro_holder(enemy)
 	empty["aggro_name"] = holder.unit_name if holder else ""
-	empty["locked"] = lock_boss_to_tank and enemy.is_boss
+	empty["locked"] = false
 	if rows.is_empty():
 		return empty
 	var top := float(rows[0]["amount"])
@@ -179,6 +223,8 @@ func _on_unit_died(unit: Unit) -> void:
 	if unit.team != Unit.TEAM_RAID:
 		_tables.erase(unit)
 		_aggro.erase(unit)
+		_spells.erase(unit)
+		_taunts.erase(unit)
 		return
 	drop_unit(unit)
 
@@ -193,7 +239,8 @@ func _on_damaged(victim: Unit, amount: float, source: Node3D, spell_id: String =
 		return
 	if not src.can_be_aggroed():
 		return
-	_add_to(victim, src, amount * DAMAGE_COEFF * _source_mult(src, spell_id))
+	_add_to(victim, src, amount * DAMAGE_COEFF * _source_mult(src, spell_id) * TalentCombat.threat_dealt_mult(src), spell_id)
+	_apply_redirect(victim, src, amount * DAMAGE_COEFF * _source_mult(src, spell_id), spell_id)
 
 
 func _on_healed(_target: Unit, amount: float, source: Node3D = null, spell_id: String = "") -> void:
@@ -210,20 +257,54 @@ func _on_healed(_target: Unit, amount: float, source: Node3D = null, spell_id: S
 	var total := amount * HEAL_COEFF * _source_mult(src, spell_id)
 	var share := total / float(enemies.size())
 	for enemy in enemies:
-		_add_to(enemy, src, share)
+		_add_to(enemy, src, share, spell_id)
 
 
 func _source_mult(src: Unit, spell_id: String) -> float:
 	return maxf(0.0, src.threat_mult) * src.ability_threat_mult(spell_id)
 
 
-func _add_to(enemy: Unit, src: Unit, amount: float) -> void:
+func _apply_redirect(enemy: Unit, src: Unit, generated: float, spell_id: String = "") -> void:
+	var slice := TalentCombat.redirect_slice(src)
+	if slice <= 0.0 or generated <= 0.0:
+		return
+	var tank := TalentCombat.redirect_tank(src)
+	if tank == null:
+		return
+	var moved := generated * slice
+	var table: Dictionary = _tables.get(enemy, {})
+	var current := float(table.get(src, 0.0))
+	if current > 0.0:
+		table[src] = maxf(0.0, current - moved)
+	_add_spell_threat(enemy, src, spell_id, -moved)
+	_add_to(enemy, tank, moved, "redirect")
+
+
+func add_threat(enemy: Unit, src: Unit, amount: float, spell_id: String = "") -> void:
+	_add_to(enemy, src, amount, spell_id)
+
+
+func taunt(enemy: Unit, src: Unit, duration: float) -> void:
+	if enemy == null or src == null or duration <= 0.0:
+		return
+	if not src.can_be_aggroed():
+		return
+	_taunts[enemy] = {
+		"holder": src,
+		"until": Time.get_ticks_msec() * 0.001 + duration,
+	}
+	_add_to(enemy, src, 80.0, "taunt")
+	_aggro[enemy] = src
+
+
+func _add_to(enemy: Unit, src: Unit, amount: float, spell_id: String = "") -> void:
 	if enemy == null or src == null or amount <= 0.0:
 		return
 	if not _tables.has(enemy):
 		_tables[enemy] = {}
 	var table: Dictionary = _tables[enemy]
 	table[src] = float(table.get(src, 0.0)) + amount
+	_add_spell_threat(enemy, src, spell_id, amount)
 	if not _aggro.has(enemy):
 		_aggro[enemy] = src
 
@@ -237,7 +318,7 @@ func _seed_enemy(enemy: Unit) -> void:
 	var tank := ArenaState.tank()
 	if tank == null or not tank.can_be_aggroed():
 		return
-	_add_to(enemy, tank, SEED_THREAT)
+	_add_to(enemy, tank, SEED_THREAT, "seed")
 	_aggro[enemy] = tank
 
 
@@ -247,6 +328,7 @@ func set_initial_target(enemy: Unit, holder: Unit) -> void:
 	if holder == null or not is_instance_valid(holder) or not holder.can_be_aggroed():
 		return
 	_tables[enemy] = {holder: SEED_THREAT}
+	_spells[enemy] = {holder: {"seed": SEED_THREAT}}
 	_aggro[enemy] = holder
 
 
@@ -367,3 +449,34 @@ func _prune(enemy: Unit) -> void:
 	for key in table.keys():
 		if not (key is Unit) or not is_instance_valid(key) or (key as Unit).is_dead:
 			table.erase(key)
+			_erase_spell_src(enemy, key)
+
+
+func _add_spell_threat(enemy: Unit, src: Unit, spell_id: String, amount: float) -> void:
+	if enemy == null or src == null or is_zero_approx(amount):
+		return
+	var key := spell_id if not spell_id.is_empty() else "other"
+	if not _spells.has(enemy):
+		_spells[enemy] = {}
+	var by_src: Dictionary = _spells[enemy]
+	if not by_src.has(src):
+		by_src[src] = {}
+	var bag: Dictionary = by_src[src]
+	var next := float(bag.get(key, 0.0)) + amount
+	if next <= 0.02:
+		bag.erase(key)
+	else:
+		bag[key] = next
+	if bag.is_empty():
+		by_src.erase(src)
+	if by_src.is_empty():
+		_spells.erase(enemy)
+
+
+func _erase_spell_src(enemy: Variant, src: Variant) -> void:
+	if not _spells.has(enemy):
+		return
+	var by_src: Dictionary = _spells[enemy]
+	by_src.erase(src)
+	if by_src.is_empty():
+		_spells.erase(enemy)

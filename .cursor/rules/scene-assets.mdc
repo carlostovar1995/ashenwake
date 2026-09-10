@@ -1,0 +1,38 @@
+---
+description: Canonical asset roots, staging promotion, text resources, and UID imports
+globs: "{assets,_incoming,scenes}/**/*"
+alwaysApply: false
+---
+
+# Scenes and assets
+
+## Canonical roots
+
+Organize runtime files under `assets/` by **type**, not vendor or author:
+
+- `assets/ui/` — HUD and icons
+- `assets/audio/` — converted runtime SFX (`audio/sfx/`) plus `LICENSES.md`
+- `assets/textures/` — world/arena textures (`textures/arena/`)
+- `assets/anims/` — animation libraries (`UAL*.glb`; source packs in `anims/ual1`, `anims/ual2`)
+- `assets/models/` — 3D characters, outfits, props, bosses
+- `assets/models/props/fantasy/` — decorative meshes (glTF)
+- `assets/models/props/collision/` — instanceable StaticBody props (cover blocks, colliders). Layouts instance these; do not keep collision prefabs under `scenes/arena/layouts/`.
+- `assets/vfx/` — spell/combat effects (`beams/`, `projectiles/`, `elemental/`, `explosion/`, `common/`, plus `bases/` and `infusions/` when overlay scenes exist)
+
+Travel VFX authoring (body vs persist groups, mix-and-match slots): `docs/vfx/AUTHORING.md`. Cheap meshes, AnimationPlayer, and OmniLight budget: `docs/vfx/OPTIMAL_DESIGN.md`. Plug-in paths: `assets/vfx/bases/{base}/body.tscn`, `assets/vfx/infusions/{infusion}/{base}_persist.tscn`, `assets/vfx/infusions/{infusion}/{base}_impact.tscn`. Placeholder bodies: magic bolt, javelin, fire projectile.
+
+Do not add a second spelling of the same type (`assets/meshes/` vs `assets/models/`, vendor-named roots such as `BinbunVFX/` or `quaternius/`). Reuse the matching type root. Preserve licensing/provenance beside the assets they cover.
+
+## `_incoming` staging
+
+- `_incoming/` is non-runtime staging, not a source for gameplay `res://` references.
+- Promote selected files into the matching canonical root, update all references, verify, then remove promoted duplicates from staging.
+- Retain `_incoming/audio/` when it is an input to `tools/convert_sfx.py`; do not ignore or delete that conversion source tree wholesale.
+- Keep transient archives, partial downloads, generated staging `.import` sidecars, and tool scratch files ignored. Never use ignore rules to hide canonical runtime assets.
+
+## Godot resources
+
+- Keep `.tscn` and `.tres` in text format. Do not rewrite or binary-convert them for cleanup.
+- Preserve existing `uid://` identities across edits and moves. Change a UID only after a real rename/move and Godot regeneration.
+- After an asset move or promotion, update every `res://` reference and run `scripts/windows/Verify-Ashenwake.ps1`.
+- Never hand-edit `.godot/`; it is generated import cache.

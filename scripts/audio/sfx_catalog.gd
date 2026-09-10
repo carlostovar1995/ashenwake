@@ -113,6 +113,14 @@ const EVENTS := {
 		"pitch_min": 1.0,
 		"pitch_max": 1.0,
 	},
+	"dawnwarden.pillar.rise": {
+		"max_poly": 1,
+		"max_distance": 80.0,
+		"path": _SFX + "earth_rumble.ogg",
+		"volume_db": -6.0,
+		"pitch_min": 1.0,
+		"pitch_max": 1.0,
+	},
 }
 
 
@@ -148,7 +156,9 @@ const MIXER_GROUPS := [
 		"id": "dawnwarden",
 		"title": "Dawnwarden",
 		"subtitle": "Boss",
-		"clips": [],
+		"clips": [
+			{"id": "dawnwarden.pillar.rise", "label": "Raise Pillars rumble"},
+		],
 	},
 ]
 

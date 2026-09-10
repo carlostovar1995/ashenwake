@@ -12,7 +12,6 @@ const _SpellRay := preload("res://scripts/visual/spell_ray_fx.gd")
 const _SpellWall := preload("res://scripts/combat/spell_wall.gd")
 const _SpellBaseFx := preload("res://scripts/visual/spell_base_fx.gd")
 const _GroundBlast := preload("res://scripts/visual/ground_blast_fx.gd")
-const _HoverFrameShader := preload("res://scripts/visual/hover_frame.gdshader")
 const EnemyNameplate := preload("res://scripts/ui/enemy_nameplate.gd")
 
 signal died(unit)
@@ -27,15 +26,11 @@ const BURN_RATIO := 0.5
 const BURN_DURATION := 10.0
 const BURN_TICK := 1.0
 const GLOBAL_COOLDOWN := 0.5
-const MOVE_SPEED_SCALE := 0.7
-const DODGE_DISTANCE := 6.0 * MOVE_SPEED_SCALE
+const BASE_MOVE_SPEED := 5.5
+const DODGE_DISTANCE := 6.0
 const DODGE_DURATION := 0.4
 const DODGE_COOLDOWN := 4.5
-const COMBUST_DURATION := 2.0
-const COMBUST_TICKS := 32
-const COMBUST_TICK := COMBUST_DURATION / float(COMBUST_TICKS)
-const COMBUST_DIVISOR := 16.0
-const SHOCK_MAX := 10
+const SHOCK_MAX := 100
 const SHOCK_TIME := 10.0
 const SHOCK_CHAIN_RATIO := 0.20
 const SHOCK_CHAIN_RANGE := 7.0
@@ -45,14 +40,10 @@ const MAX_SHOCK_BATCHES_PER_PHYSICS_FRAME := 12
 const CHARGED_MANA_DIV := 4.0
 const AFFLICT_DURATION := 10.0
 const AFFLICT_TICK := 1.0
-const AFFLICT_STACK_MAX := 200
-const AFFLICT_TAKEN_AMP := 0.20
 const REJUV_DURATION := 6.0
 const REJUV_TICK := 1.0
 const REJUV_STACK_MAX := 12
 const PROTECTION_SHIELD_TIME := 6.0
-const CHILL_PER_DAMAGE := 0.001
-const CHILL_FREEZE_AT := 1.0
 const BLESSING_MAX := 0.10
 const BLESSING_REF := 200.0
 const BLESSING_TIME := 8.0
@@ -61,33 +52,13 @@ const OVERHEAT_CD_REFUND_CAP := 4
 const INFUSION_DOUBLE_FIRE := 1
 const INFUSION_DOUBLE_ICE := 2
 const INFUSION_DOUBLE_STORM := 4
-const COMBUST_RADIUS := 2.8
 const SHATTER_BONUS := 45.0
 const CATACLYSM_BONUS := 80.0
 const WARD_TIME := 6.0
 const SHIELD_MOVE_SPEED := 0.15
 const FREEZE_TIME := 5.0
-const FREEZE_IMMUNE_TIME := 10.0
 const FREEZE_BOSS := 5.0
 const FREEZE_ADD := 5.0
-const ALTERED_BUFF_TIME := 10.0
-const ALTERED_FIRE_SPELL := 0.10
-const ALTERED_FIRE_FIRE := 0.20
-const ALTERED_RESIST := 0.30
-const ALTERED_ICE_SPEED := 0.30
-const ALTERED_ICE_TICK := 12.6
-const ALTERED_ICE_INTERVAL := 0.5
-const ALTERED_ICE_RADIUS := 2.2
-const ALTERED_ICE_PATCH_TIME := 2.6
-const ALTERED_ICE_DROP_DIST := 1.15
-const ALTERED_STORM_TICK := 0.25
-const ALTERED_STORM_DAMAGE := 13.5
-const ALTERED_STORM_RANGE := 7.0
-const ALTERED_STORM_HOPS := 3
-const ALTERED_SHADOW_TICK := 1.0
-const ALTERED_SHADOW_MAX := 30
-const ALTERED_SHADOW_HP := 0.05
-const ALTERED_SHADOW_DAMAGE := 0.30
 const LOCAL_OUTLINE_WIDTH := 0.020
 const LOCAL_OUTLINE_COLOR := Color(0.0, 0.0, 0.0, 1.0)
 const _DamageNumber := preload("res://scripts/visual/damage_number.gd")
@@ -97,6 +68,9 @@ const _DodgeClockShader := preload("res://scripts/visual/dodge_clock.gdshader")
 @export var team: int = TEAM_RAID
 @export var is_champion: bool = false
 @export var is_boss: bool = false
+## Bosses ignore knockback and knockup unless a fight sets this.
+@export var allow_knock: bool = false
+@export var enemy_rank: int = EnemyRank.Rank.NORMAL
 @export var show_nameplate: bool = false
 @export var body_color: Color = Color(0.28, 0.55, 0.95)
 @export var radius: float = 0.45
@@ -105,14 +79,14 @@ const _DodgeClockShader := preload("res://scripts/visual/dodge_clock.gdshader")
 @export var max_health: float = 650.0
 @export var max_mana: float = 400.0
 @export var mana_regen: float = 10.0
-@export var move_speed: float = 7.2
+@export var move_speed: float = BASE_MOVE_SPEED
 @export var turn_rate: float = 20.0
 @export var acceleration: float = 42.0
 @export var deceleration: float = 55.0
 
 @export var attack_damage: float = 58.0
 @export var attack_range: float = 6.2
-@export var attack_windup: float = 0.06
+@export var attack_windup: float = 0.18
 @export var attack_cooldown: float = 0.95
 @export var attack_projectile_speed: float = 22.0
 @export var is_melee: bool = false
@@ -198,12 +172,33 @@ var _shock_chain_flush_scheduled: bool = false
 var _shock_chain_batch_left: float = 0.0
 var _shock_chain_flush_queued: bool = false
 var _chill_percent: float = 0.0
+var _chill_stacks: int = 0
+var _chill_progress: float = 0.0
 var _chill_left: float = 0.0
+var _spread_chill: int = 0
+var _spread_chill_left: float = 0.0
 var _freeze_immune_left: float = 0.0
 var _afflict_stacks: int = 0
 var _afflict_left: float = 0.0
 var _afflict_acc: float = 0.0
 var _afflict_src: Unit
+var _spread_afflict: int = 0
+var _spread_afflict_left: float = 0.0
+var _seed_stacks: int = 0
+var _seed_left: float = 0.0
+var _seed_src: Unit
+var _judged_stacks: int = 0
+var _judged_left: float = 0.0
+var _sunder_stacks: int = 0
+var _sunder_left: float = 0.0
+var _judgment_brand: int = 0
+var _singe_stacks: int = 0
+var _singe_left: float = 0.0
+var _singe_src: Unit
+var _scorch_left: float = 0.0
+var _scorch_snare: float = 0.0
+var _scorch_src: Unit
+var _ashen_absorbed: int = 0
 var _blessing_dr: float = 0.0
 var _blessing_left: float = 0.0
 var _blessing_max: float = 0.0
@@ -213,26 +208,28 @@ var _rejuv_stacks: int = 0
 var _rejuv_left: float = 0.0
 var _rejuv_acc: float = 0.0
 var _rejuv_src: Unit
+var _lifebloom_left: float = 0.0
+var _lifebloom_max: float = 0.0
+var _lifebloom_hps: float = 0.0
+var _lifebloom_acc: float = 0.0
+var _lifebloom_bloom: float = 0.0
+var _lifebloom_src: Unit
+var _stormbond_left: float = 0.0
+var _stormbond_src: Unit
+var _shock_src: Unit
 var _shield_layers: Array[Dictionary] = []
 var _cast_power: float = 1.0
 var _recast_index: int = -1
 var _recast_left: float = 0.0
-var _illusion_wall_slot: int = -1
+var _illusion_exit_dir: Vector3 = Vector3.ZERO
 var _echoing: bool = false
 var _illusion_echoing: bool = false
 var _illusion_invis_left: float = 0.0
 var _illusion_invis_max: float = 0.0
 var _channel_was_recast: bool = false
 var _channel_combat_text_cast_id: int = -1
-var _combust_tick: float = 0.0
-var _combust_left: float = 0.0
-var _combust_max: float = 0.0
-var _combust_acc: float = 0.0
-var _combust_hits_left: int = 0
-var _combust_src: Unit
 var _ward_left: float = 0.0
 var _ward_time: float = 0.0
-var _had_triple: bool = false
 static var _mark_pip_tex: Texture2D
 static var _shock_batch_queue: Array[int] = []
 static var _shock_batch_queued: Dictionary = {}
@@ -257,6 +254,7 @@ var _overcharge_cast_bonus: float = 0.0
 var _overcharge_cooldown_rate: float = 1.0
 var _overheat_cast_seq: int = 0
 var _overheat_refund_left: Dictionary = {}
+var _momentum_spent: Dictionary = {}
 var _charge_mana_open: Dictionary = {}
 var _slow_max: float = 0.0
 var _ward_max: float = 0.0
@@ -264,18 +262,9 @@ var _floor_zones: Dictionary = {}
 var _floor_extras: Dictionary = {}
 var _stun_left: float = 0.0
 var _stun_max: float = 0.0
-var _wind_kb_left: float = 0.0
-var _wind_kb_dur: float = 0.0
-var _wind_kb_from: Vector3 = Vector3.ZERO
-var _wind_kb_to: Vector3 = Vector3.ZERO
-var _wind_air_left: float = 0.0
-var _wind_air_dur: float = 0.0
-var _wind_air_rise: float = 0.0
-var _wind_air_peak: float = 0.0
-var _wind_ground_y: float = 0.0
-var _wind_ray_left: float = 0.0
-var _wind_ray_from: Unit
-var _wind_carry: Area3D
+var _shatter_fire_contrib: float = 0.0
+var _shatter_shadow_contrib: float = 0.0
+var wind: UnitWindState = UnitWindState.new()
 var _pending_freeze: bool = false
 var _pending_freeze_source: Unit
 var _overcharge_sfx: int = 0
@@ -284,32 +273,31 @@ var _free_cast_max: int = 0
 var _free_cast_pips: Array[Sprite3D] = []
 var _atonement_amp: float = 0.0
 var _ward_source: Unit
-var _altered_fire_left: float = 0.0
-var _altered_ice_left: float = 0.0
-var _altered_storm_left: float = 0.0
-var _altered_shadow_left: float = 0.0
-var _altered_shadow_stacks: int = 0
-var _altered_shadow_acc: float = 0.0
-var _altered_storm_acc: float = 0.0
-var _altered_ice_drop: Vector3 = Vector3.ZERO
-var _on_frost_trail: bool = false
-var _frost_patches: Array[Node] = []
+var altered: UnitAlteredState = UnitAlteredState.new()
+var _talent_hooks: TalentHooks
+var _class_auto: ClassAutoAttack
+var _skill_recast: bool = false
+var _wraithfire_pending: bool = false
 var _nature_hedge_left: float = 0.0
-static var _frost_trail_ab: AbilityDef
 var _auras: Dictionary = {}
-var _spell_ray: Node
-var _illusion_rays: Array = []
+var _spell_rays: Array = []
+var _illusion_ray_pulsed: bool = false
 var _illusion_missile_extras: Array[Unit] = []
 var _spell_wall: Node
 
 
 func _ready() -> void:
+	if is_boss and enemy_rank == EnemyRank.Rank.NORMAL:
+		enemy_rank = EnemyRank.Rank.ELITE
 	health = 1.0 if heal_practice else max_health
 	mana = max_mana
 	add_to_group("units")
 	collision_layer = 0 if is_structure else 2
 	collision_mask = 0 if is_structure else 1
 	floor_snap_length = 0.4
+	## Rising pillars are StaticBody3Ds. Inheriting their interpolated motion
+	## launches anyone who overlaps the volume for one physics frame.
+	platform_on_leave = PLATFORM_ON_LEAVE_DO_NOTHING
 	_ensure_body()
 	call_deferred("_attach_visual")
 	if abilities.is_empty() and not is_structure:
@@ -335,7 +323,39 @@ func apply_compiled_abilities(next: Array[AbilityDef]) -> void:
 	while _cooldown_max.size() < cooldown_left.size():
 		_cooldown_max.append(0.0)
 	_illusion_missile_extras.clear()
-	_clear_illusion_rays()
+	_clear_spell_ray()
+	bind_talent_hooks(_talent_hooks)
+
+
+func bind_talent_hooks(hooks: TalentHooks) -> void:
+	_talent_hooks = hooks
+	if _talent_hooks == null:
+		return
+	for i in abilities.size():
+		var ab: AbilityDef = abilities[i]
+		if ab != null and (ab.skill_id == "pyroblast" or ab.skill_id == "pyre"):
+			_talent_hooks.pyroblast_slot = i
+
+
+func talent_hooks() -> TalentHooks:
+	return _talent_hooks
+
+
+func bind_class_auto(aa: ClassAutoAttack) -> void:
+	_class_auto = aa
+	if aa == null:
+		return
+	is_melee = aa.melee
+	attack_damage = aa.attack_damage
+	attack_range = aa.attack_range
+	attack_cooldown = aa.attack_cooldown
+	attack_windup = aa.attack_windup
+	attack_applies_charged = aa.applies_charged
+	attack_vfx_scene = aa.vfx_scene
+
+
+func class_auto() -> ClassAutoAttack:
+	return _class_auto
 
 
 func _attach_visual() -> void:
@@ -420,6 +440,9 @@ func _ensure_body() -> void:
 	_hp_root = Node3D.new()
 	_hp_root.name = "HpAnchor"
 	_hp_root.top_level = true
+	# Anchors are posed in _process from the interpolated unit origin. Engine
+	# interpolation on these top_level nodes would trail the rendered mesh.
+	_hp_root.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	add_child(_hp_root)
 
 	var use_plate := _wants_enemy_nameplate()
@@ -438,6 +461,7 @@ func _ensure_body() -> void:
 		_feet_root = Node3D.new()
 		_feet_root.name = "FeetAnchor"
 		_feet_root.top_level = true
+		_feet_root.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 		add_child(_feet_root)
 		var trough_h := _bar_fill_h() + _bar_pad() * 2.0
 		var stack := trough_h + _bar_gap() if max_mana > 1.0 else 0.0
@@ -512,26 +536,25 @@ func _tick_structure(delta: float) -> void:
 			_slow_max = 0.0
 	if _freeze_immune_left > 0.0:
 		_freeze_immune_left = maxf(0.0, _freeze_immune_left - delta)
-		if _freeze_immune_left <= 0.0 and _chill_percent >= CHILL_FREEZE_AT:
+		if _freeze_immune_left <= 0.0 and _chill_stacks >= EnemyRank.stack_max():
 			_try_chill_freeze()
 	if _stun_left > 0.0:
 		_stun_left = maxf(0.0, _stun_left - delta)
 		if _stun_left <= 0.0:
 			_stun_max = 0.0
+			_reset_shatter_shell()
 	if _pending_freeze:
 		flush_pending_freeze()
 	_tick_burn(delta)
-	_tick_combust(delta)
 	_tick_afflict(delta)
+	_tick_spread_copies(delta)
 	_mark_ice = maxf(0.0, _mark_ice - delta)
 	_chill_left = maxf(0.0, _chill_left - delta)
 	if _chill_left <= 0.0:
-		_chill_percent = 0.0
+		_clear_chill_stacks()
 	_mark_storm = maxf(0.0, _mark_storm - delta)
 	if _mark_storm <= 0.0:
 		_charged_stacks = 0
-	if not (_mark_fire > 0.0 and _mark_ice > 0.0 and _mark_storm > 0.0):
-		_had_triple = false
 
 
 func _physics_process(delta: float) -> void:
@@ -542,7 +565,7 @@ func _physics_process(delta: float) -> void:
 	if _recast_left > 0.0:
 		_recast_left = maxf(0.0, _recast_left - delta)
 		if _recast_left <= 0.0:
-			_clear_recast()
+			_expire_recast()
 	if _slow_left > 0.0:
 		_slow_left = maxf(0.0, _slow_left - delta)
 		if _slow_left <= 0.0:
@@ -593,6 +616,13 @@ func _physics_process(delta: float) -> void:
 	_update_hp_bar()
 
 
+func _process(_delta: float) -> void:
+	if _hp_root == null and _feet_root == null:
+		set_process(false)
+		return
+	_sync_world_ui_anchors()
+
+
 func hp_anchor_world() -> Vector3:
 	if _hp_root:
 		return _hp_root.global_position
@@ -613,17 +643,37 @@ func feet_anchor_world() -> Vector3:
 	return _feet_bar_world()
 
 
+func _visual_origin() -> Vector3:
+	if is_inside_tree():
+		return get_global_transform_interpolated().origin
+	return global_position
+
+
 func _feet_bar_world() -> Vector3:
+	return _feet_bar_at(_visual_origin())
+
+
+func _feet_bar_at(origin: Vector3) -> Vector3:
 	var toward := Vector3(0.0, 0.0, 1.0)
 	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
 	if cam:
-		toward = cam.global_position - global_position
+		toward = cam.global_position - origin
 		toward.y = 0.0
 		if toward.length_squared() < 0.0001:
 			toward = Vector3(0.0, 0.0, 1.0)
 		else:
 			toward = toward.normalized()
-	return global_position + toward * (radius + 0.32) + Vector3(0.0, 0.22, 0.0)
+	return origin + toward * (radius + 0.32) + Vector3(0.0, 0.22, 0.0)
+
+
+func _sync_world_ui_anchors() -> void:
+	if _hp_root == null and _feet_root == null:
+		return
+	var origin := _visual_origin()
+	if _hp_root:
+		_face_camera(_hp_root, origin + Vector3(0, height + 0.62, 0))
+	if _feet_root:
+		_face_camera(_feet_root, _feet_bar_at(origin))
 
 
 func nameplate_click_points() -> PackedVector3Array:
@@ -732,27 +782,9 @@ func _face_camera(node: Node3D, pos: Vector3) -> void:
 	node.global_transform = Transform3D(Basis(x, y, z), pos)
 
 
-func _bar_material(color: Color, priority: int, billboard: bool = true) -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED if billboard else BaseMaterial3D.BILLBOARD_DISABLED
-	mat.no_depth_test = true
-	mat.disable_receive_shadows = true
-	mat.render_priority = priority
-	return mat
-
-
 func _make_bar_mesh(parent: Node3D, mesh_name: String, size: Vector2, y: float, color: Color, priority: int, billboard: bool = true) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.name = mesh_name
-	var mesh := QuadMesh.new()
-	mesh.size = size
-	mi.mesh = mesh
+	var mi := WorldUiMesh.quad(mesh_name, size, color, priority, billboard)
 	mi.position = Vector3(0, y, 0)
-	mi.material_override = _bar_material(color, priority, billboard)
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	parent.add_child(mi)
 	return mi
 
@@ -799,10 +831,6 @@ func _apply_bar_segment(fill: MeshInstance3D, start_ratio: float, width_ratio: f
 
 
 func _update_hp_bar() -> void:
-	if _hp_root:
-		_face_camera(_hp_root, global_position + Vector3(0, height + 0.62, 0))
-	if _feet_root:
-		_face_camera(_feet_root, _feet_bar_world())
 	if _bar == null and _nameplate == null:
 		return
 	_refresh_dodge_clock()
@@ -873,21 +901,24 @@ func _update_hp_bar() -> void:
 func current_move_speed() -> float:
 	if is_stunned():
 		return 0.0
-	var spd := move_speed * MOVE_SPEED_SCALE
+	var spd := move_speed
 	if _haste_left > 0.0:
 		spd *= 1.0 + _haste_percent
 	if shield_amount() > 0.05:
 		spd *= 1.0 + SHIELD_MOVE_SPEED
-	if _chill_percent > 0.0:
-		spd *= 1.0 - clampf(_chill_percent, 0.0, 1.0)
+	if _chill_stacks > 0 or _spread_chill > 0:
+		spd *= 1.0 - clampf(float(_effective_chill_stacks()) * EnemyRank.slow_per_stack(), 0.0, 0.9)
 	if _slow_left > 0.0:
 		spd *= 1.0 - _slow_percent
 	if _nature_hedge_left > 0.0:
 		spd *= 1.0 - clampf(CombatBalance.pct("wall.nature.slow"), 0.0, 0.9)
+	var seed_cut := UnitEnemyAlter.snare_cut(self)
+	if seed_cut > 0.0:
+		spd *= 1.0 - seed_cut
 	if is_protection_hold():
-		spd *= 1.0 - clampf(CombatBalance.pct("wall.protection.slow"), 0.0, 0.9)
-	if _on_frost_trail:
-		spd *= 1.0 + ALTERED_ICE_SPEED
+		spd *= 1.0 - clampf(TalentCombat.protection_hold_slow(self), 0.0, 0.9)
+	if altered.on_frost_trail:
+		spd *= 1.0 + UnitAltered.ICE_SPEED
 	return spd
 
 
@@ -897,6 +928,15 @@ func apply_slow(percent: float, duration: float) -> void:
 	_slow_percent = maxf(_slow_percent, percent) if _slow_left > 0.0 else percent
 	_slow_left = maxf(_slow_left, duration)
 	_slow_max = maxf(_slow_max, duration)
+
+
+func apply_rooted(duration: float) -> void:
+	if duration <= 0.05:
+		return
+	if _talent_hooks == null:
+		_talent_hooks = TalentHooks.new()
+	_talent_hooks.rooted_left = maxf(_talent_hooks.rooted_left, duration)
+	apply_slow(0.70, duration)
 
 
 func refresh_nature_hedge_slow() -> void:
@@ -1037,8 +1077,11 @@ func can_prepare_cast(index: int) -> bool:
 		return false
 	if _aura_infusion_blocked(abilities[index]):
 		return false
-	if not GameSession.ignores_cooldowns() and cooldown_left[index] > 0.0 and not has_recast_ready(index):
+	if TalentCombat.undertow_empty(self, abilities[index]):
 		return false
+	if not GameSession.ignores_cooldowns() and cooldown_left[index] > 0.0 and not has_recast_ready(index):
+		if not TalentCombat.allows_undertow_cast(self, abilities[index]):
+			return false
 	if GameSession.has_infinite_mana():
 		return true
 	return mana >= mana_cost_for(index)
@@ -1064,6 +1107,11 @@ func trigger_global_cooldown(index: int) -> void:
 	_gcd_from_exempt = abilities[index].gcd_exempt
 
 
+func clear_global_cooldown() -> void:
+	global_cooldown_left = 0.0
+	_gcd_from_exempt = false
+
+
 func gcd_duration() -> float:
 	return maxf(GLOBAL_COOLDOWN * cast_time_scale(), 0.05)
 
@@ -1087,6 +1135,9 @@ func can_dodge() -> bool:
 		return false
 	if is_dodging():
 		return false
+	var hooks := talent_hooks()
+	if hooks != null and hooks.rooted_left > 0.05:
+		return false
 	return true
 
 
@@ -1096,12 +1147,27 @@ func try_dodge(dir: Vector3) -> bool:
 	var flat := Vector3(dir.x, 0.0, dir.z)
 	if flat.length_squared() < 0.04:
 		flat = facing_dir()
-	dodge_cooldown_left = DODGE_COOLDOWN
-	movement.start_dodge(flat, DODGE_DISTANCE, DODGE_DURATION)
-	var vis := get_node_or_null("CharacterVisual")
-	if vis and vis.has_method("play_dodge"):
-		vis.call("play_dodge", DODGE_DURATION)
+	var dist := TalentCombat.dodge_distance(self, DODGE_DISTANCE)
+	dodge_cooldown_left = TalentCombat.dodge_cooldown(self, DODGE_COOLDOWN)
+	# Default for every class is a 0.4s roll. Only a talent that replaces dodge
+	# (currently Wraithfire) may blink. Lunge still rolls; Worldroot blocks dodge.
+	if TalentCombat.dodge_is_blink(self):
+		_wraithfire_pending = true
+		movement.blink_to(flat, dist)
+		return true
+	_wraithfire_pending = false
+	movement.start_dodge(flat, dist, DODGE_DURATION)
+	var vis := get_node_or_null("CharacterVisual") as CharacterVisual
+	if vis != null:
+		vis.play_dodge(DODGE_DURATION)
 	return true
+
+
+func on_dodge_landed() -> void:
+	if not _wraithfire_pending:
+		return
+	_wraithfire_pending = false
+	TalentCombat.wraithfire_nova(self)
 
 
 func mana_cost_for(index: int) -> float:
@@ -1311,28 +1377,29 @@ func collect_buffs() -> Array[Dictionary]:
 		out.append(_slow_status_entry())
 	if not _burn_layers.is_empty():
 		out.append(_burn_status_entry())
-	if _combust_left > 0.05:
-		out.append(_combust_status_entry())
 	if _rejuv_stacks > 0:
 		out.append(_rejuv_status_entry())
+	if _lifebloom_left > 0.05:
+		out.append(_lifebloom_status_entry())
+	if _stormbond_left > 0.05:
+		out.append(_stormbond_status_entry())
+	_append_storm_druid_buffs(out)
 	if _recast_left > 0.05 and _recast_index >= 0 and _recast_index < abilities.size():
 		var recast_ab := abilities[_recast_index]
 		var portal := recast_ab.delivery == AbilityDef.Delivery.WALL and SpellWallLayout.style_id(recast_ab) == "illusion"
-		var portal_moves := _SpellWall.outlet_moves_left(self) if portal else 0
-		var portal_text := "Recast to place the exit portal."
-		if portal and portal_moves > 0:
-			portal_text = "Recast to move the exit portal (%d left)." % portal_moves
 		out.append({
-			"id": "encore",
-			"icon": "encore",
-			"name": "Portal" if portal else "Encore",
+			"id": "recast",
+			"icon": "recast",
+			"name": "Portal" if portal else "Recast",
 			"color": Color(0.95, 0.62, 0.88) if portal else Color(0.95, 0.82, 0.45),
 			"time_left": _recast_left,
 			"duration": maxf(recast_ab.recast_window, _recast_left),
-			"badge": ("%d" % portal_moves) if portal and portal_moves > 0 else "",
+			"badge": ("%d" % _ashen_absorbed) if recast_ab.skill_id == "ashen_wake" and _ashen_absorbed > 0 else "",
 			"description": (
-				portal_text
+				"Recast to place the exit portal, then aim its direction."
 				if portal
+				else "Recast: dash again and release absorbed Afflict as Burn on units you pass through (400 stacks/target)."
+				if recast_ab.skill_id == "ashen_wake"
 				else "Recast %s instantly at %d%% damage." % [recast_ab.display_name, int(round(recast_ab.recast_damage_mult * 100.0))]
 			),
 		})
@@ -1364,50 +1431,50 @@ func collect_buffs() -> Array[Dictionary]:
 			"badge": "%d%%" % int(round(_blessing_dr * 100.0)),
 			"description": "Take %d%% less damage." % int(round(_blessing_dr * 100.0)),
 		})
-	if _altered_fire_left > 0.05:
+	if altered.fire_left > 0.05:
 		out.append({
 			"id": "altered_fire",
 			"icon": "altered_fire",
 			"name": "Altered Fire",
 			"color": Color(1.0, 0.45, 0.12),
-			"time_left": _altered_fire_left,
-			"duration": ALTERED_BUFF_TIME,
+			"time_left": altered.fire_left,
+			"duration": UnitAltered.BUFF_TIME,
 			"description": "Spells deal +10% damage (+20% if fire-infused). 30% fire resistance.",
 		})
-	if _altered_ice_left > 0.05:
+	if altered.ice_left > 0.05:
 		out.append({
 			"id": "altered_ice",
 			"icon": "altered_ice",
 			"name": "Altered Ice",
 			"color": Color(0.45, 0.82, 1.0),
-			"time_left": _altered_ice_left,
-			"duration": ALTERED_BUFF_TIME,
+			"time_left": altered.ice_left,
+			"duration": UnitAltered.BUFF_TIME,
 			"description": "Leaves a frost trail. +30% move speed on it. 30% ice resistance.",
 		})
-	if _altered_storm_left > 0.05:
+	if altered.storm_left > 0.05:
 		out.append({
 			"id": "altered_lightning",
 			"icon": "altered_lightning",
 			"name": "Altered Lightning",
 			"color": Color(0.78, 0.68, 1.0),
-			"time_left": _altered_storm_left,
-			"duration": ALTERED_BUFF_TIME,
+			"time_left": altered.storm_left,
+			"duration": UnitAltered.BUFF_TIME,
 			"description": "Chains lightning every 0.25s. 20% less damage each bounce. 30% lightning resistance.",
 		})
-	if _altered_shadow_left > 0.05:
+	if altered.shadow_left > 0.05:
 		out.append({
 			"id": "altered_shadow",
 			"icon": "altered_shadow",
 			"name": "Shadow Pact",
 			"color": Color(0.62, 0.28, 0.82),
-			"time_left": _altered_shadow_left,
-			"duration": ALTERED_BUFF_TIME,
-			"stacks": _altered_shadow_stacks,
-			"badge": str(_altered_shadow_stacks),
+			"time_left": altered.shadow_left,
+			"duration": UnitAltered.BUFF_TIME,
+			"stacks": altered.shadow_stacks,
+			"badge": str(altered.shadow_stacks),
 			"description": "Pact DoT (%d/%d). +%d%% damage dealt. 30%% shadow resist (not vs the pact)." % [
-				_altered_shadow_stacks,
-				ALTERED_SHADOW_MAX,
-				int(round(ALTERED_SHADOW_DAMAGE * 100.0 * float(_altered_shadow_stacks) / float(ALTERED_SHADOW_MAX))),
+				altered.shadow_stacks,
+				UnitAltered.SHADOW_MAX,
+				int(round(UnitAltered.SHADOW_DAMAGE * 100.0 * float(altered.shadow_stacks) / float(UnitAltered.SHADOW_MAX))),
 			],
 		})
 	return out
@@ -1415,17 +1482,12 @@ func collect_buffs() -> Array[Dictionary]:
 
 func collect_debuffs() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	var umbral := _umbral_status_entry()
-	if not umbral.is_empty():
-		out.append(umbral)
 	if _stun_left > 0.05:
 		out.append(_frozen_status_entry())
 	elif _pending_freeze:
 		out.append(_pending_freeze_status_entry())
 	if not _burn_layers.is_empty():
 		out.append(_burn_status_entry())
-	if _combust_left > 0.05:
-		out.append(_combust_status_entry())
 	if _freeze_immune_left > 0.05 and _stun_left <= 0.05:
 		out.append({
 			"id": "freeze_immune",
@@ -1433,19 +1495,29 @@ func collect_debuffs() -> Array[Dictionary]:
 			"name": "Freeze Immune",
 			"color": Color(0.62, 0.78, 0.88),
 			"time_left": _freeze_immune_left,
-			"duration": FREEZE_IMMUNE_TIME,
+			"duration": EnemyRank.freeze_immune_time(combat_rank()),
 			"description": "Cannot be frozen. Chill can still stack.",
 		})
-	if _chill_percent > 0.001:
+	if _chill_stacks > 0 or _spread_chill > 0:
+		var shown := _effective_chill_stacks()
+		var slow_pct := int(round(float(shown) * EnemyRank.slow_per_stack() * 100.0))
 		out.append({
 			"id": "chilled",
 			"icon": "chilled",
 			"name": "Chilled",
 			"color": Color(0.45, 0.82, 1.0),
-			"time_left": _chill_left,
+			"time_left": maxf(_chill_left, _spread_chill_left),
 			"duration": MARK_TIME,
-			"badge": "%d%%" % int(round(_chill_percent * 100.0)),
-			"description": "Slowed by %d%%. Lasts %ss without ice. Freeze at 100%% for %ss." % [int(round(_chill_percent * 100.0)), str(MARK_TIME), str(FREEZE_TIME)],
+			"stacks": shown,
+			"badge": str(shown),
+			"description": "Slowed by %d%% (%d/%d). Lasts %ss without ice. Freeze at %d stacks for %ss (ice Chill only). Shock chains copy Chill scaled by Charge; the copy refreshes, it does not stack." % [
+				slow_pct,
+				shown,
+				EnemyRank.stack_max(),
+				str(MARK_TIME),
+				EnemyRank.stack_max(),
+				str(FREEZE_TIME),
+			],
 		})
 	if _charged_stacks > 0:
 		out.append({
@@ -1456,12 +1528,29 @@ func collect_debuffs() -> Array[Dictionary]:
 			"time_left": _mark_storm,
 			"duration": SHOCK_TIME,
 			"stacks": _charged_stacks,
-			"description": "Hits chain lightning to this target and nearby enemies (%d%% of the hit). 20%% less each bounce. Chain does not apply Shock." % int(round(_shock_chain_ratio() * 100.0)),
+			"badge": "%d/%d" % [_charged_stacks, shock_stack_max()],
+			"description": "Charge %d/%d. Lightning hits add 1 stack (2 on a crit). Hits chain lightning (%d%% of the hit now, 20%% at 100 Charge). 20%% less each bounce. Chain does not apply Shock. Higher Charge copies more Burn, Chill, and Afflict to hops. Copies refresh; they do not stack." % [
+				_charged_stacks,
+				shock_stack_max(),
+				int(round(_shock_chain_ratio() * 100.0)),
+			],
 		})
-	if _afflict_stacks > 0:
+	if _afflict_stacks > 0 or _spread_afflict > 0:
 		out.append(_afflict_status_entry())
+	if _seed_stacks > 0 and _seed_left > 0.05:
+		out.append(_seeded_status_entry())
+	if _judged_stacks > 0 and _judged_left > 0.05:
+		out.append(_judged_status_entry())
+	if _sunder_stacks > 0 and _sunder_left > 0.05:
+		out.append(_sundered_status_entry())
+	if _judgment_brand > 0:
+		out.append(_solar_brand_status_entry())
+	if _singe_stacks > 0 and _singe_left > 0.05:
+		out.append(_singe_status_entry())
+	if _scorch_left > 0.05:
+		out.append(_scorch_status_entry())
 	if is_protection_hold():
-		var slow := CombatBalance.pct("wall.protection.slow")
+		var slow := TalentCombat.protection_hold_slow(self)
 		var left := controller.channel_time_left() if controller != null else 0.0
 		var hold := 4.0
 		if controller != null:
@@ -1484,35 +1573,7 @@ func collect_debuffs() -> Array[Dictionary]:
 
 
 func collect_nameplate_debuffs() -> Array[Dictionary]:
-	# Shared left-to-right order for nameplates, target frames, and the boss frame.
-	var want := PackedStringArray([
-		"frozen", "frozen_pending", "burn", "chilled", "shocked", "afflicted",
-		"combust", "slow", "freeze_immune", "umbral",
-	])
-	var by_id := {}
-	for d in collect_debuffs():
-		by_id[String(d.get("id", ""))] = d
-	var out: Array[Dictionary] = []
-	var seen := {}
-	for id in want:
-		if by_id.has(id):
-			out.append(by_id[id])
-			seen[id] = true
-	for d in collect_debuffs():
-		var id := String(d.get("id", ""))
-		if id.is_empty() or seen.has(id):
-			continue
-		out.append(d)
-	return out
-
-
-func umbral_taken_bonus() -> float:
-	if not is_boss:
-		return 0.0
-	var arena := ArenaState.arena as Arena
-	if arena == null or not arena.umbral_shadow:
-		return 0.0
-	return arena.umbral_damage_taken_bonus(global_position)
+	return UnitStatusSnapshots.nameplate_debuffs(self)
 
 
 func _slow_status_entry() -> Dictionary:
@@ -1528,18 +1589,47 @@ func _slow_status_entry() -> Dictionary:
 	}
 
 
-func _umbral_status_entry() -> Dictionary:
-	var bonus := umbral_taken_bonus()
-	if bonus < 0.015:
-		return {}
-	var pct := int(round(bonus * 100.0))
+func _solar_brand_status_entry() -> Dictionary:
+	var extra := float(_judgment_brand) * CombatBalance.pct("dawnwarden.judgment.brand") * 100.0
 	return {
-		"id": "umbral",
-		"icon": "umbral",
-		"name": "Umbral",
-		"color": Color(0.38, 0.48, 0.92),
-		"badge": "%d%%" % pct,
-		"description": "Takes more damage closer to the center of the shadow.",
+		"id": "solar_brand",
+		"icon": "solar_brand",
+		"name": "Solar Brand",
+		"color": Color(1.0, 0.55, 0.12),
+		"stacks": _judgment_brand,
+		"badge": str(_judgment_brand),
+		"description": "Takes +%.1f%% damage (0.5%% per stack, no cap). Lasts the whole fight." % extra,
+	}
+
+
+func _singe_status_entry() -> Dictionary:
+	return {
+		"id": "singe",
+		"icon": "singe",
+		"name": "Singe",
+		"color": Color(1.0, 0.55, 0.16),
+		"time_left": _singe_left,
+		"duration": TalentCombat.SINGE_DURATION,
+		"stacks": _singe_stacks,
+		"badge": "%d/%d" % [_singe_stacks, TalentCombat.SINGE_CAP],
+		"description": "Fire mark %d/%d. At 3 stacks, Burst / Nova / Meteor / Pyre detonates it (Bolt / Missiles / Ray too at Singe 2+)." % [
+			_singe_stacks,
+			TalentCombat.SINGE_CAP,
+		],
+	}
+
+
+func _scorch_status_entry() -> Dictionary:
+	var snare := int(round(_scorch_snare * 100.0))
+	return {
+		"id": "scorch",
+		"icon": "scorch",
+		"name": "Scorched",
+		"color": Color(0.92, 0.38, 0.08),
+		"time_left": _scorch_left,
+		"duration": TalentCombat.SCORCH_DURATION,
+		"badge": "%d%%" % snare,
+		"description": "Slowed %d%%. Fire hits store extra Burn. Lasts %ss." % [snare, str(TalentCombat.SCORCH_DURATION)],
 	}
 
 
@@ -1552,7 +1642,7 @@ func _frozen_status_entry() -> Dictionary:
 		"color": Color(0.62, 0.9, 1.0),
 		"time_left": _stun_left,
 		"duration": dur,
-		"description": "Cannot move, attack, or cast for %ss.\nA Fire hit Shatters this for double damage." % str(FREEZE_TIME),
+		"description": "Cannot move, attack, or cast for %ss.\nFire or Shadow damage can Shatter. The larger contributor decides a Fire Shatter or a Shadow Shatter." % str(FREEZE_TIME),
 	}
 
 
@@ -1582,39 +1672,72 @@ func _burn_status_entry() -> Dictionary:
 		"time_left": _burn_time_left(),
 		"duration": BURN_DURATION,
 		"badge": _burn_tick_badge(tick),
-		"description": "Stores 50%% of Fire hits as damage over %ss." % str(BURN_DURATION),
-	}
-
-
-func _combust_status_entry() -> Dictionary:
-	return {
-		"id": "combust",
-		"icon": "combust",
-		"name": "Combust",
-		"color": Color(1.0, 0.28, 0.05),
-		"time_left": _combust_left,
-		"duration": maxf(_combust_max, _combust_left),
-		"badge": _burn_tick_badge(_combust_tick),
-		"description": "A violent Burn from Meteor or Burst.",
+		"description": "Stores 50%% of Fire hits as damage over %ss. Shock chains copy remaining Fire Burn scaled by Charge (short tick, not the full layer). The copy refreshes; it does not stack, and it cannot chain again." % str(BURN_DURATION),
 	}
 
 
 func _afflict_status_entry() -> Dictionary:
-	var amp := _afflict_stacks >= AFFLICT_STACK_MAX
 	return {
 		"id": "afflicted",
 		"icon": "afflicted",
 		"name": "Afflicted",
 		"color": Color(0.62, 0.32, 0.82),
-		"time_left": _afflict_left,
+		"time_left": maxf(_afflict_left, _spread_afflict_left),
 		"duration": AFFLICT_DURATION,
-		"stacks": _afflict_stacks,
-		"badge": "%d" % _afflict_stacks,
-		"description": "1 damage per stack each second (%d/%d). Shadow hits add 1 stack.%s" % [
-			_afflict_stacks,
-			AFFLICT_STACK_MAX,
-			" Takes 20% more damage." if amp else "",
+		"stacks": _afflict_display_stacks(),
+		"badge": "%d" % _afflict_display_stacks(),
+		"description": "1 damage per 4 stacks each second (%d/%d). Shadow hits add 1 stack (2 on a crit). Shock chains copy Afflict scaled by Charge; the copy refreshes, it does not stack. A Shadow Shatter copies a slice of stacks to nearby enemies." % [
+			_afflict_display_stacks(),
+			afflict_stack_max(),
 		],
+	}
+
+
+func _seeded_status_entry() -> Dictionary:
+	var snare := int(round(UnitEnemyAlter.snare_cut(self) * 100.0))
+	var cap := UnitEnemyAlter.seed_max()
+	return {
+		"id": "seeded",
+		"icon": "seeded",
+		"name": "Seeded",
+		"color": Color(0.42, 0.88, 0.42),
+		"time_left": _seed_left,
+		"duration": UnitEnemyAlter.buff_time(),
+		"stacks": _seed_stacks,
+		"badge": "%d/%d" % [_seed_stacks, cap],
+		"description": "Slowed %d%%. Fire spends one seed for a splash. At %d seeds, the next Nature hit blooms." % [snare, cap],
+	}
+
+
+func _judged_status_entry() -> Dictionary:
+	var taken := int(round(CombatBalance.pct("altered.divine.taken") * 100.0 * float(_judged_stacks)))
+	var div := int(round(CombatBalance.flat("altered.divine.mend_div")))
+	return {
+		"id": "judged",
+		"icon": "judged",
+		"name": "Judged",
+		"color": Color(1.0, 0.86, 0.38),
+		"time_left": _judged_left,
+		"duration": UnitEnemyAlter.buff_time(),
+		"stacks": _judged_stacks,
+		"badge": str(_judged_stacks),
+		"description": "Divine hits deal +%d%%. Damage heals the lowest-HP nearby ally (hit / %d × stacks)." % [taken, div],
+	}
+
+
+func _sundered_status_entry() -> Dictionary:
+	var cut := int(round(CombatBalance.pct("altered.protection.out") * 100.0 * float(_sunder_stacks)))
+	var brk := int(round(CombatBalance.pct("altered.protection.break") * 100.0))
+	return {
+		"id": "sundered",
+		"icon": "sundered",
+		"name": "Sundered",
+		"color": Color(0.78, 0.86, 1.0),
+		"time_left": _sunder_left,
+		"duration": UnitEnemyAlter.buff_time(),
+		"stacks": _sunder_stacks,
+		"badge": str(_sunder_stacks),
+		"description": "Deals %d%% less damage. Hitting a shield breaks a stack and returns %d%% of the absorbed hit." % [cut, brk],
 	}
 
 
@@ -1629,12 +1752,83 @@ func _rejuv_status_entry() -> Dictionary:
 		"duration": REJUV_DURATION,
 		"stacks": _rejuv_stacks,
 		"badge": "%d" % _rejuv_stacks,
-		"description": "+%d HPS per stack (%d/%d). New nature heals add a stack and refresh the duration." % [
+		"description": "+%d HPS per stack (%d/%d). New nature heals add a stack (2 on a crit) and refresh the duration." % [
 			int(round(hps)),
 			_rejuv_stacks,
 			REJUV_STACK_MAX,
 		],
 	}
+
+
+func _lifebloom_status_entry() -> Dictionary:
+	return {
+		"id": "lifebloom",
+		"icon": "lifebloom",
+		"name": "Lifebloom",
+		"color": Color(0.55, 1.0, 0.42),
+		"time_left": _lifebloom_left,
+		"duration": maxf(_lifebloom_max, _lifebloom_left),
+		"badge": str(int(round(_lifebloom_hps))),
+		"description": "+%d HPS. Blooms when it expires or is consumed." % int(round(_lifebloom_hps)),
+	}
+
+
+func _stormbond_status_entry() -> Dictionary:
+	return {
+		"id": "stormbond",
+		"icon": "stormbond",
+		"name": "Stormbond",
+		"color": Color(0.55, 0.78, 1.0),
+		"time_left": _stormbond_left,
+		"duration": 8.0,
+		"description": "Receives this caster's nature atonement pulse.",
+	}
+
+
+func _append_storm_druid_buffs(out: Array[Dictionary]) -> void:
+	var hooks := talent_hooks()
+	if hooks == null:
+		return
+	if hooks.drought_left > 0.05:
+		out.append({
+			"id": "drought",
+			"icon": "drought",
+			"name": "Drought",
+			"color": Color(0.55, 0.42, 0.18),
+			"time_left": hooks.drought_left,
+			"duration": 4.0,
+			"description": "Your nature crafts do not apply Rejuvenation." if not hooks.drought_rejuv_only else "Rejuvenation applications are suppressed.",
+		})
+	if hooks.rooted_left > 0.05:
+		out.append({
+			"id": "rooted",
+			"icon": "rooted",
+			"name": "Rooted",
+			"color": Color(0.28, 0.48, 0.22),
+			"time_left": hooks.rooted_left,
+			"duration": 6.0,
+			"description": "Cannot dodge. 70% slow. Knockback immune.",
+		})
+	if hooks.tempest_bloom_left > 0.05:
+		out.append({
+			"id": "tempest_bloom",
+			"icon": "lightning",
+			"name": "Tempest Bloom",
+			"color": Color(0.55, 0.72, 0.95),
+			"time_left": hooks.tempest_bloom_left,
+			"duration": 8.0,
+			"description": "Lightning heals. Nature crafts shock.",
+		})
+	if hooks.eye_storm_left > 0.05:
+		out.append({
+			"id": "storm_cloud",
+			"icon": "lightning",
+			"name": "Eye of the Storm",
+			"color": Color(0.78, 0.68, 1.0),
+			"time_left": hooks.eye_storm_left,
+			"duration": 8.0,
+			"description": "Storm cloud. Cannot apply Rejuvenation.",
+		})
 
 
 func _burn_tick_badge(tick: float) -> String:
@@ -1699,17 +1893,36 @@ func dismiss_buff(id: String) -> bool:
 		"burn":
 			_clear_burn()
 			return true
-		"combust":
-			_clear_combust()
-			return true
 		"afflicted":
 			_clear_afflict()
+			return true
+		"seeded":
+			UnitEnemyAlter.clear_seeded(self)
+			return true
+		"judged":
+			UnitEnemyAlter.clear_judged(self)
+			return true
+		"sundered":
+			UnitEnemyAlter.clear_sundered(self)
+			return true
+		"singe":
+			_clear_singe()
+			return true
+		"scorch":
+			clear_scorch()
 			return true
 		"rejuvenation":
 			_clear_rejuv()
 			return true
-		"encore":
-			_clear_recast()
+		"lifebloom":
+			clear_lifebloom(false)
+			return true
+		"stormbond":
+			_stormbond_left = 0.0
+			_stormbond_src = null
+			return true
+		"encore", "recast":
+			_expire_recast()
 			return true
 		"holy_blessing":
 			_blessing_dr = 0.0
@@ -1717,14 +1930,14 @@ func dismiss_buff(id: String) -> bool:
 			_blessing_max = 0.0
 			return true
 		"altered_fire":
-			_altered_fire_left = 0.0
+			altered.fire_left = 0.0
 			return true
 		"altered_ice":
 			_clear_altered_ice()
 			return true
 		"altered_lightning":
-			_altered_storm_left = 0.0
-			_altered_storm_acc = 0.0
+			altered.storm_left = 0.0
+			altered.storm_acc = 0.0
 			return true
 		"altered_shadow":
 			_clear_altered_shadow()
@@ -1914,15 +2127,30 @@ func _arm_recast(index: int, window: float) -> void:
 	_recast_left = maxf(window, 0.05)
 
 
-func _arm_illusion_portal_recast(window: float) -> void:
-	if _illusion_wall_slot < 0 or _illusion_wall_slot >= abilities.size():
-		return
-	_arm_recast(_illusion_wall_slot, window)
+func set_illusion_exit_dir(dir: Vector3) -> void:
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length_squared() < 0.0001:
+		flat = facing_dir()
+	if flat.length_squared() < 0.0001:
+		_illusion_exit_dir = Vector3(0, 0, -1)
+	else:
+		_illusion_exit_dir = flat.normalized()
+
+
+func take_illusion_exit_dir() -> Vector3:
+	var dir := _illusion_exit_dir
+	_illusion_exit_dir = Vector3.ZERO
+	return dir
 
 
 func _clear_recast() -> void:
 	_recast_index = -1
 	_recast_left = 0.0
+
+
+func _expire_recast() -> void:
+	_clear_recast()
+	clear_ashen_absorbed()
 
 
 func has_aura(index: int = -1) -> bool:
@@ -1936,8 +2164,8 @@ func toggle_aura(index: int, target: Unit = null) -> void:
 	if index < 0 or index >= abilities.size():
 		return
 	if has_aura(index):
-		stop_aura(index)
-		apply_cooldown(index, 1.0)
+		stop_aura(index, true)
+		apply_cooldown(index)
 		return
 	var ab := abilities[index]
 	if _aura_infusion_blocked(ab):
@@ -1945,8 +2173,7 @@ func toggle_aura(index: int, target: Unit = null) -> void:
 	if not can_prepare_cast(index):
 		return
 	_cast_power = 1.0
-	if not _try_consume_free_cast():
-		apply_cooldown(index, 1.0)
+	_try_consume_free_cast()
 	var extras := _cast_extras(ab)
 	var ice_id := _begin_ice_overheat_cast(ab, extras)
 	var combat_text_cast_id := _DamageNumber.begin_cast()
@@ -1960,20 +2187,26 @@ func toggle_aura(index: int, target: Unit = null) -> void:
 	_apply_ally_and_self(help, ab, false)
 
 
-func stop_aura(index: int = -1) -> void:
+func stop_aura(index: int = -1, detonate: bool = false) -> void:
 	_prune_auras()
 	if index < 0:
 		for slot in _auras.keys():
-			var node = _auras[slot]
-			if is_instance_valid(node):
-				node.queue_free()
+			_release_aura_node(_auras[slot], false)
 		_auras.clear()
 		return
 	if not _auras.has(index):
 		return
 	var node = _auras[index]
 	_auras.erase(index)
-	if is_instance_valid(node):
+	_release_aura_node(node, detonate)
+
+
+func _release_aura_node(node, detonate: bool) -> void:
+	if not is_instance_valid(node):
+		return
+	if node is SpellAura:
+		(node as SpellAura).release(detonate)
+	else:
 		node.queue_free()
 
 
@@ -2017,10 +2250,10 @@ func _aura_infusion_blocked(ab: AbilityDef) -> bool:
 
 
 func _clear_spell_ray() -> void:
-	if is_instance_valid(_spell_ray):
-		_spell_ray.queue_free()
-	_spell_ray = null
-	_clear_illusion_rays()
+	for ray in _spell_rays:
+		if is_instance_valid(ray):
+			ray.queue_free()
+	_spell_rays.clear()
 	_illusion_missile_extras.clear()
 
 
@@ -2071,7 +2304,9 @@ func roll_spell_crit(ability_id: String) -> bool:
 	return roll_ability_crit(_ability_def(ability_id))
 
 
-func roll_ability_crit(ab: AbilityDef) -> bool:
+func roll_ability_crit(ab: AbilityDef, victim: Unit = null) -> bool:
+	if TalentCombat.always_crit(self, victim, ab):
+		return true
 	if ab == null or ab.crit_chance <= 0.0:
 		return false
 	return randf() < ab.crit_chance
@@ -2121,6 +2356,8 @@ func apply_cooldown(index: int, factor: float = 1.0) -> void:
 		_cooldown_max[index] = 0.0
 		return
 	var dur := abilities[index].cooldown * factor
+	if TalentCombat.consume_undertow_charge(self, abilities[index]):
+		dur = 0.0
 	cooldown_left[index] = dur
 	_cooldown_max[index] = dur
 
@@ -2138,6 +2375,54 @@ func reduce_all_cooldowns(amount: float) -> void:
 		return
 	for i in cooldown_left.size():
 		cooldown_left[i] = maxf(0.0, cooldown_left[i] - amount)
+
+
+func reduce_ability_cooldown(index: int, amount: float) -> void:
+	if amount <= 0.0 or is_dead or index < 0 or index >= cooldown_left.size():
+		return
+	cooldown_left[index] = maxf(0.0, cooldown_left[index] - amount)
+
+
+func apply_momentum_cooldown_refund(ab: AbilityDef, combat_text_cast_id: int, victim: Unit) -> void:
+	# One refund per unique victim per combat-text cast, including zone ticks.
+	# Total refund is capped at a fraction of compiled cooldown so cleave/pierce/volley cannot dump the whole CD.
+	if ab == null or ab.hit_cooldown_reduction <= 0.05 or is_dead:
+		return
+	if victim == null or not is_instance_valid(victim):
+		return
+	var key := combat_text_cast_id if combat_text_cast_id >= 0 else -ab.loadout_slot
+	var rec: Dictionary = _momentum_spent.get(key, {"refunded": 0.0, "mobs": {}})
+	var cap := ab.cooldown * ab.hit_cooldown_refund_cap
+	if cap <= 0.05:
+		return
+	var refunded := float(rec.get("refunded", 0.0))
+	var left := cap - refunded
+	if left <= 0.05:
+		return
+	var mobs: Dictionary = rec.get("mobs", {})
+	var vid := victim.get_instance_id()
+	if mobs.has(vid):
+		return
+	mobs[vid] = true
+	var amount := minf(ab.hit_cooldown_reduction, left)
+	rec["mobs"] = mobs
+	rec["refunded"] = refunded + amount
+	var was_new := not _momentum_spent.has(key)
+	_momentum_spent[key] = rec
+	if was_new and _momentum_spent.size() > 24:
+		var drop: Array = []
+		for k in _momentum_spent.keys():
+			if drop.size() >= 8:
+				break
+			drop.append(k)
+		for k in drop:
+			if k == key:
+				continue
+			_momentum_spent.erase(k)
+	var idx := ab.loadout_slot
+	if idx < 0:
+		idx = _ability_index_by_id(ab.combat_id())
+	reduce_ability_cooldown(idx, amount)
 
 
 func reduce_overheat_cooldown(amount: float = OVERHEAT_CD_REFUND) -> void:
@@ -2256,6 +2541,11 @@ func clamped_ground_point(point: Vector3, max_range: float) -> Vector3:
 	return wall_stop_point(dest, false)
 
 
+func clamped_skillshot_point(point: Vector3, ab: AbilityDef) -> Vector3:
+	var reach := ab.skillshot_reach() if ab != null else 12.0
+	return clamped_ground_point(point, reach)
+
+
 func wall_stop_point(to: Vector3, include_spell_walls: bool = true) -> Vector3:
 	var hit := _wall_ray_to(to, include_spell_walls)
 	if hit.is_empty():
@@ -2314,12 +2604,14 @@ func _wall_ray_to(to: Vector3, include_spell_walls: bool = true) -> Dictionary:
 	return hit
 
 
+func _dev_test_unkillable() -> bool:
+	return GameSession.dev_test_mode and team == TEAM_RAID and not is_structure
+
+
 func take_damage(amount: float, source = null, number_color: Color = Color(0, 0, 0, 0), hit_kind: String = "", ability_id: String = "", crit: bool = false, ignore_resist: bool = false, combat_text_cast_id: int = -1, combat_text_periodic: bool = false, combat_text_split: Dictionary = {}) -> void:
 	if not is_instance_valid(source):
 		source = null
 	if is_structure and host_wall != null and is_instance_valid(host_wall):
-		if _afflict_stacks >= AFFLICT_STACK_MAX:
-			amount *= 1.0 + CombatBalance.pct("afflict.taken")
 		host_wall.take_hit(amount, global_position, source as Unit, hit_kind, number_color, crit, combat_text_cast_id, combat_text_split)
 		if host_wall == null or not is_instance_valid(host_wall) or not host_wall.living:
 			if not is_dead:
@@ -2338,31 +2630,49 @@ func take_damage(amount: float, source = null, number_color: Color = Color(0, 0,
 		amount *= maxf(0.0, 1.0 - _resist_cut(hit_kind, ability_id))
 		if amount <= 0.0:
 			return
-	var umbral := umbral_taken_bonus()
-	if umbral > 0.0:
-		amount *= 1.0 + umbral
-	if _afflict_stacks >= AFFLICT_STACK_MAX:
-		amount *= 1.0 + CombatBalance.pct("afflict.taken")
+	if team == TEAM_RAID and _judgment_brand > 0:
+		amount *= judgment_brand_taken_mult()
 	if _dr_left > 0.0 and _dr_percent > 0.0:
 		amount *= maxf(0.0, 1.0 - _dr_percent)
 		if amount <= 0.0:
 			return
+	var talent_cut := TalentCombat.taken_cut(self, hit_kind)
+	var before_cut := amount
+	if talent_cut > 0.0:
+		amount *= maxf(0.0, 1.0 - talent_cut)
+		if amount <= 0.0:
+			TalentCombat.on_bodyguard_prevented(self, before_cut)
+			return
+		TalentCombat.on_bodyguard_prevented(self, before_cut - amount)
 	if _blessing_left > 0.0 and _blessing_dr > 0.0:
 		amount *= maxf(0.0, 1.0 - _blessing_dr)
 		if amount <= 0.0:
+			if ability_id != "intercede":
+				TalentCombat.on_taken_hit(self, src, 0.0, 0.0)
 			return
+	var absorbed := 0.0
 	if shield_amount() > 0.0:
+		var before_sh := amount
 		amount = _absorb_shield(amount)
+		absorbed = before_sh - amount
 		if amount <= 0.0:
+			if ability_id != "intercede":
+				TalentCombat.on_taken_hit(self, src, absorbed, 0.0)
+				UnitEnemyAlter.on_taken_hit(self, src, absorbed, absorbed, ability_id)
 			return
 	health = maxf(0.0, health - amount)
-	if immortal:
+	if immortal or _dev_test_unkillable():
 		health = maxf(1.0, health)
+	if ability_id != "intercede":
+		TalentCombat.on_taken_hit(self, src, absorbed, amount)
+		UnitEnemyAlter.on_taken_hit(self, src, amount + absorbed, absorbed, ability_id)
 	var spell := ability_id if not ability_id.is_empty() else hit_kind
 	damaged.emit(self, amount, source, spell)
 	_present_damage_text(amount, source, number_color, hit_kind, crit, spell, combat_text_cast_id, combat_text_periodic, combat_text_split)
 	if src != null:
 		src.apply_atonement(amount)
+	if _stun_left > 0.05:
+		_chew_shatter_from_dot(src, amount, hit_kind, combat_text_cast_id)
 	if health <= 0.0:
 		die()
 
@@ -2478,6 +2788,10 @@ func _hit_number_tint(kind: String) -> Color:
 func apply_heal(amount: float, source: Node3D = null, ability_id: String = "", combat_text_split: Dictionary = {}, combat_text_cast_id: int = -1, combat_text_periodic: bool = false, crit: bool = false, heal_kind: String = "") -> void:
 	if is_dead or amount <= 0.0:
 		return
+	var src_unit := source as Unit
+	amount *= TalentCombat.heal_out_mult(src_unit, ability_id)
+	amount *= TalentCombat.heal_taken_mult(self)
+	amount *= TalentCombat.nature_target_heal_mult(src_unit, self, ability_id)
 	var room := maxf(0.0, max_health - health)
 	var hp_heal := minf(room, amount)
 	if hp_heal > 0.0:
@@ -2566,21 +2880,7 @@ func _make_hover_frame(parent: Node3D, frame_name: String, camera_billboard: boo
 
 
 func _make_outline_frame(parent: Node3D, frame_name: String, camera_billboard: bool = true, overlay_priority: int = 10) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.name = frame_name
-	var quad := QuadMesh.new()
-	quad.size = Vector2(1, 1)
-	mi.mesh = quad
-	var mat := ShaderMaterial.new()
-	mat.shader = _HoverFrameShader
-	mat.set_shader_parameter("outline_color", _hover_color)
-	mat.set_shader_parameter("border", 0.02)
-	mat.set_shader_parameter("billboard", camera_billboard)
-	mat.render_priority = overlay_priority
-	mi.material_override = mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
-	mi.visible = false
+	var mi := WorldUiMesh.hover_frame(frame_name, _hover_color, 0.02, camera_billboard, overlay_priority)
 	parent.add_child(mi)
 	return mi
 
@@ -2602,18 +2902,7 @@ func _place_hover_frame(frame: MeshInstance3D, pos: Vector3, size: Vector2, show
 
 
 func _place_outline_frame(frame: MeshInstance3D, pos: Vector3, size: Vector2, shown: bool, color: Color, border: float) -> void:
-	if frame == null:
-		return
-	frame.visible = shown
-	if not shown:
-		return
-	frame.position = pos
-	frame.scale = Vector3(size.x, size.y, 1.0)
-	var mat := frame.material_override as ShaderMaterial
-	if mat:
-		mat.set_shader_parameter("outline_color", color)
-		mat.set_shader_parameter("quad_size", size)
-		mat.set_shader_parameter("border", border)
+	WorldUiMesh.place_hover_frame(frame, pos, size, shown, color, border)
 
 
 func _make_dodge_clock() -> void:
@@ -2648,8 +2937,9 @@ func _refresh_dodge_clock() -> void:
 	if _dodge_clock_mat == null:
 		return
 	var ratio := 0.0
-	if DODGE_COOLDOWN > 0.04:
-		ratio = clampf(dodge_cooldown_left / DODGE_COOLDOWN, 0.0, 1.0)
+	var cd := TalentCombat.dodge_cooldown(self, DODGE_COOLDOWN)
+	if cd > 0.04:
+		ratio = clampf(dodge_cooldown_left / cd, 0.0, 1.0)
 	_dodge_clock_mat.set_shader_parameter("progress", ratio)
 
 
@@ -2842,11 +3132,10 @@ func apply_atonement(dealt: float) -> void:
 	var heal_amt := dealt * atonement_ratio * (1.0 + _atonement_amp)
 	if heal_amt <= 0.05:
 		return
-	for other in ArenaState.units:
+	var teammates: Array = ArenaState.living_team(team)
+	for other in teammates:
 		var u := other as Unit
 		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
-		if u.team != team:
 			continue
 		if not u.has_ward_from(self):
 			continue
@@ -2868,9 +3157,11 @@ func _shield_grant_amount(ab: AbilityDef) -> float:
 func apply_spell_shield(target: Unit, ab: AbilityDef) -> void:
 	if target == null or ab == null or ab.shield <= 0.05:
 		return
-	var dur := _shield_duration_for(ab)
-	target.apply_shield(_shield_grant_amount(ab), dur, self, SpellPower.elements_for(ab))
+	var dur := _shield_duration_for(ab) + TalentCombat.shield_duration_bonus(self, target, ab)
+	var amt := _shield_grant_amount(ab) * TalentCombat.shield_out_mult(self, target)
+	target.apply_shield(amt, dur, self, SpellPower.elements_for(ab))
 	UnitWind.apply_shield_haste(target, ab, dur)
+	TalentCombat.on_shield_applied(self, target, ab)
 
 
 func _shield_status_text() -> String:
@@ -2933,13 +3224,11 @@ func _apply_ability_shields(ab: AbilityDef) -> void:
 	if rad <= 0.05:
 		apply_spell_shield(self, ab)
 		return
-	for other in ArenaState.units:
+	for other in ArenaState.units_near(global_position, rad, false, true):
 		var u := other as Unit
 		if u == null or not is_instance_valid(u) or u.is_dead:
 			continue
 		if u.team != team:
-			continue
-		if u.global_position.distance_to(global_position) > rad + u.radius:
 			continue
 		apply_spell_shield(u, ab)
 
@@ -2955,18 +3244,7 @@ func health_bar_span() -> float:
 	return maxf(max_health, health + shield_amount())
 
 
-func elemental_mark_count() -> int:
-	var n := 0
-	if _mark_fire > 0.0:
-		n += 1
-	if _mark_ice > 0.0:
-		n += 1
-	if _mark_storm > 0.0:
-		n += 1
-	return n
-
-
-func receive_ability_hit(source = null, element: int = AbilityDef.Element.NONE, damage: float = 0.0, mark_bonus: float = 0.0, extra_elements: PackedInt32Array = PackedInt32Array(), tick_hit: bool = false, grant_chill: bool = true, allow_reactions: bool = true, overheat_cast_id: int = -1, infusion_double: int = 0, ability_id: String = "", combat_text_cast_id: int = -1, combat_text_periodic: bool = false) -> void:
+func receive_ability_hit(source = null, element: int = AbilityDef.Element.NONE, damage: float = 0.0, _mark_bonus: float = 0.0, extra_elements: PackedInt32Array = PackedInt32Array(), tick_hit: bool = false, grant_chill: bool = true, _allow_reactions: bool = true, overheat_cast_id: int = -1, infusion_double: int = 0, ability_id: String = "", combat_text_cast_id: int = -1, combat_text_periodic: bool = false) -> void:
 	if not is_instance_valid(source):
 		source = null
 	if is_dead:
@@ -2974,36 +3252,24 @@ func receive_ability_hit(source = null, element: int = AbilityDef.Element.NONE, 
 	var ab := _spell_for_incoming_hit(source, ability_id, element, extra_elements)
 	if ab != null and not SpellPower.deals_enemy_damage(ab):
 		return
+	if source != null:
+		damage *= TalentCombat.hit_mult(source, self, element, extra_elements, tick_hit, ability_id)
+	if ab != null and ab.execute_health_frac > 0.05 and max_health > 0.05 and health / max_health <= ab.execute_health_frac:
+		damage *= ab.execute_damage_mult
 	var extras: Array[int] = []
 	for extra in extra_elements:
 		if extra != AbilityDef.Element.NONE and extra != element and not extras.has(extra):
 			extras.append(extra)
-	var marks_before := elemental_mark_count()
-	var had_fire := _mark_fire > 0.0
-	var had_ice := _mark_ice > 0.0
-	var had_storm := _mark_storm > 0.0
-	var can_freeze := true
 	var was_frozen := _stun_left > 0.0
-	var bonus := 0.0
 	if _element_applies_mark(element):
-		if tick_hit:
-			_apply_mark(element, source, false, grant_chill, infusion_double, false)
-		elif allow_reactions:
-			bonus += apply_elemental_hit(source, element, had_fire, had_ice, had_storm, infusion_double, can_freeze)
-		else:
-			_apply_mark(element, source, true, grant_chill, infusion_double, can_freeze)
+		_apply_mark(element, source, false if tick_hit else true, grant_chill, infusion_double, not tick_hit)
 	for extra in extras:
-		_apply_infusion_status(source, extra, true, false if tick_hit else grant_chill, infusion_double, can_freeze)
-	var shattered := not tick_hit and was_frozen and _hit_shatters_frozen(element, extras, infusion_double)
-	if shattered:
-		_reaction_flash(Color(1.0, 0.72, 0.22), 1.05)
-		_break_freeze()
-		AudioManager.play_at("reaction.shatter", global_position + Vector3(0.0, height * 0.45, 0.0))
+		_apply_infusion_status(source, extra, true, false if tick_hit else grant_chill, infusion_double, not tick_hit)
 	var crit := false
 	if source and not tick_hit and not AbilityDef.matches_base(ability_id, "shock_chain"):
-		crit = source.roll_ability_crit(ab)
+		crit = source.roll_ability_crit(ab, self)
 	var powered := SpellPower.packet(damage, ab, extra_elements, self, false, ability_id, crit, element)
-	var dealt := _final_spell_damage(powered, element, extras, had_storm, mark_bonus, marks_before, shattered, bonus)
+	var dealt := powered
 	if source:
 		source._refund_overheat_if_ice_hit(element, extra_elements, damage, tick_hit, grant_chill, overheat_cast_id)
 	var kind := _hit_number_kind(element, tick_hit)
@@ -3019,8 +3285,16 @@ func receive_ability_hit(source = null, element: int = AbilityDef.Element.NONE, 
 		else {}
 	)
 	take_damage(dealt, source, _hit_number_tint(kind), kind, spell, crit, true, combat_text_cast_id, combat_text_periodic or tick_hit, split)
-	if source and not tick_hit and _hit_carries_element(element, extras, AbilityDef.Element.NATURE):
-		source._pulse_rejuvenation(dealt)
+	if was_frozen:
+		_chew_shatter_from_hit(source, dealt, element, extras, infusion_double, ability_id, combat_text_cast_id)
+	if source and dealt > 0.05:
+		source.apply_momentum_cooldown_refund(ab, combat_text_cast_id, self)
+		if ab != null and ab.lifesteal > 0.05:
+			source.apply_heal(dealt * ab.lifesteal, source, ability_id)
+	if source and not tick_hit:
+		var pulse := _hit_carries_element(element, extras, AbilityDef.Element.NATURE) or TalentCombat.tempest_bloom_pulses(source, element, extras)
+		if pulse:
+			source._pulse_rejuvenation(dealt, crit_status_stacks(1, crit))
 	if is_dead:
 		return
 	if _hit_carries_fire(element, extras):
@@ -3030,79 +3304,101 @@ func receive_ability_hit(source = null, element: int = AbilityDef.Element.NONE, 
 	if _hit_carries_element(element, extras, AbilityDef.Element.ICE) and grant_chill:
 		apply_chill(dealt, source)
 	if _hit_carries_element(element, extras, AbilityDef.Element.STORM):
-		apply_shock(source)
-	if _hit_carries_element(element, extras, AbilityDef.Element.SHADOW):
-		apply_afflict(source)
-	if source != null and dealt > 0.05:
+		var shock_n := TalentCombat.shock_stacks_on_hit(source, ability_id, tick_hit)
+		if shock_n > 0:
+			apply_shock(source, crit_status_stacks(shock_n, crit))
+	if _hit_carries_element(element, extras, AbilityDef.Element.SHADOW) and not _is_shatter_pulse(ability_id):
+		apply_afflict_stacks(source, crit_status_stacks(1, crit))
+	UnitEnemyAlter.on_ability_hit(self, source, ab, element, extras, tick_hit, crit)
+	if source != null and dealt > 0.05 and not _is_shatter_pulse(ability_id):
 		_try_shock_chain(source, dealt)
-
-
-func apply_elemental_hit(source: Unit, kind: int, had_fire: bool = false, had_ice: bool = false, had_storm: bool = false, infusion_double: int = 0, can_freeze: bool = false) -> float:
-	if not _element_applies_mark(kind):
-		return 0.0
-	var extra := 0.0
-	if kind == AbilityDef.Element.STORM:
-		if had_ice:
-			extra += CombatBalance.scaled_hit("shatter")
-			_reaction_flash(Color(0.85, 0.95, 1.0), 0.7)
-			AudioManager.play_at("reaction.shatter", global_position + Vector3(0.0, height * 0.45, 0.0))
-	_apply_mark(kind, source, true, true, infusion_double, can_freeze)
-	var triple := _mark_fire > 0.0 and _mark_ice > 0.0 and _mark_storm > 0.0
-	if triple and not _had_triple:
-		extra += CombatBalance.scaled_hit("cataclysm")
-		_had_triple = true
-		_reaction_flash(Color(1.0, 0.55, 0.2), 1.15)
-		AbilityFx.play_at(AbilityFx.GROUND_EXPLOSION, global_position, {"scale": 0.85, "lifetime": 1.6})
-		AudioManager.play_at("reaction.cataclysm", global_position)
-	elif not triple:
-		_had_triple = false
-	return extra
-
-
-func _final_spell_damage(base: float, element: int, extras: Array, _had_storm: bool, mark_bonus: float, marks_before: int, shattered: bool, reaction_bonus: float) -> float:
-	var amount := base
-	if mark_bonus > 0.0:
-		amount *= 1.0 + mark_bonus * float(marks_before)
-	if shattered:
-		amount *= 2.0
-	return amount + reaction_bonus
-
-
-func _hit_is_fire_or_ice(element: int, extras: Array) -> bool:
-	if element == AbilityDef.Element.FIRE or element == AbilityDef.Element.ICE:
-		return true
-	for extra in extras:
-		if extra == AbilityDef.Element.FIRE or extra == AbilityDef.Element.ICE:
-			return true
-	return false
+	if source != null:
+		TalentCombat.on_ability_hit(source, self, ab, element, extras, dealt, tick_hit, crit, ability_id)
 
 
 func _hit_carries_fire(element: int, extras: Array) -> bool:
-	if element == AbilityDef.Element.FIRE:
-		return true
-	for extra in extras:
-		if extra == AbilityDef.Element.FIRE:
-			return true
-	return false
+	return _hit_carries_element(element, extras, AbilityDef.Element.FIRE)
 
 
 func _break_freeze() -> void:
-	if _stun_left <= 0.0:
-		return
+	_reset_shatter_shell()
 	_stun_left = 0.0
 	_stun_max = 0.0
 	_refresh_freeze_visual()
 
 
-func _hit_shatters_frozen(element: int, extras: Array, infusion_double: int) -> bool:
-	if element == AbilityDef.Element.FIRE:
-		return true
-	if (infusion_double & INFUSION_DOUBLE_FIRE) != 0:
-		return true
-	for extra in extras:
-		if extra == AbilityDef.Element.FIRE:
-			return true
-	return false
+func _reset_shatter_shell() -> void:
+	_shatter_fire_contrib = 0.0
+	_shatter_shadow_contrib = 0.0
+
+
+func _is_shatter_pulse(ability_id: String) -> bool:
+	return ability_id.begins_with("shatter")
+
+
+func _chew_shatter_from_dot(source: Unit, amount: float, hit_kind: String, combat_text_cast_id: int) -> void:
+	if amount <= 0.05:
+		return
+	if hit_kind == "burn":
+		_chew_shatter_shell(source, amount, 0.0, AbilityDef.Element.FIRE, combat_text_cast_id)
+	elif hit_kind == "afflicted":
+		_chew_shatter_shell(source, 0.0, amount, AbilityDef.Element.SHADOW, combat_text_cast_id)
+
+
+func _chew_shatter_from_hit(
+	source: Unit,
+	dealt: float,
+	element: int,
+	extras: Array,
+	infusion_double: int,
+	ability_id: String,
+	combat_text_cast_id: int
+) -> void:
+	if dealt <= 0.05 or _is_shatter_pulse(ability_id):
+		return
+	var fire_hit := _hit_carries_fire(element, extras) or (infusion_double & INFUSION_DOUBLE_FIRE) != 0
+	var shadow_hit := _hit_carries_element(element, extras, AbilityDef.Element.SHADOW)
+	if not fire_hit and not shadow_hit:
+		return
+	var fire_amt := 0.0
+	var shadow_amt := 0.0
+	if fire_hit and shadow_hit:
+		fire_amt = dealt * 0.5
+		shadow_amt = dealt * 0.5
+	elif fire_hit:
+		fire_amt = dealt
+	else:
+		shadow_amt = dealt
+	_chew_shatter_shell(source, fire_amt, shadow_amt, element, combat_text_cast_id)
+
+
+func _chew_shatter_shell(
+	source: Unit,
+	fire_amt: float,
+	shadow_amt: float,
+	primary_element: int,
+	combat_text_cast_id: int
+) -> void:
+	if fire_amt <= 0.0 and shadow_amt <= 0.0:
+		return
+	_shatter_fire_contrib += maxf(fire_amt, 0.0)
+	_shatter_shadow_contrib += maxf(shadow_amt, 0.0)
+	var shell := EnemyRank.shatter_shell(combat_rank())
+	if _shatter_fire_contrib + _shatter_shadow_contrib < shell:
+		return
+	var fire_c := _shatter_fire_contrib
+	var shadow_c := _shatter_shadow_contrib
+	var fire_wins := fire_c > shadow_c
+	if fire_c == shadow_c:
+		fire_wins = primary_element != AbilityDef.Element.SHADOW
+	_break_freeze()
+	if fire_wins:
+		_reaction_flash(Color(1.0, 0.72, 0.22), 1.05)
+	else:
+		_reaction_flash(Color(0.62, 0.32, 0.82), 1.05)
+	AudioManager.play_at("reaction.shatter", global_position + Vector3(0.0, height * 0.45, 0.0))
+	if source != null and is_instance_valid(source):
+		StatusReactions.on_shatter_break(self, source, fire_wins, fire_c, shadow_c, combat_text_cast_id)
 
 
 func _element_applies_mark(kind: int) -> bool:
@@ -3124,26 +3420,27 @@ func _hit_carries_element(element: int, extras: Array, want: int) -> bool:
 	return false
 
 
-func _pulse_rejuvenation(dealt: float) -> void:
+func _pulse_rejuvenation(dealt: float, stacks: int = 1) -> void:
 	if is_dead or dealt <= 0.0:
 		return
-	var amt := dealt * CombatBalance.pct("rejuvenation.pulse")
+	var amt := dealt * TalentCombat.pulse_ratio(self)
 	if amt < 1.0:
 		return
-	for other in ArenaState.units:
-		var u := other as Unit
+	var allies := TalentCombat.pulse_allies(self, dealt)
+	if allies.is_empty():
+		return
+	var share := amt / float(allies.size())
+	var rejuv_n := maxi(stacks, 1)
+	for u in allies:
 		if u == null or not is_instance_valid(u) or u.is_dead:
 			continue
-		if u.team != team:
-			continue
-		if u.global_position.distance_to(global_position) > 8.5 + u.radius:
-			continue
-		u.apply_heal(amt, self, "nature")
-		u.apply_rejuvenation(self)
+		u.apply_heal(share, self, "nature")
+		u.apply_rejuvenation(self, rejuv_n, "nature")
 
 
 func apply_burn(source: Unit, hit_damage: float) -> void:
-	var add := hit_damage * CombatBalance.pct("burn.ratio")
+	var had_burn := not _burn_layers.is_empty()
+	var add := hit_damage * TalentCombat.burn_store_ratio(source, self)
 	if add <= 0.0:
 		return
 	_burn_layers.append({
@@ -3153,6 +3450,36 @@ func apply_burn(source: Unit, hit_damage: float) -> void:
 		"source": source,
 	})
 	_mark_fire = maxf(_mark_fire, BURN_DURATION)
+	TalentCombat.on_apply_burn(source, self, had_burn, add)
+
+
+func apply_spread_burn(source: Unit, amount: float, duration: float, origin: Unit = null) -> void:
+	if is_dead or amount <= 0.02 or duration <= 0.05:
+		return
+	var origin_id := origin.get_instance_id() if origin != null and is_instance_valid(origin) else 0
+	var layer := {
+		"remaining": amount,
+		"time_left": duration,
+		"dps": amount / duration,
+		"source": source,
+		"spread": true,
+		"spread_from": origin_id,
+	}
+	for i in _burn_layers.size():
+		var existing: Dictionary = _burn_layers[i]
+		if bool(existing.get("spread", false)) and int(existing.get("spread_from", 0)) == origin_id:
+			_burn_layers[i] = layer
+			_mark_fire = maxf(_mark_fire, duration)
+			return
+	_burn_layers.append(layer)
+	_mark_fire = maxf(_mark_fire, duration)
+
+
+## Discrete stacks from a spell hit. Burn and Chill convert from damage, so crit already scales them.
+static func crit_status_stacks(stacks: int, crit: bool) -> int:
+	if stacks <= 0:
+		return 0
+	return stacks * 2 if crit else stacks
 
 
 func apply_afflict(source: Unit) -> void:
@@ -3162,52 +3489,432 @@ func apply_afflict(source: Unit) -> void:
 func apply_afflict_stacks(source: Unit, stacks: int) -> void:
 	if is_dead or stacks <= 0:
 		return
-	_afflict_stacks = mini(AFFLICT_STACK_MAX, _afflict_stacks + stacks)
+	_afflict_stacks = mini(afflict_stack_max(), _afflict_stacks + stacks)
 	_afflict_left = AFFLICT_DURATION
 	if source != null and is_instance_valid(source):
 		_afflict_src = source
 
 
-func apply_rejuvenation(source: Unit) -> void:
-	if is_dead:
+func apply_rejuvenation(source: Unit, stacks: int = 1, ability_id: String = "") -> void:
+	if is_dead or stacks <= 0:
 		return
-	_rejuv_stacks = mini(REJUV_STACK_MAX, _rejuv_stacks + 1)
+	if TalentCombat.drought_blocks_rejuv_apply(source, ability_id):
+		return
+	var had := _rejuv_stacks
+	_rejuv_stacks = mini(REJUV_STACK_MAX, _rejuv_stacks + stacks)
 	_rejuv_left = REJUV_DURATION
 	if source != null and is_instance_valid(source):
 		_rejuv_src = source
+	TalentCombat.on_rejuvenation_applied(source, self, had, ability_id)
 
 
-func apply_holy_blessing(base_power: float) -> void:
+func rejuv_stacks() -> int:
+	return _rejuv_stacks
+
+
+func consume_rejuvenation() -> int:
+	var n := _rejuv_stacks
+	_clear_rejuv()
+	return n
+
+
+func apply_lifebloom(source: Unit, hps: float, duration: float, bloom: float) -> void:
+	if is_dead or hps <= 0.05:
+		return
+	if source != null:
+		var hooks := source.talent_hooks()
+		if hooks != null and hooks.lifebloom_target_id != 0 and hooks.lifebloom_target_id != get_instance_id():
+			var old = instance_from_id(hooks.lifebloom_target_id)
+			if old is Unit and is_instance_valid(old) and old != self:
+				(old as Unit).clear_lifebloom(false)
+	_lifebloom_hps = hps
+	_lifebloom_left = duration
+	_lifebloom_max = duration
+	_lifebloom_bloom = bloom
+	_lifebloom_acc = 0.0
+	_lifebloom_src = source
+
+
+func has_lifebloom_from(source: Unit) -> bool:
+	if _lifebloom_left <= 0.05:
+		return false
+	return source != null and _lifebloom_src == source
+
+
+func consume_lifebloom(bloom_override: float = -1.0, trigger_expire_bloom: bool = true) -> void:
+	var src := _lifebloom_src
+	var bloom := bloom_override if bloom_override > 0.05 else ( _lifebloom_bloom if trigger_expire_bloom else 0.0 )
+	clear_lifebloom(false)
+	if bloom > 0.05 and src != null and is_instance_valid(src):
+		apply_heal(bloom, src, "lifebloom")
+
+
+func clear_lifebloom(trigger_expire_bloom: bool = true) -> void:
+	var src := _lifebloom_src
+	if trigger_expire_bloom and _lifebloom_bloom > 0.05 and src != null and is_instance_valid(src):
+		apply_heal(_lifebloom_bloom, src, "lifebloom")
+	_lifebloom_left = 0.0
+	_lifebloom_max = 0.0
+	_lifebloom_hps = 0.0
+	_lifebloom_acc = 0.0
+	_lifebloom_bloom = 0.0
+	_lifebloom_src = null
+	if src != null and is_instance_valid(src):
+		var hooks := src.talent_hooks()
+		if hooks != null and hooks.lifebloom_target_id == get_instance_id():
+			hooks.lifebloom_target_id = 0
+
+
+func apply_stormbond(source: Unit, duration: float) -> void:
+	if is_dead:
+		return
+	_stormbond_left = duration
+	_stormbond_src = source
+
+
+func has_stormbond() -> bool:
+	return _stormbond_left > 0.05
+
+
+func clear_stormbond_from(source: Unit) -> void:
+	if source != null and _stormbond_src == source:
+		_stormbond_left = 0.0
+		_stormbond_src = null
+
+
+func shock_stacks() -> int:
+	return _charged_stacks
+
+
+func shock_source() -> Unit:
+	return _shock_src if _shock_src != null and is_instance_valid(_shock_src) else null
+
+
+func arm_skill_recast(index: int, window: float) -> void:
+	_arm_recast(index, window)
+
+
+func apply_holy_blessing(base_power: float, source: Unit = null) -> void:
 	if is_dead or base_power <= 0.0:
 		return
-	var add := (base_power / BLESSING_REF) * BLESSING_MAX
+	var cap := TalentCombat.blessing_cap(source)
+	var add := (base_power / BLESSING_REF) * cap * TalentCombat.blessing_rate(source)
 	if add <= 0.0:
 		return
 	if _blessing_left <= 0.05:
 		_blessing_dr = 0.0
-	_blessing_dr = minf(BLESSING_MAX, _blessing_dr + add)
+	_blessing_dr = minf(cap, _blessing_dr + add)
 	_blessing_left = maxf(_blessing_left, BLESSING_TIME)
 	_blessing_max = maxf(_blessing_max, BLESSING_TIME)
 
 
-func apply_chill(ability_damage: float, source: Unit = null) -> void:
+func combat_rank() -> int:
+	return EnemyRank.from_unit(self)
+
+
+func chill_stacks() -> int:
+	return _chill_stacks
+
+
+func spreadable_chill_stacks() -> int:
+	return _chill_stacks
+
+
+func _effective_chill_stacks() -> int:
+	return _chill_stacks + _spread_chill
+
+
+func has_chill() -> bool:
+	return _chill_stacks > 0 or _spread_chill > 0
+
+
+func has_shock() -> bool:
+	return _mark_storm > 0.0
+
+
+func shock_stack_max() -> int:
+	var cap := int(round(CombatBalance.flat("shock.stacks.max")))
+	if cap <= 0:
+		return SHOCK_MAX
+	return cap
+
+
+func shock_charge_ratio() -> float:
+	if _charged_stacks <= 0:
+		return 0.0
+	return float(_charged_stacks) / float(shock_stack_max())
+
+
+func holy_blessing_dr() -> float:
+	return _blessing_dr if _blessing_left > 0.05 else 0.0
+
+
+func has_burn() -> bool:
+	return not _burn_layers.is_empty()
+
+
+func burn_remaining() -> float:
+	var total := 0.0
+	for layer in _burn_layers:
+		total += float(layer.get("remaining", 0.0))
+	return total
+
+
+func spreadable_burn_remaining() -> float:
+	var total := 0.0
+	for layer in _burn_layers:
+		if bool(layer.get("spread", false)):
+			continue
+		total += float(layer.get("remaining", 0.0))
+	return total
+
+
+func consume_burn() -> float:
+	var total := burn_remaining()
+	_clear_burn()
+	return total
+
+
+func burn_source() -> Unit:
+	for layer in _burn_layers:
+		var layer_src = layer.get("source")
+		if layer_src is Unit and is_instance_valid(layer_src):
+			return layer_src as Unit
+	return null
+
+
+func apply_singe(source: Unit, duration: float, cap: int) -> void:
+	if is_dead or duration <= 0.05 or cap <= 0:
+		return
+	_singe_src = source
+	_singe_left = duration
+	_singe_stacks = mini(_singe_stacks + 1, cap)
+
+
+func singe_stacks() -> int:
+	if _singe_left <= 0.05:
+		return 0
+	return _singe_stacks
+
+
+func consume_singe() -> int:
+	var n := singe_stacks()
+	_clear_singe()
+	return n
+
+
+func apply_scorch(source: Unit, duration: float, snare: float) -> void:
+	if is_dead or duration <= 0.05:
+		return
+	_scorch_src = source
+	_scorch_left = duration
+	_scorch_snare = maxf(_scorch_snare, snare)
+	if snare > 0.0:
+		apply_slow(snare, duration)
+
+
+func has_scorch_from(source: Unit) -> bool:
+	if _scorch_left <= 0.05 or source == null:
+		return false
+	return _scorch_src == source
+
+
+func clear_scorch() -> void:
+	_scorch_left = 0.0
+	_scorch_snare = 0.0
+	_scorch_src = null
+
+
+func _clear_singe() -> void:
+	_singe_stacks = 0
+	_singe_left = 0.0
+	_singe_src = null
+
+
+func refresh_burn(seconds: float) -> void:
+	if seconds <= 0.0 or _burn_layers.is_empty():
+		return
+	for layer in _burn_layers:
+		layer["time_left"] = float(layer.get("time_left", 0.0)) + seconds
+
+
+func afflict_stacks() -> int:
+	return _afflict_stacks
+
+
+func spreadable_afflict_stacks() -> int:
+	return _afflict_stacks
+
+
+func afflict_display_stacks() -> int:
+	return _afflict_display_stacks()
+
+
+func _afflict_display_stacks() -> int:
+	return _afflict_stacks + _spread_afflict
+
+
+func afflict_stack_max() -> int:
+	return maxi(int(round(CombatBalance.flat("afflict.stacks.max"))), 1)
+
+
+func apply_judgment_brand(stacks: int = 1) -> void:
+	if team != TEAM_RAID or is_dead or stacks <= 0:
+		return
+	_judgment_brand += stacks
+
+
+func double_judgment_brand() -> void:
+	if team != TEAM_RAID or is_dead or _judgment_brand <= 0:
+		return
+	_judgment_brand *= 2
+
+
+func judgment_brand_stacks() -> int:
+	return _judgment_brand
+
+
+func judgment_brand_taken_mult() -> float:
+	if _judgment_brand <= 0:
+		return 1.0
+	return 1.0 + float(_judgment_brand) * CombatBalance.pct("dawnwarden.judgment.brand")
+
+
+func afflict_tick_damage() -> float:
+	var per := maxf(CombatBalance.flat("afflict.per"), 1.0)
+	return CombatBalance.flat("afflict.tick") * float(_afflict_display_stacks()) / per
+
+
+func afflict_remaining_value() -> float:
+	return afflict_tick_damage() * _afflict_left
+
+
+func consume_afflict() -> float:
+	var total := afflict_remaining_value()
+	_clear_afflict()
+	return total
+
+
+func consume_afflict_stacks() -> int:
+	var stacks := _afflict_stacks
+	if stacks <= 0:
+		return 0
+	_clear_afflict()
+	return stacks
+
+
+func absorb_ashen_afflict(stacks: int) -> void:
+	if stacks <= 0:
+		return
+	_ashen_absorbed += stacks
+
+
+func ashen_absorbed_afflict() -> int:
+	return _ashen_absorbed
+
+
+func clear_ashen_absorbed() -> void:
+	_ashen_absorbed = 0
+
+
+func apply_burn_from_afflict_stacks(source: Unit, stacks: int) -> int:
+	if is_dead:
+		return 0
+	var take := clampi(stacks, 0, afflict_stack_max())
+	if take <= 0:
+		return 0
+	var dps := float(take) * CombatBalance.flat("skill.ashen.afflict_to_burn")
+	if dps > 0.02:
+		_add_burn_dps(source, dps)
+	return take
+
+
+func convert_afflict_to_burn(source: Unit, fraction: float) -> int:
+	if is_dead or _afflict_stacks <= 0 or fraction <= 0.0:
+		return 0
+	var take := clampi(int(round(float(_afflict_stacks) * fraction)), 0, _afflict_stacks)
+	if take <= 0:
+		return 0
+	_afflict_stacks -= take
+	if _afflict_stacks <= 0:
+		_clear_afflict()
+	var dps := float(take) * CombatBalance.flat("skill.ashen.afflict_to_burn")
+	if dps > 0.02:
+		_add_burn_dps(source, dps)
+	return take
+
+
+func _add_burn_dps(source: Unit, dps: float) -> void:
+	if dps <= 0.0:
+		return
+	_burn_layers.append({
+		"remaining": dps * BURN_DURATION,
+		"time_left": BURN_DURATION,
+		"dps": dps,
+		"source": source,
+	})
+	_mark_fire = maxf(_mark_fire, BURN_DURATION)
+
+
+func apply_chill(ability_damage: float, source: Unit = null, effectiveness: float = 1.0) -> void:
 	if ability_damage <= 0.0:
 		return
-	_chill_percent = minf(1.0, _chill_percent + ability_damage * CHILL_PER_DAMAGE)
+	var stacks_before := _chill_stacks
+	effectiveness = TalentCombat.chill_effectiveness(source, self, effectiveness)
+	var per := maxf(EnemyRank.ice_per_stack(combat_rank()), 0.01)
+	_chill_progress += ability_damage * maxf(effectiveness, 0.0)
+	var cap := EnemyRank.stack_max()
+	while _chill_progress >= per and _chill_stacks < cap:
+		_chill_stacks += 1
+		_chill_progress -= per
+	_chill_percent = float(_chill_stacks) / float(maxi(cap, 1))
 	_chill_left = MARK_TIME
 	_mark_ice = MARK_TIME
+	TalentCombat.on_chill_applied(source, self, stacks_before)
 	_try_chill_freeze(source)
 
 
-func apply_shock(_source: Unit = null) -> void:
-	_charged_stacks = mini(SHOCK_MAX, _charged_stacks + 1)
+func apply_chill_stacks(stacks: int, source: Unit = null) -> void:
+	if stacks <= 0:
+		return
+	var stacks_before := _chill_stacks
+	var cap := EnemyRank.stack_max()
+	_chill_stacks = mini(cap, _chill_stacks + stacks)
+	_chill_percent = float(_chill_stacks) / float(maxi(cap, 1))
+	_chill_left = MARK_TIME
+	_mark_ice = MARK_TIME
+	TalentCombat.on_chill_applied(source, self, stacks_before)
+	_try_chill_freeze(source)
+
+
+func apply_spread_chill(stacks: int) -> void:
+	if is_dead or stacks <= 0:
+		return
+	_spread_chill = stacks
+	_spread_chill_left = MARK_TIME
+
+
+func apply_spread_afflict(source: Unit, stacks: int) -> void:
+	if is_dead or stacks <= 0:
+		return
+	_spread_afflict = mini(afflict_stack_max(), stacks)
+	_spread_afflict_left = AFFLICT_DURATION
+	if source != null and is_instance_valid(source) and _afflict_src == null:
+		_afflict_src = source
+
+
+func apply_shock(_source: Unit = null, stacks: int = 1) -> void:
+	var n := maxi(stacks, 1)
+	_charged_stacks = mini(shock_stack_max(), _charged_stacks + n)
 	_mark_storm = SHOCK_TIME
+	if _source != null and is_instance_valid(_source):
+		_shock_src = _source
 
 
 func _shock_chain_ratio() -> float:
 	if _charged_stacks <= 0:
 		return 0.0
-	return CombatBalance.pct("shock.chain") * (float(_charged_stacks) / float(SHOCK_MAX))
+	return CombatBalance.pct("shock.chain") * shock_charge_ratio()
 
 
 func _try_shock_chain(source: Unit, hit_damage: float) -> void:
@@ -3272,9 +3979,10 @@ static func _enqueue_shock_chain_batch(unit: Unit) -> void:
 static func _drain_shock_chain_batches() -> void:
 	_ensure_shock_scheduler()
 	var frame := Engine.get_physics_frames()
-	if frame != _shock_batch_frame:
-		_shock_batch_frame = frame
-		_shock_batches_used = 0
+	if frame == _shock_batch_frame:
+		return
+	_shock_batch_frame = frame
+	_shock_batches_used = 0
 	while _shock_batches_used < MAX_SHOCK_BATCHES_PER_PHYSICS_FRAME and not _shock_batch_queue.is_empty():
 		var id: int = int(_shock_batch_queue.pop_front())
 		_shock_batch_queued.erase(id)
@@ -3317,8 +4025,10 @@ func _resolve_shock_chain(source: Unit, bounce: float) -> void:
 	var hops: Array[Unit] = [self]
 	var visited: Dictionary = {self: true}
 	var current := self
-	for _i in SHOCK_CHAIN_HOPS:
-		var nxt := source._chain_bounce_target(current, visited, SHOCK_CHAIN_RANGE, false)
+	var hop_count := TalentCombat.shock_chain_hops(source)
+	var bounce_range := TalentCombat.shock_chain_range(source)
+	for _i in hop_count:
+		var nxt := source._chain_bounce_target(current, visited, bounce_range, false)
 		if nxt == null:
 			break
 		visited[nxt] = true
@@ -3330,14 +4040,20 @@ func _resolve_shock_chain(source: Unit, bounce: float) -> void:
 		var u := hops[i]
 		if u == null or not is_instance_valid(u) or u.is_dead:
 			continue
-		var dmg := bounce * CombatBalance.chain_hop_mult(i)
+		var dmg := bounce * TalentCombat.chain_hop_mult_for(source, i)
 		if dmg < 1.0:
 			continue
 		u.take_damage(dmg, source, _DamageNumber.tint_for("lightning"), "lightning", "shock_chain", false, false, -1, true)
+		TalentCombat.on_lightning_hop(source, u)
+	StatusReactions.on_shock_chain(self, hops, source)
 
 
 func outgoing_damage_mult(ability_id: String, hit_kind: String) -> float:
-	return UnitAltered.outgoing_damage_mult(self, ability_id, hit_kind)
+	return UnitAltered.outgoing_damage_mult(self, ability_id, hit_kind) * UnitEnemyAlter.outgoing_mult(self)
+
+
+func element_taken_mult(element: int) -> float:
+	return UnitEnemyAlter.taken_mult(self, element)
 
 
 func _resist_cut(hit_kind: String, ability_id: String) -> float:
@@ -3444,12 +4160,7 @@ func _tick_dummy_home(delta: float) -> void:
 	_home_away += delta
 	if _home_away < DUMMY_HOME_WAIT:
 		return
-	_wind_kb_left = 0.0
-	_wind_air_left = 0.0
-	_wind_air_rise = 0.0
-	_wind_ray_left = 0.0
-	_wind_ray_from = null
-	_wind_carry = null
+	wind.clear()
 	_home_return_from = global_position
 	var dist := Vector2(dx, dz).length()
 	_home_return_dur = clampf(dist / 10.0, 0.25, 0.7)
@@ -3469,28 +4180,27 @@ func apply_support_hit(source: Unit, heal_amount: float, shield_amount: float, s
 		if primary == AbilityDef.Element.NONE:
 			primary = ab.element
 	var split := {}
+	var crit := false
 	if heal_amount > 0.05:
-		var crit := source.roll_ability_crit(ab) if source and not combat_text_periodic else false
+		crit = source.roll_ability_crit(ab) if source and not combat_text_periodic else false
 		var healed := SpellPower.packet(heal_amount, ab, extras, null, true, ability_id, crit, primary)
 		split = _DamageNumber.split_for_heal(ab, extras, ability_id, crit, primary, heal_amount, healed)
 		var kind := _DamageNumber.kind_for_element(primary, combat_text_periodic) if primary != AbilityDef.Element.NONE else "heal"
 		apply_heal(healed, source, ability_id, split, combat_text_cast_id, combat_text_periodic, crit, kind)
 		if blessing_power > 0.05:
-			apply_holy_blessing(blessing_power)
+			apply_holy_blessing(blessing_power, source)
 	if rejuvenate:
-		apply_rejuvenation(source)
+		var rejuv_n := TalentCombat.rejuvenation_stacks_to_apply(source, ability_id)
+		apply_rejuvenation(source, crit_status_stacks(rejuv_n, crit), ability_id)
+		TalentCombat.on_nature_support(source, self, ability_id, combat_text_cast_id)
 	if shield_amount > 0.05:
 		var dur := shield_duration if shield_duration > 0.05 else PROTECTION_SHIELD_TIME
+		dur += TalentCombat.shield_duration_bonus(source, self, ab)
 		var amt := SpellPower.packet(shield_amount, ab, extras, null, true, ability_id, false, primary, "shield")
+		amt *= TalentCombat.shield_out_mult(source, self)
 		apply_shield(amt, dur, source, SpellPower.elements_for(ab, extras, primary), combat_text_cast_id)
 		UnitWind.apply_shield_haste(self, ab, dur)
-
-
-func remaining_burn() -> float:
-	var total := 0.0
-	for layer in _burn_layers:
-		total += float(layer.get("remaining", 0.0))
-	return maxf(0.0, total)
+		TalentCombat.on_shield_applied(source, self, ab, combat_text_cast_id)
 
 
 func _burn_tick_damage() -> float:
@@ -3540,9 +4250,9 @@ func _commit_freeze(source: Unit = null) -> void:
 	var dur := FREEZE_TIME
 	_stun_left = dur
 	_stun_max = dur
-	_chill_percent = 0.0
-	_chill_left = 0.0
-	_freeze_immune_left = maxf(_freeze_immune_left, FREEZE_IMMUNE_TIME)
+	_clear_chill_stacks()
+	_reset_shatter_shell()
+	_freeze_immune_left = maxf(_freeze_immune_left, EnemyRank.freeze_immune_time(combat_rank()))
 	_pending_freeze = false
 	_pending_freeze_source = null
 	if controller:
@@ -3569,20 +4279,11 @@ func flush_pending_freeze() -> void:
 	_commit_freeze(src)
 
 
-func consume_elemental_marks() -> float:
-	var n := elemental_mark_count()
-	_clear_marks()
-	if n <= 0:
-		return 35.0
-	if n == 1:
-		return 75.0
-	if n == 2:
-		return 170.0
-	return 300.0
-
-
 func die() -> void:
 	if is_dead:
+		return
+	if _dev_test_unkillable():
+		health = maxf(1.0, health)
 		return
 	if is_structure:
 		is_dead = true
@@ -3596,6 +4297,7 @@ func die() -> void:
 		return
 	is_dead = true
 	health = 0.0
+	TalentCombat.on_death(self)
 	set_ability_hover(false)
 	_clear_marks()
 	_stun_left = 0.0
@@ -3610,13 +4312,13 @@ func die() -> void:
 	_clear_radiance()
 	_refresh_freeze_visual()
 	_clear_ward()
-	_chill_percent = 0.0
-	_chill_left = 0.0
+	_clear_chill_stacks()
 	_freeze_immune_left = 0.0
 	_blessing_dr = 0.0
 	_blessing_left = 0.0
 	_blessing_max = 0.0
-	_clear_recast()
+	_expire_recast()
+	_illusion_exit_dir = Vector3.ZERO
 	_echoing = false
 	_illusion_echoing = false
 	_illusion_invis_left = 0.0
@@ -3698,30 +4400,61 @@ func fire_auto_attack(target: Unit) -> void:
 		return
 	_restore_auto_mana()
 	if is_melee:
-		target.take_damage(attack_damage, self, _DamageNumber.tint_for("physical"), "physical", "auto")
+		_deliver_auto_hit(target)
 		AudioManager.play_at("melee.hit", target.global_position + Vector3(0.0, 1.0, 0.0))
-		if attack_applies_charged:
-			target._apply_mark(AbilityDef.Element.STORM, self)
 		return
 	var origin := auto_attack_origin()
-	Projectile.spawn(self, origin, {
+	Projectile.spawn(self, origin, _auto_projectile_cfg(target))
+
+
+func _deliver_auto_hit(target: Unit) -> void:
+	var aa := class_auto()
+	if aa != null and aa.element != AbilityDef.Element.NONE:
+		target.receive_ability_hit(self, aa.element, attack_damage, 0.0, aa.extra_elements, false, true, true, -1, 0, "auto")
+	else:
+		target.take_damage(attack_damage, self, _DamageNumber.tint_for("physical"), "physical", "auto")
+		if attack_applies_charged:
+			target._apply_mark(AbilityDef.Element.STORM, self)
+	TalentCombat.on_auto_attack(self, target)
+
+
+func _auto_projectile_cfg(target: Unit) -> Dictionary:
+	var aa := class_auto()
+	var color := Color(1.0, 0.5, 0.12)
+	var element := AbilityDef.Element.NONE
+	var extras := PackedInt32Array()
+	var charged := attack_applies_charged
+	var scene := attack_vfx_scene
+	if aa != null:
+		color = aa.projectile_color
+		element = aa.element
+		extras = aa.extra_elements
+		charged = aa.applies_charged
+		if not aa.vfx_scene.is_empty():
+			scene = aa.vfx_scene
+	return {
 		"homing": target,
 		"speed": attack_projectile_speed,
 		"damage": attack_damage,
 		"radius": 0.14,
 		"max_distance": 24.0,
-		"color": Color(1.0, 0.5, 0.12),
+		"color": color,
+		"element": element,
+		"extra_elements": extras,
 		"skillshot": false,
-		"vfx_scene": attack_vfx_scene,
+		"vfx_scene": scene,
 		"vfx_scale": attack_vfx_scale,
 		"vfx_yaw": attack_vfx_yaw,
-		"grant_charged": attack_applies_charged,
+		"grant_charged": charged,
 		"ability_id": "auto",
-	})
+	}
 
 
 func can_attack_ally() -> bool:
-	return attack_shield > 0.05
+	if attack_shield > 0.05:
+		return true
+	var aa := class_auto()
+	return aa != null and aa.ally_heal > 0.05
 
 
 func _restore_auto_mana() -> void:
@@ -3732,9 +4465,19 @@ func _restore_auto_mana() -> void:
 func _fire_ally_auto(target: Unit) -> void:
 	if not can_attack_ally() or target == null or target.is_dead:
 		return
+	var aa := class_auto()
+	var heal := aa.ally_heal if aa != null else 0.0
+	var rejuv := aa != null and aa.ally_rejuvenation
 	var dur := attack_shield_duration if attack_shield_duration > 0.05 else WARD_TIME
+	var color := aa.ally_color if aa != null and heal > 0.05 else Color(0.95, 0.88, 0.45)
+	var scene := attack_vfx_scene
+	if aa != null and not aa.vfx_scene.is_empty():
+		scene = aa.vfx_scene
 	if is_melee:
-		target.apply_shield(attack_shield, dur, self)
+		if heal > 0.05 or rejuv:
+			target.apply_support_hit(self, heal, attack_shield, dur, rejuv, "auto", 0.0, PackedInt32Array(), AbilityDef.Element.NATURE)
+		elif attack_shield > 0.05:
+			target.apply_shield(attack_shield, dur, self)
 		AudioManager.play_at("auto.hit", target.global_position + Vector3(0.0, 1.0, 0.0))
 		return
 	var origin := auto_attack_origin()
@@ -3742,18 +4485,22 @@ func _fire_ally_auto(target: Unit) -> void:
 		"homing": target,
 		"speed": attack_projectile_speed,
 		"damage": 0.0,
+		"heal": heal,
+		"heal_allies": heal > 0.05,
+		"applies_rejuvenation": rejuv,
+		"element": AbilityDef.Element.NATURE if heal > 0.05 or rejuv else AbilityDef.Element.NONE,
 		"shield": attack_shield,
 		"shield_duration": dur,
 		"radius": 0.14,
 		"max_distance": 24.0,
-		"color": Color(0.95, 0.88, 0.45),
+		"color": color,
 		"skillshot": false,
-		"vfx_scene": attack_vfx_scene,
+		"vfx_scene": scene,
 		"vfx_scale": attack_vfx_scale,
 		"vfx_yaw": attack_vfx_yaw,
-		"vfx_primary": Color(1.0, 0.94, 0.55),
-		"vfx_secondary": Color(0.95, 0.78, 0.28),
-		"vfx_tertiary": Color(1.0, 0.98, 0.8),
+		"vfx_primary": color,
+		"vfx_secondary": color.darkened(0.18),
+		"vfx_tertiary": color.lightened(0.2),
 		"ability_id": "auto",
 	})
 
@@ -3763,6 +4510,7 @@ func cast_ability(index: int, point: Vector3, target: Unit = null) -> void:
 		return
 	var ab := abilities[index]
 	var recast := has_recast_ready(index)
+	_skill_recast = recast
 	_cast_power = ab.recast_damage_mult if recast else 1.0
 	spend_cast(index)
 	if recast:
@@ -3773,6 +4521,7 @@ func cast_ability(index: int, point: Vector3, target: Unit = null) -> void:
 	var ice_id := -1 if wall_cast else _begin_ice_overheat_cast(ab, extras)
 	var combat_text_cast_id := _DamageNumber.begin_cast()
 	_deliver_ability(ab, point, target, extras, ice_id, double_mask, index, combat_text_cast_id)
+	_skill_recast = false
 	if not recast and not _echoing and ab.recast_window > 0.05:
 		_arm_recast(index, ab.recast_window)
 	if not recast and not _echoing and ab.echo and ab.delivery != AbilityDef.Delivery.GROUND_AOE and ab.delivery != AbilityDef.Delivery.AURA and ab.delivery != AbilityDef.Delivery.WALL:
@@ -3806,16 +4555,22 @@ func _finish_queued_echo(index: int, point: Vector3, target_id: int, ab: Ability
 
 
 func _deliver_ability(ab: AbilityDef, point: Vector3, target: Unit, extras: PackedInt32Array, ice_id: int, double_mask: int, slot: int = -1, combat_text_cast_id: int = -1) -> void:
+	if ClassSkillRuntime.try_deliver(self, ab, point, target, slot, combat_text_cast_id, _skill_recast):
+		return
 	var ally := target if target != null and is_instance_valid(target) and not target.is_dead and target.team == team and ab.can_target_allies() else null
 	if ally != null and not ab.pierces_skillshot() and ab.target_mode == AbilityDef.TargetMode.UNIT:
 		_play_ability_fx(ab, ally.global_position + Vector3(0, 1.0, 0))
 		_apply_ally_and_self(ally, ab)
+		_apply_cleave_ally_splash(ally, ab)
 		return
 	if ally != null and ally == self and ab.target_mode == AbilityDef.TargetMode.SKILLSHOT and not ab.pierces_skillshot():
 		_apply_ally_and_self(ally, ab)
+		_apply_cleave_ally_splash(ally, ab)
 		return
 	match ab.target_mode:
 		AbilityDef.TargetMode.SKILLSHOT:
+			if ab.delivery == AbilityDef.Delivery.RAY:
+				return
 			var dir := Vector3(point.x - global_position.x, 0.0, point.z - global_position.z)
 			if dir.length_squared() < 0.001:
 				dir = facing_dir()
@@ -3835,16 +4590,18 @@ func _deliver_ability(ab: AbilityDef, point: Vector3, target: Unit, extras: Pack
 				_play_ability_fx(ab, target.global_position + Vector3(0, 1.0, 0))
 				if target.team == team:
 					_apply_ally_and_self(target, ab)
+					_apply_cleave_ally_splash(target, ab)
 				else:
 					target.receive_ability_hit(self, ab.element, _scaled(ab.damage), 0.0, extras, false, true, true, ice_id, double_mask, ab.combat_id(), combat_text_cast_id)
 					if ab.slow_duration > 0.0:
 						target.apply_slow(ab.slow_percent, ab.slow_duration)
 					UnitWind.apply_on_target(target, ab, self)
+					_apply_cleave_splash(target, ab, extras, ice_id, double_mask, combat_text_cast_id)
 		AbilityDef.TargetMode.GROUND:
 			if ab.delivery == AbilityDef.Delivery.METEOR:
-				_drop_meteors(point, ab, _scaled(ab.damage), ab.aoe_radius, extras, ice_id, double_mask, 1.0, combat_text_cast_id)
+				_drop_meteors(point, ab, _scaled(ab.damage), ab.aoe_radius, extras, ice_id, double_mask, combat_text_cast_id)
 			elif ab.delivery == AbilityDef.Delivery.WALL:
-				_place_spell_wall(point, ab, extras, ice_id, double_mask, combat_text_cast_id, slot)
+				_place_spell_wall(point, ab, extras, ice_id, double_mask, combat_text_cast_id)
 			elif ab.delivery == AbilityDef.Delivery.GROUND_AOE or (ab.zone_duration > 0.05 and ab.tick_shield <= 0.05 and ab.tick_damage > 0.05):
 				_place_ground_aoe(point, ab, extras, slot, combat_text_cast_id)
 			elif ab.zone_duration > 0.05:
@@ -3857,7 +4614,7 @@ func _deliver_ability(ab: AbilityDef, point: Vector3, target: Unit, extras: Pack
 			else:
 				if ab.delivery == AbilityDef.Delivery.NOVA:
 					_SpellBaseFx.nova(point, ab.aoe_radius, ab)
-				_ground_burst(point, ab, -1.0, -1.0, extras, ice_id, double_mask, 2.0, combat_text_cast_id)
+				_ground_burst(point, ab, -1.0, -1.0, extras, ice_id, double_mask, combat_text_cast_id)
 				_queue_illusion_area_echoes(point, ab, extras, ice_id, double_mask, -1.0, -1.0, combat_text_cast_id)
 			if ab.delivery == AbilityDef.Delivery.GROUND_AOE or ab.zone_duration > 0.05:
 				_apply_ally_and_self(ally, ab, false)
@@ -3870,7 +4627,7 @@ func _deliver_ability(ab: AbilityDef, point: Vector3, target: Unit, extras: Pack
 			if ab.damage > 0.05 or ab.delivery == AbilityDef.Delivery.NOVA:
 				if ab.delivery == AbilityDef.Delivery.NOVA:
 					_SpellBaseFx.nova(global_position, ab.aoe_radius, ab)
-				_ground_burst(global_position, ab, -1.0, -1.0, extras, ice_id, double_mask, 2.0, combat_text_cast_id)
+				_ground_burst(global_position, ab, -1.0, -1.0, extras, ice_id, double_mask, combat_text_cast_id)
 				_queue_illusion_area_echoes(global_position, ab, extras, ice_id, double_mask, -1.0, -1.0, combat_text_cast_id)
 			elif ab.grant_all_infusions or ab.buff_duration > 0.05 or ab.free_cast_charges > 0 or ab.shield > 0.0:
 				_play_ability_fx(ab, global_position + Vector3(0.0, height * 0.45, 0.0))
@@ -3890,8 +4647,11 @@ func begin_channel_cast(index: int) -> void:
 	_channel_was_recast = recast
 	_channel_combat_text_cast_id = _DamageNumber.begin_cast()
 	_illusion_missile_extras.clear()
+	_illusion_ray_pulsed = false
 	if recast:
 		_clear_recast()
+	if ab.delivery == AbilityDef.Delivery.RAY:
+		_ensure_spell_rays(ab)
 	if SpellWallLayout.is_protection(ab):
 		var aim := global_position + facing_dir()
 		if controller != null:
@@ -3944,11 +4704,10 @@ func finish_channeled_ability(index: int, point: Vector3, charge: float) -> void
 		end_channel_cast(index)
 		return
 	if ab.id == "meteor" or ab.delivery == AbilityDef.Delivery.METEOR:
-		var combust_mult := lerpf(1.0, 2.0, clampf(charge, 0.0, 1.0))
-		_drop_meteors(point, ab, dmg, rad, extras, ice_id, double_mask, combust_mult, combat_text_cast_id)
+		_drop_meteors(point, ab, dmg, rad, extras, ice_id, double_mask, combat_text_cast_id)
 		end_channel_cast(index)
 		return
-	_ground_burst(point, ab, dmg, rad, extras, ice_id, double_mask, 2.0, combat_text_cast_id)
+	_ground_burst(point, ab, dmg, rad, extras, ice_id, double_mask, combat_text_cast_id)
 	_queue_illusion_area_echoes(point, ab, extras, ice_id, double_mask, dmg, rad, combat_text_cast_id)
 	end_channel_cast(index)
 
@@ -3985,6 +4744,8 @@ func chain_lightning_at(
 	if ab == null or primary == null or not is_instance_valid(primary) or primary.is_dead:
 		return
 	var hops := extra_hops if extra_hops >= 0 else ab.chain_bounces
+	if StormCloudZone.contains_caster(self):
+		hops += 1
 	var reach := bounce_range if bounce_range > 0.0 else ab.bounce_range
 	var chain := _build_lightning_chain(primary, hops, reach)
 	if chain.is_empty():
@@ -4023,11 +4784,27 @@ func _build_lightning_chain(primary: Unit, hops: int, bounce_range: float) -> Ar
 	return chain
 
 
-func _chain_bounce_target(from: Unit, visited: Dictionary, bounce_range: float, check_los: bool = true) -> Unit:
+func _chain_bounce_target(from: Unit, visited: Dictionary, bounce_range: float, check_los: bool = true, closest: bool = false) -> Unit:
 	if from == null or not is_instance_valid(from):
 		return null
 	var range_sq := bounce_range * bounce_range
 	var origin := from.global_position
+	if closest:
+		var best: Unit = null
+		var best_d := INF
+		for u in ArenaState.units_near(origin, bounce_range):
+			if u.team == team:
+				continue
+			if visited.has(u):
+				continue
+			var d := origin.distance_squared_to(u.global_position)
+			if d > range_sq or d >= best_d:
+				continue
+			if check_los and not from.has_wall_los(u.global_position):
+				continue
+			best_d = d
+			best = u
+		return best
 	var nearby: Array[Unit] = []
 	for u in ArenaState.units_near(origin, bounce_range):
 		if u.team == team:
@@ -4064,10 +4841,8 @@ func _apply_thunder_hit(victim: Unit, ab: AbilityDef, extras: PackedInt32Array =
 		return
 	var hit_at := victim.global_position + Vector3(0.0, victim.height * 0.55, 0.0)
 	AudioManager.play_at("thunder_wave.hop", hit_at)
-	if victim.is_stunned():
-		AudioManager.play_at("reaction.shatter", hit_at)
 	var raw := damage_override if damage_override >= 0.0 else _scaled(ab.damage)
-	raw *= CombatBalance.chain_hop_mult(hop)
+	raw *= TalentCombat.chain_hop_mult_for(self, hop)
 	victim.receive_ability_hit(self, ab.element, raw, 0.0, extras, false, true, allow_reactions, overheat_cast_id, infusion_double, ab.combat_id(), combat_text_cast_id, combat_text_periodic or hop > 0)
 	if ab.slow_duration > 0.0:
 		victim.apply_slow(ab.slow_percent, ab.slow_duration)
@@ -4075,7 +4850,8 @@ func _apply_thunder_hit(victim: Unit, ab: AbilityDef, extras: PackedInt32Array =
 
 func _spawn_skillshot_fan(dir: Vector3, point: Vector3, ab: AbilityDef, extras: PackedInt32Array, ice_id: int, double_mask: int, combat_text_cast_id: int = -1) -> void:
 	var count := maxi(ab.projectile_count, 1)
-	var spread := deg_to_rad(8.0)
+	# Wave is already wide; bolt's 8° fan would stack into one blob.
+	var spread := deg_to_rad(18.0) if ab.delivery == AbilityDef.Delivery.WAVE else deg_to_rad(8.0)
 	var start := -spread * 0.5 * float(count - 1)
 	for i in count:
 		var shot_dir := dir.rotated(Vector3.UP, start + spread * float(i))
@@ -4084,11 +4860,69 @@ func _spawn_skillshot_fan(dir: Vector3, point: Vector3, ab: AbilityDef, extras: 
 		_spawn_skillshot(extra_dir, point, ab, extras, ice_id, double_mask, combat_text_cast_id)
 
 
+func _apply_cleave_splash(primary: Unit, ab: AbilityDef, extras: PackedInt32Array, ice_id: int, double_mask: int, combat_text_cast_id: int) -> void:
+	if ab == null or primary == null or not is_instance_valid(primary):
+		return
+	if ab.splash_radius <= 0.05 or ab.splash_ratio <= 0.05:
+		return
+	if primary.team == team:
+		_apply_cleave_ally_splash(primary, ab)
+		return
+	var splash_dmg := _scaled(ab.damage) * ab.splash_ratio
+	if splash_dmg <= 0.05:
+		return
+	var origin := primary.global_position
+	for u in ArenaState.units_near(origin, ab.splash_radius, false, true, true):
+		if u == null or u == primary or u.team == team or u.is_dead:
+			continue
+		u.receive_ability_hit(self, ab.element, splash_dmg, 0.0, extras, false, true, true, ice_id, double_mask, ab.combat_id(), combat_text_cast_id)
+	SpellWall.apply_radius_hit(self, origin, ab.splash_radius, splash_dmg, "hit", Color(0, 0, 0, 0), combat_text_cast_id, true)
+
+
+func _apply_cleave_ally_splash(primary: Unit, ab: AbilityDef) -> void:
+	if ab == null or primary == null or not is_instance_valid(primary):
+		return
+	if ab.splash_radius <= 0.05 or ab.splash_ratio <= 0.05:
+		return
+	if not ab.can_target_allies():
+		return
+	var origin := primary.global_position
+	for u in ArenaState.units_near(origin, ab.splash_radius, false, true, true):
+		if u == null or u == primary or u.team != team or u.is_dead:
+			continue
+		_apply_cleave_ally_hit(u, ab)
+
+
+func _apply_cleave_ally_hit(target: Unit, ab: AbilityDef) -> void:
+	var ratio := ab.splash_ratio
+	var heal_amt := _scaled(ab.heal) if ab.heal > 0.05 else (_scaled(ab.damage) if ab.heal_allies else 0.0)
+	if ab.heal_allies and heal_amt <= 0.05 and ab.tick_damage > 0.05:
+		heal_amt = _scaled(ab.tick_damage)
+	heal_amt *= ratio
+	var shield_amt := _scaled(ab.shield) * ratio
+	if heal_amt > 0.05 or shield_amt > 0.05 or ab.applies_rejuvenation:
+		target.apply_support_hit(
+			self,
+			heal_amt,
+			shield_amt,
+			_shield_duration_for(ab),
+			ab.applies_rejuvenation,
+			ab.combat_id(),
+			_blessing_power_for(ab),
+			ab.extra_elements,
+			ab.element
+		)
+	if ab.altered:
+		target.apply_altered_from(ab)
+	if shield_amt > 0.05:
+		UnitIllusion.apply_shield_stealth(target, ab, _shield_duration_for(ab))
+
+
 func _spawn_skillshot(dir: Vector3, point: Vector3, ab: AbilityDef, extras: PackedInt32Array, ice_id: int, double_mask: int, combat_text_cast_id: int = -1) -> void:
-	var max_d := ab.skillshot_length if ab.skillshot_length > 0.05 else ab.range
+	var max_d := ab.skillshot_reach()
 	max_d = wall_travel_distance(dir, max_d, false)
 	var travel := max_d
-	if ab.splash_radius > 0.05:
+	if ab.splash_radius > 0.05 and not ab.pierces_skillshot():
 		var to_aim := Vector2(point.x - global_position.x, point.z - global_position.z).length()
 		travel = clampf(to_aim, 0.45, max_d)
 	var spawn_off := clampf(minf(0.8, travel * 0.22), 0.12, maxf(travel - 0.2, 0.12))
@@ -4108,13 +4942,15 @@ func _spawn_skillshot(dir: Vector3, point: Vector3, ab: AbilityDef, extras: Pack
 		"overheat_cast_id": ice_id,
 		"combat_text_cast_id": combat_text_cast_id,
 		"infusion_double": double_mask,
-		"vfx_scene": ab.vfx_scene,
+		"vfx_scene": ab.travel_vfx_path(),
+		"vfx_body_aura": ab.vfx_body_aura,
 		"vfx_scale": ab.vfx_scale,
 		"vfx_primary": ab.vfx_primary,
 		"vfx_secondary": ab.vfx_secondary,
 		"vfx_tertiary": ab.vfx_tertiary,
 		"vfx_yaw": ab.vfx_yaw,
-		"vfx_layers": ab.vfx_layers,
+		"vfx_persist": ab.vfx_persist,
+		"vfx_impact": ab.vfx_impact,
 		"splash_radius": ab.splash_radius,
 		"splash_ratio": ab.splash_ratio,
 		"splash_vfx": splash_vfx if ab.splash_radius > 0.0 else "",
@@ -4127,9 +4963,9 @@ func _spawn_skillshot(dir: Vector3, point: Vector3, ab: AbilityDef, extras: Pack
 		"shield_duration": _shield_duration_for(ab),
 		"applies_rejuvenation": ab.applies_rejuvenation,
 		"blessing_power": _blessing_power_for(ab),
-		"hit_cooldown_reduction": ab.hit_cooldown_reduction,
+		"hit_cooldown_reduction": 0.0,
 		"holy_pulse_ratio": ab.holy_pulse_ratio,
-		"pierce": ab.delivery == AbilityDef.Delivery.WAVE,
+		"pierce": ab.pierces_skillshot(),
 	})
 
 
@@ -4152,13 +4988,15 @@ func _spawn_ally_delivery(target: Unit, ab: AbilityDef) -> void:
 		"skillshot": false,
 		"element": ab.element,
 		"extra_elements": extras,
-		"vfx_scene": ab.vfx_scene,
+		"vfx_scene": ab.travel_vfx_path(),
+		"vfx_body_aura": ab.vfx_body_aura,
 		"vfx_scale": ab.vfx_scale,
 		"vfx_primary": ab.vfx_primary,
 		"vfx_secondary": ab.vfx_secondary,
 		"vfx_tertiary": ab.vfx_tertiary,
 		"vfx_yaw": ab.vfx_yaw,
-		"vfx_layers": ab.vfx_layers,
+		"vfx_persist": ab.vfx_persist,
+		"vfx_impact": ab.vfx_impact,
 		"ability_id": ab.combat_id(),
 		"ghost_enemies": SpellPower.ghosts_enemies(ab),
 		"heal_allies": ab.heal_allies or ab.altered,
@@ -4172,14 +5010,12 @@ func _spawn_ally_delivery(target: Unit, ab: AbilityDef) -> void:
 
 
 func _cone_blast(dir: Vector3, ab: AbilityDef, extras: PackedInt32Array = PackedInt32Array(), overheat_cast_id: int = -1, infusion_double: int = 0, combat_text_cast_id: int = -1) -> void:
-	var length := ab.range if ab.range > 0.05 else ab.skillshot_length
+	var length := ab.skillshot_reach()
 	var half := ab.cone_angle * 0.5
 	_IceBlastFx.spawn(global_position, dir, length, ab.cone_angle, cone_wall_lengths(dir, ab.cone_angle, length))
-	for other in ArenaState.units:
+	for other in ArenaState.units_near(global_position, length, false, true, true):
 		var u := other as Unit
 		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
-		if u.is_structure:
 			continue
 		var to := u.global_position - global_position
 		to.y = 0.0
@@ -4203,14 +5039,7 @@ func _cone_blast(dir: Vector3, ab: AbilityDef, extras: PackedInt32Array = Packed
 
 
 func _play_ability_fx(ab: AbilityDef, pos: Vector3, look: Vector3 = Vector3.ZERO) -> void:
-	var played := false
-	if ab.vfx_scene != "":
-		var cfg := ab.vfx_cfg()
-		if look.length_squared() > 0.0001:
-			cfg["look"] = look
-		if AbilityFx.play_at(ab.vfx_scene, pos, cfg):
-			played = true
-	SpellVfx.play_impact(pos, {"vfx_layers": ab.vfx_layers})
+	var played := SpellVfx.play_point(ab, pos, look)
 	_SpellBaseFx.cast_pop(pos, ab)
 	if played:
 		return
@@ -4232,7 +5061,7 @@ func _place_sanctuary(point: Vector3, ab: AbilityDef, slot: int = -1, combat_tex
 		ab.extra_elements,
 		combat_text_cast_id
 	))
-	SpellVfx.play_impact(Vector3(point.x, 0.35, point.z), {"vfx_layers": ab.vfx_layers})
+	SpellVfx.play_ability_impact(ab, Vector3(point.x, 0.35, point.z))
 
 
 func _clear_protection_wall() -> void:
@@ -4255,10 +5084,8 @@ func _live_spell_wall() -> SpellWall:
 	return _spell_wall as SpellWall
 
 
-func _place_spell_wall(point: Vector3, ab: AbilityDef, extras: PackedInt32Array, ice_id: int, double_mask: int, combat_text_cast_id: int = -1, slot: int = -1) -> void:
+func _place_spell_wall(point: Vector3, ab: AbilityDef, extras: PackedInt32Array, ice_id: int, double_mask: int, combat_text_cast_id: int = -1, _slot: int = -1) -> void:
 	if SpellWallLayout.style_id(ab) == "illusion":
-		if slot >= 0:
-			_illusion_wall_slot = slot
 		_SpellWall.spawn(self, point, ab, extras, ice_id, double_mask, combat_text_cast_id)
 		return
 	var old := _live_spell_wall()
@@ -4277,49 +5104,208 @@ func _place_ground_aoe(point: Vector3, ab: AbilityDef, extras: PackedInt32Array,
 			_register_floor_extra(slot, _GroundAoe.spawn(self, extra.at, ab, extras, extra.radius, combat_text_cast_id))
 
 
-func _fire_ray_tick(index: int, ab: AbilityDef, target: Unit) -> bool:
-	if not ab.accepts_unit(team, target):
+func _ensure_spell_rays(ab: AbilityDef) -> void:
+	var tint: Color = ab.vfx_primary if ab.vfx_primary.a > 0.02 else ab.color
+	var width := 0.192
+	if ab.skillshot_width > 0.05:
+		width = ab.skillshot_width * (0.16 / 0.55)
+	var count := maxi(ab.projectile_count, 1)
+	var yaws := _ray_fan_yaws(count)
+	var life := maxf(ab.channel_time * cast_time_scale(), 0.05)
+	var reach := ab.range if ab.range > 0.05 else 14.0
+	while _spell_rays.size() > count:
+		var extra = _spell_rays.pop_back()
+		if is_instance_valid(extra):
+			extra.queue_free()
+	for i in count:
+		var ray: SpellRay = null
+		if i < _spell_rays.size() and is_instance_valid(_spell_rays[i]) and _spell_rays[i] is SpellRay:
+			ray = _spell_rays[i] as SpellRay
+		else:
+			ray = _SpellRay.attach_aimed(self, tint, life, ab)
+			if i < _spell_rays.size():
+				var old = _spell_rays[i]
+				if is_instance_valid(old):
+					old.queue_free()
+				_spell_rays[i] = ray
+			else:
+				_spell_rays.append(ray)
+		ray.beam_width = width
+		ray.steer_yaw = yaws[i] if i < yaws.size() else 0.0
+		ray.reach = reach
+
+
+func _ray_fan_yaws(count: int) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	var n := maxi(count, 1)
+	if n <= 1:
+		out.append(0.0)
+		return out
+	var spread := deg_to_rad(CombatBalance.flat("fan.angle"))
+	var start := -spread * 0.5 * float(n - 1)
+	for i in n:
+		out.append(start + spread * float(i))
+	return out
+
+
+func ray_beam_end(ab: AbilityDef, dir: Vector3) -> Vector3:
+	var origin := Vector3(global_position.x, 0.0, global_position.z)
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length_squared() < 0.0001:
+		flat = facing_dir()
+	if flat.length_squared() < 0.0001:
+		flat = Vector3(0.0, 0.0, 1.0)
+	flat = flat.normalized()
+	var reach := ab.range if ab.range > 0.05 else 14.0
+	return wall_stop_point(origin + flat * reach, true)
+
+
+func _ray_beam_hits(ab: AbilityDef, u: Unit) -> bool:
+	if u == null or u == self or not is_instance_valid(u) or u.is_dead:
 		return false
+	if u.team == team:
+		return ab.can_target_allies()
+	if SpellPower.ghosts_enemies(ab):
+		return false
+	return ab.can_target_enemies()
+
+
+func _dist_to_xz_segment(p: Vector3, a: Vector3, b: Vector3) -> float:
+	var ap := Vector2(p.x - a.x, p.z - a.z)
+	var ab := Vector2(b.x - a.x, b.z - a.z)
+	var len_sq := ab.length_squared()
+	var t := 0.0 if len_sq < 0.0001 else clampf(ap.dot(ab) / len_sq, 0.0, 1.0)
+	return Vector2(p.x, p.z).distance_to(Vector2(a.x, a.z) + ab * t)
+
+
+func _ray_beam_targets(ab: AbilityDef, aim: Vector3) -> Array[Unit]:
+	var found: Array[Unit] = []
+	var start := Vector3(global_position.x, 0.0, global_position.z)
+	var end := Vector3(aim.x, 0.0, aim.z)
+	var delta := end - start
+	var length := delta.length()
+	if length < 0.08:
+		return found
+	var dir := delta / length
+	var half_w := ab.skillshot_width * 0.5 if ab.skillshot_width > 0.05 else 0.28
+	var query_center := start.lerp(end, 0.5)
+	var query_radius := length * 0.5 + half_w
+	var ranked: Array[Dictionary] = []
+	for u in ArenaState.units_near(query_center, query_radius, true, true, true):
+		if not _ray_beam_hits(ab, u):
+			continue
+		if _dist_to_xz_segment(u.global_position, start, end) > half_w + u.radius:
+			continue
+		var along := Vector3(u.global_position.x - start.x, 0.0, u.global_position.z - start.z).dot(dir)
+		if along < -u.radius or along > length + u.radius:
+			continue
+		ranked.append({"unit": u, "along": along})
+	ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.along) < float(b.along))
+	var pierce := ab.pierces_skillshot()
+	for row in ranked:
+		found.append(row.unit as Unit)
+		if not pierce:
+			break
+	return found
+
+
+func _fire_ray_tick(index: int, ab: AbilityDef, _locked: Unit) -> bool:
 	spend_mana(index)
-	if _spell_ray == null or not is_instance_valid(_spell_ray):
-		_spell_ray = _SpellRay.attach(self, target, ab.vfx_primary if ab.vfx_primary.a > 0.02 else ab.color)
-	elif _spell_ray.get("target") != null:
-		_spell_ray.set("target", target)
+	_ensure_spell_rays(ab)
 	var extras := _cast_extras(ab)
 	var ice_id := _begin_ice_overheat_cast(ab, extras)
+	_apply_ray_beam_hits(ab, extras, ice_id, _channel_combat_text_cast_id, true)
+	if ab.echo and not _channel_was_recast:
+		var tw := create_tween()
+		tw.tween_interval(0.1)
+		tw.tween_callback(_finish_ray_echo.bind(ab, extras, ice_id, _channel_combat_text_cast_id))
+	return true
+
+
+func _apply_ray_beam_hits(ab: AbilityDef, extras: PackedInt32Array, ice_id: int, combat_text_cast_id: int, allow_pulse: bool) -> void:
 	var dmg := _scaled(ab.damage if ab.damage > 0.05 else ab.tick_damage)
+	var origin := Vector3(global_position.x, 0.0, global_position.z)
+	var aim := controller.cast_point if controller != null else origin + facing_dir() * (ab.range if ab.range > 0.05 else 14.0)
+	var center := Vector3(aim.x - origin.x, 0.0, aim.z - origin.z)
+	if center.length_squared() < 0.0001:
+		center = facing_dir()
+	if center.length_squared() < 0.0001:
+		center = Vector3(0.0, 0.0, 1.0)
+	center = center.normalized()
+	var yaws := _ray_fan_yaws(maxi(ab.projectile_count, 1))
+	var seen: Dictionary = {}
+	var pulse_host: Unit = null
+	for yaw in yaws:
+		var dir := center.rotated(Vector3.UP, yaw)
+		var dest := ray_beam_end(ab, dir)
+		for target in _ray_beam_targets(ab, dest):
+			var id := target.get_instance_id()
+			if seen.has(id):
+				continue
+			seen[id] = true
+			_hit_ray_target(target, ab, extras, ice_id, dmg, combat_text_cast_id)
+			if pulse_host == null and target.team != team:
+				pulse_host = target
+	if allow_pulse:
+		_try_illusion_ray_pulse(pulse_host, ab, extras, ice_id, dmg, combat_text_cast_id)
+
+
+func _hit_ray_target(target: Unit, ab: AbilityDef, extras: PackedInt32Array, ice_id: int, dmg: float, combat_text_cast_id: int) -> void:
+	if target == null or not is_instance_valid(target) or target.is_dead:
+		return
 	if target.team == team:
 		_apply_ally_spell(target, ab, true, false)
 		if target != self:
 			apply_altered_from(ab, false)
-	else:
-		target.receive_ability_hit(self, ab.element, dmg, 0.0, extras, false, true, true, ice_id, _infusion_double_mask(), ab.combat_id(), _channel_combat_text_cast_id)
-		if UnitWind.has_wind(ab) and not UnitIllusion.has_illusion(ab):
-			UnitWind.start_ray_push(target, self)
-		_illusion_ray_bounces(target, ab, extras, ice_id, dmg, _channel_combat_text_cast_id)
-	if ab.echo and not _channel_was_recast:
-		var target_id := target.get_instance_id() if target != null and is_instance_valid(target) else 0
-		var tw := create_tween()
-		tw.tween_interval(0.1)
-		tw.tween_callback(_finish_ray_echo.bind(target_id, ab, extras, ice_id, _channel_combat_text_cast_id))
-	return true
-
-
-func _finish_ray_echo(target_id: int, echo_ab: AbilityDef, echo_extras: PackedInt32Array, echo_ice: int, echo_combat_text_cast_id: int) -> void:
-	if is_dead or echo_ab == null:
 		return
-	var echo_target := instance_from_id(target_id) as Unit if target_id != 0 else null
-	if echo_target == null or not is_instance_valid(echo_target) or echo_target.is_dead:
+	target.receive_ability_hit(self, ab.element, dmg, 0.0, extras, false, true, true, ice_id, _infusion_double_mask(), ab.combat_id(), combat_text_cast_id)
+	if UnitWind.has_wind(ab):
+		UnitWind.start_ray_push(target, self)
+
+
+func _try_illusion_ray_pulse(host: Unit, ab: AbilityDef, extras: PackedInt32Array, ice_id: int, dmg: float, combat_text_cast_id: int) -> void:
+	if _illusion_ray_pulsed or not UnitIllusion.has_illusion(ab):
+		return
+	if host == null or not is_instance_valid(host) or host.is_dead or host.team == team:
+		return
+	_illusion_ray_pulsed = true
+	var pulse_el := _illusion_ray_pulse_element(ab)
+	var pulse_extras := PackedInt32Array()
+	for extra in extras:
+		if extra == AbilityDef.Element.ILLUSION or extra == pulse_el:
+			continue
+		pulse_extras.append(extra)
+	_SpellAura.burst_at(
+		self,
+		host.global_position,
+		ab,
+		pulse_extras,
+		ice_id,
+		_infusion_double_mask(),
+		combat_text_cast_id,
+		dmg,
+		CombatBalance.flat("illusion.ray.pulse"),
+		pulse_el
+	)
+
+
+func _illusion_ray_pulse_element(ab: AbilityDef) -> int:
+	if ab == null:
+		return AbilityDef.Element.ILLUSION
+	if ab.element != AbilityDef.Element.ILLUSION:
+		return ab.element
+	for extra in ab.extra_elements:
+		if extra != AbilityDef.Element.NONE and extra != AbilityDef.Element.ILLUSION:
+			return extra
+	return AbilityDef.Element.ILLUSION
+
+
+func _finish_ray_echo(echo_ab: AbilityDef, echo_extras: PackedInt32Array, echo_ice: int, echo_combat_text_cast_id: int) -> void:
+	if is_dead or echo_ab == null:
 		return
 	var saved := _cast_power
 	_cast_power = echo_ab.echo_damage_mult
-	var echo_dmg := _scaled(echo_ab.damage if echo_ab.damage > 0.05 else echo_ab.tick_damage)
-	if echo_target.team == team:
-		_apply_ally_spell(echo_target, echo_ab, true, false)
-		if echo_target != self:
-			apply_altered_from(echo_ab, false)
-	else:
-		echo_target.receive_ability_hit(self, echo_ab.element, echo_dmg, 0.0, echo_extras, false, true, true, echo_ice, _infusion_double_mask(), echo_ab.combat_id(), echo_combat_text_cast_id)
+	_apply_ray_beam_hits(echo_ab, echo_extras, echo_ice, echo_combat_text_cast_id, false)
 	_cast_power = saved
 
 
@@ -4356,10 +5342,10 @@ func _missile_bloom_sides(count: int) -> PackedFloat32Array:
 func _missile_bloom_lifts(count: int) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	if count <= 1:
-		out.append(0.55)
+		out.append(0.28)
 		return out
 	for i in count:
-		out.append(lerpf(1.15, -0.28, float(i) / float(count - 1)))
+		out.append(lerpf(0.52, -0.14, float(i) / float(count - 1)))
 	return out
 
 
@@ -4373,7 +5359,6 @@ func _fire_missile_set(target: Unit, origin: Vector3, ab: AbilityDef, extras: Pa
 	var sides := _missile_bloom_sides(n)
 	var lifts := _missile_bloom_lifts(n)
 	var width := CombatBalance.flat("missiles.arc.width")
-	var arc_min := CombatBalance.flat("missiles.arc.min")
 	var toward := (target.global_position - global_position).slide(Vector3.UP)
 	if toward.length_squared() < 0.001:
 		toward = facing_dir()
@@ -4387,8 +5372,13 @@ func _fire_missile_set(target: Unit, origin: Vector3, ab: AbilityDef, extras: Pa
 		travel = 16.0
 	for i in n:
 		var side := sides[i] if i < sides.size() else 0.0
-		var yaw := side * 0.95
+		var yaw := side * 0.28
 		var launch := toward.rotated(Vector3.UP, yaw)
+		var splash_r := 0.0
+		var splash_ratio := 0.0
+		if i == 0 and ab.splash_radius > 0.05 and ab.splash_ratio > 0.05:
+			splash_r = ab.splash_radius
+			splash_ratio = ab.splash_ratio / share
 		Projectile.spawn(self, origin, {
 			"homing": target,
 			"direction": launch,
@@ -4402,13 +5392,17 @@ func _fire_missile_set(target: Unit, origin: Vector3, ab: AbilityDef, extras: Pa
 			"extra_elements": extras,
 			"overheat_cast_id": ice_id,
 			"combat_text_cast_id": combat_text_cast_id,
-			"vfx_scene": ab.vfx_scene,
+			"splash_radius": splash_r,
+			"splash_ratio": splash_ratio,
+			"vfx_scene": ab.travel_vfx_path(),
+			"vfx_body_aura": ab.vfx_body_aura,
 			"vfx_scale": ab.vfx_scale,
 			"vfx_primary": ab.vfx_primary,
 			"vfx_secondary": ab.vfx_secondary,
 			"vfx_tertiary": ab.vfx_tertiary,
 			"vfx_yaw": ab.vfx_yaw,
-			"vfx_layers": ab.vfx_layers,
+			"vfx_persist": ab.vfx_persist,
+			"vfx_impact": ab.vfx_impact,
 			"ability_id": ab.combat_id(),
 			"ghost_enemies": SpellPower.ghosts_enemies(ab),
 			"heal_allies": false if extra_target else (ab.heal_allies or ab.altered),
@@ -4421,7 +5415,6 @@ func _fire_missile_set(target: Unit, origin: Vector3, ab: AbilityDef, extras: Pa
 			"arc_side": side,
 			"arc_width": width * randf_range(0.92, 1.08),
 			"arc_lift": lifts[i] if i < lifts.size() else 0.0,
-			"arc_min": arc_min,
 		})
 
 
@@ -4429,14 +5422,14 @@ func fire_channel_tick(index: int, target: Unit) -> bool:
 	if index < 0 or index >= abilities.size():
 		return false
 	var ab := abilities[index]
-	if target == null or not is_instance_valid(target) or target.is_dead:
-		return false
-	if not ab.accepts_unit(team, target):
-		return false
 	if not GameSession.has_infinite_mana() and mana < mana_cost_for(index):
 		return false
 	if ab.delivery == AbilityDef.Delivery.RAY:
 		return _fire_ray_tick(index, ab, target)
+	if target == null or not is_instance_valid(target) or target.is_dead:
+		return false
+	if not ab.accepts_unit(team, target):
+		return false
 	spend_mana(index)
 	var extras := _cast_extras(ab)
 	var ice_id := _begin_ice_overheat_cast(ab, extras)
@@ -4529,15 +5522,18 @@ func _delayed_ground(point: Vector3, ab: AbilityDef, extras: PackedInt32Array = 
 	t.combat_text_cast_id = combat_text_cast_id
 
 
-func _ground_burst(point: Vector3, ab: AbilityDef, damage_override: float = -1.0, radius_override: float = -1.0, extras: PackedInt32Array = PackedInt32Array(), overheat_cast_id: int = -1, infusion_double: int = 0, combust_mult: float = 2.0, combat_text_cast_id: int = -1) -> void:
+func _ground_burst(point: Vector3, ab: AbilityDef, damage_override: float = -1.0, radius_override: float = -1.0, extras: PackedInt32Array = PackedInt32Array(), overheat_cast_id: int = -1, infusion_double: int = 0, combat_text_cast_id: int = -1) -> void:
 	var dmg := _scaled(ab.damage) if damage_override < 0.0 else damage_override
 	var rad := ab.aoe_radius if radius_override < 0.0 else radius_override
 	var is_burst := ab.delivery == AbilityDef.Delivery.AOE_EXPLOSION or ab.id == "aoe_explosion"
 	var is_nova := ab.delivery == AbilityDef.Delivery.NOVA
 	if is_burst:
-		_GroundBlast.play(point, rad, ab)
+		if not SpellVfx.play_ability_impact(ab, point):
+			_GroundBlast.play(point, rad, ab)
 	elif not is_nova:
-		if ab.vfx_scene != "":
+		if SpellVfx.play_ability_impact(ab, point):
+			pass
+		elif ab.vfx_scene != "":
 			var cfg := ab.vfx_cfg()
 			cfg["area_radius"] = rad
 			if ab.id == "meteor":
@@ -4550,20 +5546,14 @@ func _ground_burst(point: Vector3, ab: AbilityDef, damage_override: float = -1.0
 		else:
 			_spawn_flash(point, ab.color, maxf(0.6, rad * 0.35))
 		_SpellBaseFx.burst(point, rad, ab)
-	for u in ArenaState.units:
+	for u in ArenaState.units_near(point, rad, false, true):
 		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
-		if u.is_structure:
-			continue
-		if u.hit_distance_to(point) > rad:
 			continue
 		if not _burst_has_los(point, u.global_position):
 			continue
 		if u.team == team:
 			_apply_area_ally(u, ab)
 			continue
-		if ab.id == "meteor":
-			u._combust(self, combust_mult)
 		u.receive_ability_hit(self, ab.element, dmg, 0.0, extras, false, true, true, overheat_cast_id, infusion_double, ab.combat_id(), combat_text_cast_id)
 		if ab.slow_duration > 0.0:
 			u.apply_slow(ab.slow_percent, ab.slow_duration)
@@ -4571,7 +5561,7 @@ func _ground_burst(point: Vector3, ab: AbilityDef, damage_override: float = -1.0
 	SpellWall.apply_radius_hit(self, point, rad, dmg, "hit", Color(0, 0, 0, 0), combat_text_cast_id, true)
 
 
-func _drop_meteors(point: Vector3, ab: AbilityDef, dmg: float, rad: float, extras: PackedInt32Array, ice_id: int, double_mask: int, combust_mult: float, combat_text_cast_id: int = -1) -> void:
+func _drop_meteors(point: Vector3, ab: AbilityDef, dmg: float, rad: float, extras: PackedInt32Array, ice_id: int, double_mask: int, combat_text_cast_id: int = -1) -> void:
 	var keep := 1.0
 	var spots: Array[Vector3] = [point]
 	var step := 0.0
@@ -4584,15 +5574,15 @@ func _drop_meteors(point: Vector3, ab: AbilityDef, dmg: float, rad: float, extra
 		var at: Vector3 = spots[i]
 		var wait := step * float(i)
 		if wait <= 0.001:
-			_drop_one_meteor(at, ab, dmg * keep, rad, extras, ice_id, double_mask, combust_mult, combat_text_cast_id)
+			_drop_one_meteor(at, ab, dmg * keep, rad, extras, ice_id, double_mask, combat_text_cast_id)
 		else:
-			get_tree().create_timer(wait).timeout.connect(_drop_one_meteor.bind(at, ab, dmg * keep, rad, extras, ice_id, double_mask, combust_mult, combat_text_cast_id))
+			get_tree().create_timer(wait).timeout.connect(_drop_one_meteor.bind(at, ab, dmg * keep, rad, extras, ice_id, double_mask, combat_text_cast_id))
 
 
-func _drop_one_meteor(point: Vector3, ab: AbilityDef, dmg: float, rad: float, extras: PackedInt32Array, ice_id: int, double_mask: int, combust_mult: float, combat_text_cast_id: int = -1) -> void:
+func _drop_one_meteor(point: Vector3, ab: AbilityDef, dmg: float, rad: float, extras: PackedInt32Array, ice_id: int, double_mask: int, combat_text_cast_id: int = -1) -> void:
 	if is_dead:
 		return
-	_MeteorFx.drop(self, point, ab, dmg, rad, extras, ice_id, double_mask, combust_mult, combat_text_cast_id)
+	_MeteorFx.drop(self, point, ab, dmg, rad, extras, ice_id, double_mask, combat_text_cast_id)
 
 
 func _queue_illusion_area_echoes(point: Vector3, ab: AbilityDef, extras: PackedInt32Array, ice_id: int, double_mask: int, damage_override: float = -1.0, radius_override: float = -1.0, combat_text_cast_id: int = -1) -> void:
@@ -4617,81 +5607,8 @@ func _finish_illusion_area_echo(point: Vector3, ab: AbilityDef, extras: PackedIn
 	if is_dead or ab == null:
 		return
 	_illusion_echoing = true
-	_ground_burst(point, ab, damage_override, echo_rad, extras, ice_id, double_mask, 2.0, combat_text_cast_id)
+	_ground_burst(point, ab, damage_override, echo_rad, extras, ice_id, double_mask, combat_text_cast_id)
 	_illusion_echoing = false
-
-
-func _illusion_ray_bounces(primary: Unit, ab: AbilityDef, extras: PackedInt32Array, ice_id: int, dmg: float, combat_text_cast_id: int = -1) -> void:
-	if not UnitIllusion.has_illusion(ab) or primary == null:
-		_clear_illusion_rays()
-		return
-	var hops := maxi(int(round(CombatBalance.flat("illusion.ray.hops"))), 1)
-	var bounce_range := CombatBalance.flat("illusion.ray.range")
-	var visited: Dictionary = {primary: true}
-	var current := primary
-	var chain: Array[Unit] = []
-	for _i in hops:
-		var nxt := _chain_bounce_target(current, visited, bounce_range)
-		if nxt == null:
-			break
-		visited[nxt] = true
-		chain.append(nxt)
-		current = nxt
-	_sync_illusion_rays(primary, chain, ab)
-	var origin := Vector3.ZERO
-	if UnitWind.has_wind(ab):
-		var pack: Array = [primary]
-		for hop in chain:
-			pack.append(hop)
-		origin = UnitIllusion.cluster_center(pack)
-		UnitIllusion.scatter_from(primary, origin)
-	if chain.is_empty():
-		return
-	var double_mask := _infusion_double_mask()
-	var fallback := facing_dir()
-	for i in chain.size():
-		var hop := chain[i]
-		var delay := ab.bounce_delay * float(i + 1)
-		if delay <= 0.001:
-			_apply_illusion_ray_hop(hop, ab, extras, ice_id, double_mask, dmg, origin, fallback, combat_text_cast_id)
-		else:
-			get_tree().create_timer(delay).timeout.connect(_apply_illusion_ray_hop.bind(hop, ab, extras, ice_id, double_mask, dmg, origin, fallback, combat_text_cast_id))
-
-
-func _sync_illusion_rays(primary: Unit, chain: Array[Unit], ab: AbilityDef) -> void:
-	var tint: Color = ab.vfx_primary if ab.vfx_primary.a > 0.02 else ab.color
-	while _illusion_rays.size() > chain.size():
-		var old = _illusion_rays.pop_back()
-		if old != null and is_instance_valid(old):
-			old.queue_free()
-	var prev := primary
-	for i in chain.size():
-		var hop := chain[i]
-		if i < _illusion_rays.size() and _illusion_rays[i] != null and is_instance_valid(_illusion_rays[i]):
-			var ray = _illusion_rays[i]
-			ray.source = prev
-			ray.target = hop
-		else:
-			if i < _illusion_rays.size():
-				_illusion_rays[i] = _SpellRay.attach(prev, hop, tint)
-			else:
-				_illusion_rays.append(_SpellRay.attach(prev, hop, tint))
-		prev = hop
-
-
-func _clear_illusion_rays() -> void:
-	for ray in _illusion_rays:
-		if ray != null and is_instance_valid(ray):
-			ray.queue_free()
-	_illusion_rays.clear()
-
-
-func _apply_illusion_ray_hop(hop: Unit, ab: AbilityDef, extras: PackedInt32Array, ice_id: int, double_mask: int, dmg: float, origin: Vector3 = Vector3.ZERO, fallback: Vector3 = Vector3.ZERO, combat_text_cast_id: int = -1) -> void:
-	if hop == null or not is_instance_valid(hop) or hop.is_dead:
-		return
-	hop.receive_ability_hit(self, ab.element, dmg, 0.0, extras, false, true, true, ice_id, double_mask, ab.combat_id(), combat_text_cast_id)
-	if UnitWind.has_wind(ab):
-		UnitIllusion.scatter_from(hop, origin, fallback)
 
 
 func cone_wall_lengths(dir: Vector3, angle: float, radius: float, steps: int = 28) -> PackedFloat32Array:
@@ -4726,7 +5643,7 @@ func _tick_elemental(delta: float) -> void:
 			_blessing_max = 0.0
 	if _freeze_immune_left > 0.0:
 		_freeze_immune_left = maxf(0.0, _freeze_immune_left - delta)
-		if _freeze_immune_left <= 0.0 and _chill_percent >= CHILL_FREEZE_AT:
+		if _freeze_immune_left <= 0.0 and _chill_stacks >= EnemyRank.stack_max():
 			_try_chill_freeze()
 	if _overcharge_left > 0.0:
 		_overcharge_left = maxf(0.0, _overcharge_left - delta)
@@ -4741,25 +5658,40 @@ func _tick_elemental(delta: float) -> void:
 		_stun_left = maxf(0.0, _stun_left - delta)
 		if _stun_left <= 0.0:
 			_stun_max = 0.0
+			_reset_shatter_shell()
 			_refresh_freeze_visual()
 	if _pending_freeze:
 		flush_pending_freeze()
 	if is_dead:
 		return
 	_tick_altered(delta)
+	UnitEnemyAlter.tick(self, delta)
+	TalentCombat.tick(self, delta)
+	_tick_furnace_marks(delta)
 	_tick_burn(delta)
-	_tick_combust(delta)
 	_tick_afflict(delta)
 	_tick_rejuv(delta)
+	_tick_lifebloom(delta)
+	_tick_stormbond(delta)
+	_tick_spread_copies(delta)
 	_mark_ice = maxf(0.0, _mark_ice - delta)
 	_chill_left = maxf(0.0, _chill_left - delta)
 	if _chill_left <= 0.0:
-		_chill_percent = 0.0
+		_clear_chill_stacks()
 	_mark_storm = maxf(0.0, _mark_storm - delta)
 	if _mark_storm <= 0.0:
 		_charged_stacks = 0
-	if not (_mark_fire > 0.0 and _mark_ice > 0.0 and _mark_storm > 0.0):
-		_had_triple = false
+
+
+func _tick_furnace_marks(delta: float) -> void:
+	if _singe_left > 0.0:
+		_singe_left = maxf(0.0, _singe_left - delta)
+		if _singe_left <= 0.0:
+			_clear_singe()
+	if _scorch_left > 0.0:
+		_scorch_left = maxf(0.0, _scorch_left - delta)
+		if _scorch_left <= 0.0:
+			clear_scorch()
 
 
 func _tick_burn(delta: float) -> void:
@@ -4779,6 +5711,8 @@ func _tick_burn(delta: float) -> void:
 			if layer_src is Unit and is_instance_valid(layer_src):
 				tick_source = layer_src
 		if tick_damage > 0.02:
+			if tick_source != null:
+				tick_damage = TalentCombat.modify_burn_tick(tick_source, self, tick_damage)
 			take_damage(tick_damage, tick_source, _DamageNumber.tint_for("burn"), "burn", "burn", false, false, -1, true)
 	var keep: Array[Dictionary] = []
 	for layer in _burn_layers:
@@ -4840,6 +5774,17 @@ func _clear_afflict() -> void:
 	_afflict_left = 0.0
 	_afflict_acc = 0.0
 	_afflict_src = null
+	_spread_afflict = 0
+	_spread_afflict_left = 0.0
+
+
+func _tick_spread_copies(delta: float) -> void:
+	_spread_chill_left = maxf(0.0, _spread_chill_left - delta)
+	if _spread_chill_left <= 0.02:
+		_spread_chill = 0
+	_spread_afflict_left = maxf(0.0, _spread_afflict_left - delta)
+	if _spread_afflict_left <= 0.02:
+		_spread_afflict = 0
 
 
 func _clear_rejuv() -> void:
@@ -4850,7 +5795,13 @@ func _clear_rejuv() -> void:
 
 
 func _rejuv_hps() -> float:
-	return CombatBalance.flat("rejuvenation.hps")
+	var hps := CombatBalance.flat("rejuvenation.hps")
+	var src := _rejuv_src if _rejuv_src != null and is_instance_valid(_rejuv_src) else null
+	if src != null:
+		var hooks := src.talent_hooks()
+		if hooks != null and hooks.evergreen > 0.0:
+			hps *= 1.0 + hooks.evergreen
+	return hps
 
 
 func _tick_rejuv(delta: float) -> void:
@@ -4871,50 +5822,48 @@ func _tick_rejuv(delta: float) -> void:
 		_clear_rejuv()
 
 
+func _tick_lifebloom(delta: float) -> void:
+	if _lifebloom_left <= 0.05:
+		_lifebloom_acc = 0.0
+		return
+	_lifebloom_left = maxf(0.0, _lifebloom_left - delta)
+	_lifebloom_acc += delta
+	while _lifebloom_acc >= 1.0 and _lifebloom_left > 0.0 and not is_dead:
+		_lifebloom_acc -= 1.0
+		var src: Unit = _lifebloom_src if _lifebloom_src != null and is_instance_valid(_lifebloom_src) else null
+		if _lifebloom_hps > 0.02:
+			apply_heal(_lifebloom_hps, src, "lifebloom")
+	if _lifebloom_left <= 0.02:
+		clear_lifebloom(true)
+
+
+func _tick_stormbond(delta: float) -> void:
+	if _stormbond_left <= 0.05:
+		return
+	_stormbond_left = maxf(0.0, _stormbond_left - delta)
+	if _stormbond_left <= 0.02:
+		_stormbond_src = null
+
+
 func _tick_afflict(delta: float) -> void:
-	if _afflict_stacks <= 0:
+	if _afflict_stacks <= 0 and _spread_afflict <= 0:
 		_afflict_acc = 0.0
 		return
-	_afflict_left = maxf(0.0, _afflict_left - delta)
+	if _afflict_stacks > 0:
+		_afflict_left = maxf(0.0, _afflict_left - delta)
 	_afflict_acc += delta
-	var per_stack := CombatBalance.flat("afflict.tick")
-	while _afflict_acc >= AFFLICT_TICK and _afflict_stacks > 0 and not is_dead:
+	while _afflict_acc >= AFFLICT_TICK and (_afflict_stacks > 0 or _spread_afflict > 0) and not is_dead:
 		_afflict_acc -= AFFLICT_TICK
-		var amount := per_stack * float(_afflict_stacks) * AFFLICT_TICK
+		var amount := afflict_tick_damage() * AFFLICT_TICK
 		if amount > 0.02:
 			var src: Unit = _afflict_src if _afflict_src != null and is_instance_valid(_afflict_src) else null
 			take_damage(amount, src, _DamageNumber.tint_for("afflicted"), "afflicted", "afflicted", false, false, -1, true)
-	if _afflict_left <= 0.02 or _afflict_stacks <= 0:
-		_clear_afflict()
-
-
-func _clear_combust() -> void:
-	_combust_tick = 0.0
-	_combust_left = 0.0
-	_combust_max = 0.0
-	_combust_acc = 0.0
-	_combust_hits_left = 0
-	_combust_src = null
-
-
-func _tick_combust(delta: float) -> void:
-	if _combust_hits_left <= 0 or _combust_tick <= 0.0:
-		return
-	_combust_acc += delta
-	_combust_left = maxf(0.0, float(_combust_hits_left) * COMBUST_TICK - _combust_acc)
-	var src = _combust_src
-	if not is_instance_valid(src):
-		src = null
-		_combust_src = null
-	while _combust_acc >= COMBUST_TICK and _combust_hits_left > 0:
-		_combust_acc -= COMBUST_TICK
-		_combust_hits_left -= 1
-		take_damage(_combust_tick, src, _DamageNumber.tint_for("combust"), "combust", "combust", false, false, -1, true)
-		if is_dead:
-			_clear_combust()
-			return
-	if _combust_hits_left <= 0:
-		_clear_combust()
+	if _afflict_stacks > 0 and _afflict_left <= 0.02:
+		_afflict_stacks = 0
+		_afflict_left = 0.0
+		if _spread_afflict <= 0:
+			_afflict_acc = 0.0
+			_afflict_src = null
 
 
 func _apply_mark(kind: int, _source: Unit, _stack_storm: bool = true, _stack_chill: bool = true, _infusion_double: int = 0, _can_freeze: bool = false) -> void:
@@ -4927,47 +5876,32 @@ func _apply_mark(kind: int, _source: Unit, _stack_storm: bool = true, _stack_chi
 
 
 func _try_chill_freeze(source: Unit = null) -> void:
-	if _chill_percent < CHILL_FREEZE_AT:
+	if _chill_stacks < EnemyRank.stack_max():
 		return
 	if apply_freeze(source):
 		_reaction_flash(Color(0.7, 0.92, 1.0), 0.95)
 
 
-func _clear_marks() -> void:
-	_clear_burn()
-	_clear_combust()
-	_clear_afflict()
-	_clear_rejuv()
-	_mark_ice = 0.0
+func _clear_chill_stacks() -> void:
+	_chill_stacks = 0
+	_chill_progress = 0.0
 	_chill_percent = 0.0
 	_chill_left = 0.0
+
+
+func _clear_marks() -> void:
+	_clear_burn()
+	_clear_afflict()
+	_clear_rejuv()
+	_clear_singe()
+	clear_scorch()
+	UnitEnemyAlter.clear_all(self)
+	_mark_ice = 0.0
+	_clear_chill_stacks()
+	_spread_chill = 0
+	_spread_chill_left = 0.0
 	_mark_storm = 0.0
 	_charged_stacks = 0
-	_had_triple = false
-
-
-func _combust(source: Unit, mult: float = 2.0) -> void:
-	var leftover := remaining_burn()
-	if leftover <= 0.0:
-		return
-	_clear_burn()
-	var tick := leftover * maxf(mult, 0.0) / COMBUST_DIVISOR
-	if tick <= 0.02:
-		return
-	_combust_tick = tick
-	_combust_left = COMBUST_DURATION
-	_combust_max = COMBUST_DURATION
-	_combust_acc = 0.0
-	_combust_hits_left = COMBUST_TICKS
-	_combust_src = source
-	_reaction_flash(Color(1.0, 0.45, 0.12), 1.0)
-	AbilityFx.play_at(AbilityFx.FIRE_CAST, global_position + Vector3(0.0, height * 0.2, 0.0), {
-		"scale": 0.9,
-		"lifetime": 0.9,
-		"primary_color": Color(1.0, 0.45, 0.12),
-		"secondary_color": Color(1.0, 0.22, 0.05),
-	})
-	AudioManager.play_at("reaction.combust", global_position + Vector3(0.0, height * 0.2, 0.0))
 
 
 func _reaction_flash(color: Color, size: float) -> void:

@@ -25,6 +25,7 @@ var _augment_pane: Control
 var _picker_kind: String = "base"
 var _focus_socket: int = 0
 var _base_socket: SpellSocket
+var _infusion_group: Control
 var _infusion_sockets: Array[SpellSocket] = []
 var _augment_sockets: Array[SpellSocket] = []
 var _craft_hint: Label
@@ -39,6 +40,7 @@ var _kit_hint: Label
 var _kit_lock: bool = false
 var _kit_name_popup: PopupPanel
 var _kit_name_edit: LineEdit
+var _swap_df: Button
 
 
 func _ready() -> void:
@@ -59,6 +61,8 @@ func _ready() -> void:
 func _on_socket_drop(kind: String, id: String, index: int, data: Dictionary) -> void:
 	if id.is_empty():
 		return
+	if _editing_skill() and kind != "augment":
+		return
 	var recipe := _recipe()
 	var from := String(data.get("from", ""))
 	var from_index := int(data.get("from_index", -1))
@@ -72,23 +76,17 @@ func _on_socket_drop(kind: String, id: String, index: int, data: Dictionary) -> 
 	elif kind == "augment":
 		if not SpellCatalog.augment_fits(recipe.base_id, id):
 			return
-		if id == SpellRecipe.OVERFLOW_ID:
-			if not recipe.has_overflow():
-				recipe.toggle_augment(id)
-		else:
-			if recipe.has_overflow():
-				return
-			if from == "socket" and from_index != index:
-				recipe.set_augment(from_index, "")
-			recipe.set_augment(index, id)
+		if from == "socket" and from_index != index:
+			recipe.set_augment(from_index, "")
+		recipe.set_augment(index, id)
 	GameSession.set_slot_recipe(_edit_index, recipe)
 	_refresh()
 
 
 func _on_socket_clear(kind: String, index: int) -> void:
-	var recipe := _recipe()
-	if kind == "base":
+	if kind == "base" or (_editing_skill() and kind == "infusion"):
 		return
+	var recipe := _recipe()
 	if kind == "infusion":
 		recipe.set_infusion(index, "")
 	elif kind == "augment":
@@ -98,10 +96,13 @@ func _on_socket_clear(kind: String, index: int) -> void:
 
 
 func _on_hotkey_drop(index: int, data: Dictionary) -> void:
-	_edit_index = clampi(index, 0, 5)
+	_edit_index = clampi(index, 0, SpellCatalog.BAR_SLOTS - 1)
 	var kind := String(data.get("kind", ""))
 	var id := String(data.get("id", ""))
 	if id.is_empty():
+		_refresh()
+		return
+	if _editing_skill() and kind != "augment":
 		_refresh()
 		return
 	if kind == "base":
@@ -132,11 +133,24 @@ func _build() -> void:
 	slots.alignment = BoxContainer.ALIGNMENT_CENTER
 	slots.add_theme_constant_override("separation", 6)
 	main.add_child(slots)
-	for i in 6:
+	for i in SpellCatalog.BAR_SLOTS:
+		if i == SpellCatalog.CRAFT_SLOTS:
+			var gap := Control.new()
+			gap.custom_minimum_size.x = 14
+			slots.add_child(gap)
 		var b := _slot_button(i)
 		slots.add_child(b)
 		_slot_buttons.append(b)
 		_paint_slot(b, i)
+	var swap_gap := Control.new()
+	swap_gap.custom_minimum_size.x = 8
+	slots.add_child(swap_gap)
+	_swap_df = _kit_btn("Swap", func() -> void:
+		GameSession.swap_skill_binds()
+	)
+	_swap_df.custom_minimum_size = Vector2(56, 88)
+	_swap_df.tooltip_text = "Swap D and F"
+	slots.add_child(_swap_df)
 	_stats = Label.new()
 	_stats.visible = false
 	main.add_child(_stats)
@@ -263,9 +277,10 @@ func _build_craft_bench() -> VBoxContainer:
 	_base_socket = _make_socket("base", 0, "+")
 	row.add_child(_socket_group("BASE", [_base_socket]))
 	_infusion_sockets.clear()
-	for i in 3:
+	for i in SpellRecipe.DEFAULT_INFUSIONS:
 		_infusion_sockets.append(_make_socket("infusion", i, "+"))
-	row.add_child(_socket_group("INFUSIONS", _infusion_sockets))
+	_infusion_group = _socket_group("INFUSIONS", _infusion_sockets)
+	row.add_child(_infusion_group)
 	_augment_sockets.clear()
 	for i in 3:
 		_augment_sockets.append(_make_socket("augment", i, "+"))
@@ -311,6 +326,8 @@ func _make_socket(kind: String, index: int, hint: String) -> SpellSocket:
 func _slot_button(index: int) -> SpellHotkeySlot:
 	var b := SpellHotkeySlot.new()
 	b.slot_index = index
+	b.accepts_base = SpellCatalog.is_craft_index(index)
+	b.accepts_infusion = SpellCatalog.is_craft_index(index)
 	b.pressed.connect(func() -> void:
 		_select_slot(index)
 	)
@@ -416,7 +433,11 @@ func _infusion_category(title: String, infusions: Array) -> VBoxContainer:
 	return col
 
 
-func _build_augment_row() -> HFlowContainer:
+func _build_augment_row() -> Control:
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size.y = 240
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var flow := _chip_flow(210.0)
 	for aug in SpellCatalog.all_augments():
 		var id := aug.id
@@ -428,26 +449,35 @@ func _build_augment_row() -> HFlowContainer:
 		b.setup("augment", id, aug.display_name, StatusIcons.texture_for(aug.id))
 		_hook_piece_tip(b, "augment", id)
 		_augment_buttons[id] = b
-	return flow
+	scroll.add_child(flow)
+	return scroll
 
 
 func _select_slot(index: int) -> void:
-	_edit_index = clampi(index, 0, 5)
-	_show_picker("base", 0)
+	_edit_index = clampi(index, 0, SpellCatalog.BAR_SLOTS - 1)
+	if _editing_skill():
+		_show_picker("augment", 0)
+	else:
+		_show_picker("base", 0)
 
 
 func _on_socket_pressed(kind: String, index: int) -> void:
+	if _editing_skill() and kind != "augment":
+		_show_picker("augment", index if kind == "augment" else 0)
+		return
 	_show_picker(kind, index)
 
 
 func _show_picker(kind: String, socket_index: int = -1) -> void:
+	if _editing_skill() and kind != "augment":
+		kind = "augment"
 	_picker_kind = kind
 	if socket_index >= 0:
 		_focus_socket = socket_index
 	if _base_pane:
-		_base_pane.visible = kind == "base"
+		_base_pane.visible = kind == "base" and not _editing_skill()
 	if _infusion_pane:
-		_infusion_pane.visible = kind == "infusion"
+		_infusion_pane.visible = kind == "infusion" and not _editing_skill()
 	if _augment_pane:
 		_augment_pane.visible = kind == "augment"
 	_refresh()
@@ -462,16 +492,29 @@ func _next_empty_infusion(recipe: SpellRecipe) -> int:
 
 
 func _next_empty_augment(recipe: SpellRecipe) -> int:
-	if recipe.has_overflow():
-		return -1
 	for i in SpellRecipe.MAX_AUGMENTS:
 		if i >= recipe.augment_ids.size() or String(recipe.augment_ids[i]).is_empty():
 			return i
 	return -1
 
 
+func _editing_skill() -> bool:
+	return SpellCatalog.is_skill_index(_edit_index)
+
+
 func _recipe() -> SpellRecipe:
 	GameSession.ensure_loadout()
+	if _editing_skill():
+		var overlay := GameSession.skill_recipe(_edit_index - SpellCatalog.CRAFT_SLOTS)
+		if overlay != null:
+			return overlay
+		var empty := SpellRecipe.new()
+		empty.base_id = GameSession.bound_skill_id(_edit_index)
+		empty.infusion_ids = PackedStringArray()
+		empty.augment_ids = PackedStringArray()
+		GameSession.set_slot_recipe(_edit_index, empty)
+		var stored := GameSession.skill_recipe(_edit_index - SpellCatalog.CRAFT_SLOTS)
+		return stored if stored != null else empty
 	var item = GameSession.spell_loadout[_edit_index]
 	if item is SpellRecipe:
 		return item
@@ -481,7 +524,7 @@ func _recipe() -> SpellRecipe:
 
 
 func _set_base(base_id: String) -> void:
-	if not SpellCatalog.is_base_available(base_id):
+	if _editing_skill() or not SpellCatalog.is_base_available(base_id):
 		return
 	var recipe := _recipe()
 	recipe.base_id = base_id
@@ -491,6 +534,8 @@ func _set_base(base_id: String) -> void:
 
 
 func _toggle_infusion(infusion_id: String) -> void:
+	if _editing_skill():
+		return
 	var recipe := _recipe()
 	if recipe.has_infusion(infusion_id):
 		recipe.toggle_infusion(infusion_id)
@@ -514,16 +559,11 @@ func _toggle_augment(augment_id: String) -> void:
 	var recipe := _recipe()
 	if not recipe.has_augment(augment_id) and not SpellCatalog.augment_fits(recipe.base_id, augment_id):
 		return
-	if recipe.has_overflow() and augment_id != SpellRecipe.OVERFLOW_ID:
-		return
-	if augment_id == SpellRecipe.OVERFLOW_ID or _picker_kind != "augment" or _focus_socket < 0:
+	if _picker_kind != "augment" or _focus_socket < 0:
 		recipe.toggle_augment(augment_id)
 	else:
 		recipe.set_augment(_focus_socket, augment_id)
 	GameSession.set_slot_recipe(_edit_index, recipe)
-	if recipe.has_overflow():
-		_show_picker("infusion", _next_empty_infusion(recipe))
-		return
 	var next := _next_empty_augment(recipe)
 	if next >= 0:
 		_show_picker("augment", next)
@@ -538,6 +578,10 @@ func _fill_lore(ab: AbilityDef, recipe: SpellRecipe) -> void:
 		var flavor := String(parts.get("flavor", ""))
 		if not flavor.is_empty():
 			top.append(flavor)
+		if recipe != null and not recipe.base_id.is_empty():
+			var tag_line := SpellTags.display_line(SpellCatalog.tags_for(recipe.base_id))
+			if not tag_line.is_empty():
+				top.append(tag_line)
 		var lock := String(parts.get("lock", ""))
 		if not lock.is_empty():
 			top.append(lock)
@@ -545,18 +589,36 @@ func _fill_lore(ab: AbilityDef, recipe: SpellRecipe) -> void:
 	if _lore_costs:
 		_set_bbcode(_lore_costs, "\n".join(parts.get("costs", PackedStringArray())))
 	if _lore_infusions:
-		var inf_lines: PackedStringArray = PackedStringArray()
-		var note := String(parts.get("infusion_note", ""))
-		if not note.is_empty():
-			inf_lines.append(note)
-		for line in parts.get("infusions", PackedStringArray()):
-			inf_lines.append(String(line))
-		_set_bbcode(_lore_infusions, "\n".join(inf_lines) if not inf_lines.is_empty() else "—")
+		if _editing_skill():
+			if recipe.base_id.is_empty():
+				_set_bbcode(_lore_infusions, "—")
+			else:
+				_set_bbcode(_lore_infusions, "Damage type is built into this ultimate.")
+		else:
+			var inf_lines: PackedStringArray = PackedStringArray()
+			for line in parts.get("infusions", PackedStringArray()):
+				inf_lines.append(String(line))
+			_set_bbcode(_lore_infusions, "\n".join(inf_lines) if not inf_lines.is_empty() else "—")
 	if _lore_augments:
-		var aug_lines: PackedStringArray = PackedStringArray()
-		for line in parts.get("augments", PackedStringArray()):
-			aug_lines.append(String(line))
-		_set_bbcode(_lore_augments, "\n".join(aug_lines) if not aug_lines.is_empty() else "—")
+		if _editing_skill() and (recipe == null or recipe.base_id.is_empty()):
+			_set_bbcode(_lore_augments, "—")
+		else:
+			var aug_lines: PackedStringArray = PackedStringArray()
+			for line in parts.get("augments", PackedStringArray()):
+				aug_lines.append(String(line))
+			_set_bbcode(_lore_augments, "\n".join(aug_lines) if not aug_lines.is_empty() else "—")
+
+
+func _fill_empty_skill_lore(ab: AbilityDef) -> void:
+	var text := ab.description if ab != null and not ab.description.is_empty() else "No ultimate bound."
+	if _lore:
+		_set_bbcode(_lore, text)
+	if _lore_costs:
+		_set_bbcode(_lore_costs, "")
+	if _lore_infusions:
+		_set_bbcode(_lore_infusions, "—")
+	if _lore_augments:
+		_set_bbcode(_lore_augments, "—")
 
 
 func _set_bbcode(lab: RichTextLabel, text: String) -> void:
@@ -819,15 +881,19 @@ func _confirm_kit_name() -> void:
 
 func _refresh() -> void:
 	var recipe := _recipe()
-	var ab := SpellCompiler.compile(recipe, _HOTKEYS[_edit_index])
+	var unbound_skill := _editing_skill() and (recipe == null or recipe.base_id.is_empty())
+	var ab := ClassSkillCompiler.empty_slot(_HOTKEYS[_edit_index]) if unbound_skill else SpellCompiler.compile_slot(recipe, _HOTKEYS[_edit_index])
 	for i in _slot_buttons.size():
 		_paint_slot(_slot_buttons[i], i)
 		_slot_buttons[i].set_selected(i == _edit_index)
 	if _lore_title:
 		_lore_title.text = ab.display_name
 	if _lore_icon:
-		_lore_icon.texture = StatusIcons.texture_for_ability(ab.icon_id, ab.icon_infusion_tag)
-	_fill_lore(ab, recipe)
+		_lore_icon.texture = null if ab.icon_id.is_empty() else StatusIcons.texture_for_ability(ab.icon_id, ab.icon_infusion_tag)
+	if unbound_skill:
+		_fill_empty_skill_lore(ab)
+	else:
+		_fill_lore(ab, recipe)
 	if _picker_kind == "base":
 		for id in _base_buttons.keys():
 			_base_buttons[id].set_selected(id == recipe.base_id)
@@ -836,38 +902,54 @@ func _refresh() -> void:
 			"infusion":
 				_picker_heading.text = "INFUSIONS  (up to %d)" % recipe.infusion_cap()
 			"augment":
-				_picker_heading.text = "AUGMENTS  (Overflow only)" if recipe.has_overflow() else "AUGMENTS  (up to 3)"
+				_picker_heading.text = "AUGMENTS  (up to 3)"
 			_:
 				_picker_heading.text = "BASES"
 	if _picker_kind == "infusion":
 		for id in _infusion_buttons.keys():
 			_infusion_buttons[id].set_selected(recipe.has_infusion(id))
-	if _picker_kind == "augment":
-		_paint_augment_buttons(recipe)
+	if _craft_hint:
+		if _editing_skill():
+			if recipe.base_id.is_empty():
+				_craft_hint.text = "Unlock this ultimate on the Talents tab. It binds to D or F automatically."
+			else:
+				_craft_hint.text = "D and F keep their class skill and damage type. Add augments only. Use Swap to switch D and F."
+		else:
+			_craft_hint.text = "Click an empty socket to choose pieces. Right-click a filled socket to remove it."
+	if _swap_df != null:
+		_swap_df.disabled = GameSession.bound_skill_id(SpellCatalog.CRAFT_SLOTS).is_empty() and GameSession.bound_skill_id(SpellCatalog.CRAFT_SLOTS + 1).is_empty()
+	_paint_augment_buttons(recipe)
 	_paint_sockets(recipe)
 
 
 func _paint_augment_buttons(recipe: SpellRecipe) -> void:
-	var overflow := recipe.has_overflow()
 	for id in _augment_buttons.keys():
 		var chip: SpellPieceChip = _augment_buttons[id]
-		chip.set_selected(recipe.has_augment(id))
-		var skip := SpellCatalog.augment_skip_reason(recipe.base_id, id)
-		if not skip.is_empty():
-			chip.modulate = Color(0.55, 0.55, 0.6, 0.7)
-		elif overflow and id != SpellRecipe.OVERFLOW_ID:
-			chip.modulate = Color(0.55, 0.55, 0.6, 0.7)
-		else:
-			chip.modulate = Color.WHITE
+		var selected := recipe.has_augment(id)
+		var skip := SpellCatalog.recipe_augment_skip_reason(recipe, id)
+		chip.visible = skip.is_empty() or selected
+		chip.set_selected(selected)
+	if _tip_from != null and is_instance_valid(_tip_from) and not _tip_from.visible:
+		_hide_piece_tip()
 
 
 func _paint_sockets(recipe: SpellRecipe) -> void:
-	var base := SpellCatalog.get_base(recipe.base_id)
+	var skill_slot := _editing_skill()
+	var bound := not recipe.base_id.is_empty()
+	var base := SpellCatalog.resolve_base(recipe.base_id) if bound else null
 	if _base_socket:
-		_base_socket.set_piece(base.id, StatusIcons.texture_for_ability(base.icon_id, ""), base.display_name)
-		_base_socket.set_active(_picker_kind == "base")
-	var overflow := recipe.has_overflow()
-	var cap := recipe.infusion_cap()
+		_base_socket.set_locked(skill_slot)
+		if base:
+			_base_socket.set_piece(base.id, StatusIcons.texture_for_ability(base.icon_id, ""), base.display_name)
+		elif skill_slot:
+			_base_socket.set_piece("", null, "Empty")
+		else:
+			var fallback := SpellCatalog.get_base(recipe.base_id)
+			_base_socket.set_piece(fallback.id, StatusIcons.texture_for_ability(fallback.icon_id, ""), fallback.display_name)
+		_base_socket.set_active(_picker_kind == "base" and not skill_slot)
+	if _infusion_group:
+		_infusion_group.visible = not skill_slot
+	var cap := 0 if skill_slot else recipe.infusion_cap()
 	for i in _infusion_sockets.size():
 		var sock: SpellSocket = _infusion_sockets[i]
 		sock.visible = i < cap
@@ -883,29 +965,30 @@ func _paint_sockets(recipe: SpellRecipe) -> void:
 		sock.set_active(_picker_kind == "infusion" and i == _focus_socket)
 	for i in _augment_sockets.size():
 		var sock: SpellSocket = _augment_sockets[i]
-		sock.visible = not overflow or i == 0
-		sock.set_locked(false)
-		if not sock.visible:
-			continue
-		if overflow:
-			var overflow_aug := SpellCatalog.get_augment(SpellRecipe.OVERFLOW_ID)
-			sock.set_piece(overflow_aug.id, StatusIcons.texture_for(overflow_aug.id), overflow_aug.display_name)
-			sock.set_active(_picker_kind == "augment" and i == 0)
-			continue
+		sock.visible = true
+		sock.set_locked(skill_slot and not bound)
 		var aug_id := recipe.augment_ids[i] if i < recipe.augment_ids.size() else ""
 		var aug := SpellCatalog.get_augment(aug_id) if not aug_id.is_empty() else null
 		if aug:
 			sock.set_piece(aug.id, StatusIcons.texture_for(aug.id), aug.display_name)
 		else:
 			sock.set_piece("", null, "+")
-		sock.set_active(_picker_kind == "augment" and i == _focus_socket)
+		sock.set_active(_picker_kind == "augment" and i == _focus_socket and bound)
 
 
 func _paint_slot(b: SpellHotkeySlot, index: int) -> void:
 	GameSession.ensure_loadout()
-	var recipe: SpellRecipe = GameSession.spell_loadout[index] if index < GameSession.spell_loadout.size() and GameSession.spell_loadout[index] is SpellRecipe else SpellCatalog.default_loadout()[index]
-	var ab := SpellCompiler.compile(recipe, _HOTKEYS[index])
-	b.set_art(StatusIcons.texture_for_ability(ab.icon_id, ab.icon_infusion_tag), _HOTKEYS[index])
+	var recipe: SpellRecipe
+	if SpellCatalog.is_skill_index(index):
+		recipe = GameSession.skill_recipe(index - SpellCatalog.CRAFT_SLOTS)
+		if recipe == null:
+			recipe = SpellRecipe.new()
+			recipe.base_id = GameSession.bound_skill_id(index)
+	else:
+		recipe = GameSession.spell_loadout[index] if index < GameSession.spell_loadout.size() and GameSession.spell_loadout[index] is SpellRecipe else SpellCatalog.default_loadout()[index]
+	var ab := SpellCompiler.compile_slot(recipe, _HOTKEYS[index])
+	var tex: Texture2D = null if ab.icon_id.is_empty() else StatusIcons.texture_for_ability(ab.icon_id, ab.icon_infusion_tag)
+	b.set_art(tex, _HOTKEYS[index])
 
 
 func _cast_label(ab: AbilityDef) -> String:
@@ -1004,12 +1087,6 @@ func _show_piece_tip(kind: String, id: String, from: Control) -> void:
 	if _tip == null or id.is_empty():
 		return
 	var text := SpellCard.piece_tooltip(kind, id, true)
-	if kind == "augment":
-		var skip := SpellCatalog.augment_skip_reason(_recipe().base_id, id)
-		if skip.is_empty() and _recipe().has_overflow() and id != SpellRecipe.OVERFLOW_ID:
-			skip = "Overflow cannot be combined with other augments."
-		if not skip.is_empty():
-			text = "[color=#ff857a]%s[/color]\n\n%s" % [skip, text]
 	if text.is_empty():
 		_hide_piece_tip()
 		return

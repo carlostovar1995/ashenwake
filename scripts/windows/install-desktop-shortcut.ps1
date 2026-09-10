@@ -1,4 +1,4 @@
-# Install a native "Sync Ashenwake" desktop shortcut (no WSL).
+# Install a native "Sync Ashenwake" desktop shortcut.
 $ErrorActionPreference = "Stop"
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path

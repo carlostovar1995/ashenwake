@@ -420,7 +420,10 @@ func _load_mix() -> void:
 	_mix.clear()
 	_timing.clear()
 	var cfg := ConfigFile.new()
-	if cfg.load(_MIX_PATH) != OK:
+	var result := cfg.load(_MIX_PATH)
+	if result != OK:
+		if result != ERR_FILE_NOT_FOUND:
+			push_warning("AudioManager: could not load saved mix (%s)" % error_string(result))
 		return
 	if cfg.has_section("mix"):
 		for key in cfg.get_section_keys("mix"):
@@ -444,4 +447,6 @@ func _save_mix() -> void:
 		if not _Catalog.EVENTS.has(event_id):
 			continue
 		cfg.set_value("timing", event_id, float(_timing[event_id]))
-	cfg.save(_MIX_PATH)
+	var result := cfg.save(_MIX_PATH)
+	if result != OK:
+		push_warning("AudioManager: could not save mix (%s)" % error_string(result))

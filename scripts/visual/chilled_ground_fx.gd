@@ -8,6 +8,7 @@ const _WISP_SHADER := preload("res://scripts/visual/ice_wisp.gdshader")
 
 const HASTE_PERCENT := 0.30
 const HASTE_REFRESH := 0.12
+const HASTE_REFRESH_INTERVAL := 0.10
 const DRAW_PRIORITY := 4
 const MAX_OPACITY := 0.20
 const FILL_ALPHA := 0.12
@@ -30,6 +31,7 @@ var combat_text_cast_id: int = -1
 
 var _elapsed: float = 0.0
 var _tick_acc: float = 0.0
+var _haste_refresh_acc: float = HASTE_REFRESH_INTERVAL
 var _ticks: int = 0
 var _max_ticks: int = 32
 var _chill_granted: Dictionary = {}
@@ -164,7 +166,10 @@ func _physics_process(delta: float) -> void:
 			_tick_acc -= tick_interval
 		_pulse()
 		_ticks += 1
-	_refresh_haste()
+	_haste_refresh_acc += delta
+	if _haste_refresh_acc >= HASTE_REFRESH_INTERVAL:
+		_haste_refresh_acc = 0.0
+		_refresh_haste()
 	if _elapsed >= duration:
 		_close()
 
@@ -172,10 +177,7 @@ func _physics_process(delta: float) -> void:
 func _pulse() -> void:
 	if source == null or not is_instance_valid(source):
 		return
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
+	for u in ArenaState.units_near(global_position, radius, true, true):
 		if u.team == source.team:
 			continue
 		if u.hit_distance_to(global_position) > radius:
@@ -201,10 +203,7 @@ func _refresh_haste() -> void:
 	if source == null or not is_instance_valid(source) or source.is_dead:
 		return
 	var hit_caster := false
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
+	for u in ArenaState.units_near(global_position, radius, true, true, true):
 		if u.team != source.team:
 			continue
 		if not _contains(u):

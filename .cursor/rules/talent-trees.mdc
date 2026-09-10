@@ -1,0 +1,80 @@
+---
+description: Ashenwake spec talent-tree design rules. Use when planning a spec, talent tree, D/F loadout, ultimates, autos, or /plan-class.
+alwaysApply: false
+---
+
+# Talent trees
+
+Protocol for specs. Locked specs live in `docs/specs/` (system: `docs/talents/system.md`). QWER stay crafted `SpellRecipe` slots; D/F are spec skills from trees. Do not implement a new spec, trees, workshop changes, or a lobby picker unless the user asked.
+
+## Bar
+
+- **Q W E R**: crafted in the spell workshop. Trees must not replace, occupy, or author these slots.
+- **D and F**: the only combat hotkeys for spec talent **skills**. They come from the tree, not crafting.
+- **Lobby loadout**: unlocking a talent skill auto-fills **D then F** (spec-slot order, no duplicate binds). Refunding that skill clears its slot and does not reshuffle the other. Combat does not rebind them. The Spellbook has a **Swap** next to D/F that exchanges those two binds and their augment overlays. The Talents tab does not pick D/F. Extra unlocked skills beyond two stay unbound until a slot frees.
+- **No class pick.** Identity is the two-spec loadout. Live catalog still uses one `class_id` until a later implement.
+
+## Specs and slots
+
+- Global pool of **6** specs (two from each retired class): Furnace, Crucible (dps); Ironclad, Holdfast (tank); Lifegrove, Stormpulse (healer / healer-dps). Internal ids stay `kindling` / `cinderfrost` / `aegis` / `bastion` / `wildroot` / `tempest`.
+- Lobby: **up to 2 spec slots**, any mix of roles, **no duplicate spec**. Empty slots are legal.
+- **50** starting points are **shared** across slotted specs. Do not invent extra sources unless asked.
+- Specs are **point sinks**, not 10-point paths. A spec has more ranks than 50 so you cannot max it. You may fill one column, spread across both, and take filler passives in the same row.
+- **No mandated spend pattern.** Leftover points are not an error.
+- **No ultimate-count cap.** Reaching an ultimate takes **18 points in that spec** on a 7-row tree (`row × 3`). 50 points typically finishes **two** ultimates (~19 each) with a leftover dip. A third ultimate is impossible because there are only two slots.
+- The bar still has only D and F.
+
+## Tree shape (WoW tiers)
+
+Each spec is **one tree**: named left and right **columns** plus optional **mid fillers**, then a single ultimate.
+
+- A **row** (tier) has **2 or more** talents. Width can mix: two 1-point autos, four 3-point nodes, a pair of 2-point interactions. Talents in a row do **not** share max rank.
+- You may invest in **any unlocked talents**, including several in the same row and several in the same column. There is **no left/right exclusive pick**.
+- **Next tier unlocks when this spec has enough points in earlier rows.** Row `N` (0-based) unlocks at **`N × 3`** points spent in this spec on rows `0 .. N-1`. Row 0 is free. Ultimate (last row of a 7-row tree) therefore needs **18** points in the spec. Refunding is allowed only if every remaining invested talent would still sit on an unlocked row (same rule as Classic WoW).
+- **Filler passives** are themed `%` (or small flats) that pad a row. They exist so a column-only spend still has ranks to buy, and so a row can hold more than two picks. They count toward the next-tier unlock. Prefer max 3. Rows do not need a filler.
+- Rarity is per **talent**, not per exclusive pair: most talents max 1–3. **Max 3** is the cap. At least **two** talents in the spec should be max 3. Ultimates stay max 1. Auto options stay max 1. Do not raise a max-1 talent to 3 just to fill the cap.
+- **Max 2+ must scale per point invested.** Rank 2+ may be a larger % or flat of the same effect, or the same effect plus a new rider. You may leave a talent unmaxed.
+- Max 1 is a single effect (no scale list). Autos and ultimates are always max 1.
+- Each **column** (left and right) needs at least **three interaction** talents and **at least 1** themed **% increase** passive so an all-left or all-right spend is a coherent kit. Mixed spends are intended. Fillers can add extra % passives; there is **no cap of 2**.
+- Exactly **one auto row** per spec: two `auto` options (max 1 each) plus an optional non-auto filler. The two auto options stay **mutually exclusive** (one auto per spec). The filler is not exclusive. Auto options do not count as a % passive or toward the interaction quota.
+- The **last talent** is that spec’s unique **ultimate** (an active skill), shared, **cost 1**, no scale.
+- Earlier talents are **passives, interactions, or auto**. Only skills (ultimates, plus any extra actives the brief demands) go on D/F.
+
+Template (7 rows): row 0 free; later rows unlock at 3 / 6 / 9 / 12 / 15; ult at 18. Row 0 should offer **at least 3** ranks so the next tier is reachable without dipping another spec. Sum of max ranks on rows `0 .. N-1` must be `>=` that later row’s unlock cost.
+
+## Talent UI
+
+Live `TalentPane` is the lobby tree. Do not invent extra chrome when planning or implementing.
+
+- **No row titles.** No T1–T7 badges, no left/filler/right header bar over the nodes.
+- **One node style** for every talent (passive, interaction, auto, ultimate, left/mid/right/shared). Same gold chrome. Do not tint autos blue, fillers cooler, or ultimates gold-modulate. Unspent nodes may dim; invested nodes stay full brightness. That dim is rank state, not type.
+- **Label:** talent **name left-aligned**, rank **right-aligned** as `0/2` (current / max). Do not center a single `"Name 0/2"` string.
+- Hover still shows the inspect tip (per-point lines). Types stay in the tooltip, not as a color code on the button.
+
+## Auto-attack
+
+- **Baseline (no auto talent):** ranged, **32** hit, **7.2m**, **1.05s** CD, **0.2s** windup, **no element, no rider**. Right-click is never empty. It is not a fifth hotkey.
+- Each spec’s auto row is two mutually exclusive modifiers plus an optional filler. You may take **one auto option per slotted spec** (up to two). They **stack as riders** on the baseline.
+- If **any** invested auto option has `melee: true`, the attack becomes melee (range/windup/damage from that option). Other specs’ riders still apply to that melee hit.
+- At most **one** melee conversion can be invested in the loadout (taking a second melee option is illegal until the first is refunded).
+- Element: fire if any fire auto is taken, else lightning if any lightning auto is taken, else physical if melee, else none.
+- Prefer live statuses (burn, shock, afflict, rejuv, threat, shield, singe, scorch). Do not clone a QWER craft.
+- Auto is not a talent-free class identity. Do not bake a unique auto into picking a spec slot.
+
+## Numbers
+
+- **Write real numbers** on every talent that deals damage, heals, shields, or grants a % buff. Use `%` or flat hit/tick values (and cooldown/duration on skills). Do not leave `+X%` or “a little damage.”
+- Planning values, not `CombatBalance` slider ids, unless the user asked to implement.
+- Tune against live CombatBalance (bolt hit ~42, nova ~130, meteor ~500, wall blast ~160, ground tick ~14, player HP **500**). Talent extras and pulses should usually be **below** a full crafted hit unless they are the ultimate.
+- Max-3 fillers: about **+3% to +4% per rank** for a damage/heal % (landing near **+10%** at rank 3). Column passives can be steeper.
+
+## Planning
+
+- One-phrase briefs are enough (`plan a tank spec`). Fill name, columns, fillers, and nodes. Do not ask for a form.
+- Keep fantasy short and mechanical. Keep the user’s wording when they name the spec.
+- Each column needs **at least three interaction talents** (hooks into bases, infusions, statuses, altered, shields, or threat so crafted QWER play differently). Do not clone workshop augments.
+- Each column also needs **at least 1** themed **% increase** passive. Fillers add more. Give an actual percent.
+- **Playstyle toys (optional, not a quota).** Prefer interactions that change how QWER is used, not only bigger numbers. Agents may suggest **new named buffs or debuffs** when an existing status is a poor fit. A new status should be short, numbered, and alter decisions (stance, mark, window, resource). Mark it as new in Open questions. Do not invent a fifth hotkey.
+- Planning produces a spec. Implementation is a separate request. Every spec includes an **auto row** (two exclusive options with numbers, optional filler).
+
+Full output shape: `.cursor/skills/plan-class/SKILL.md`. Command: `/plan-class`. After this protocol, `/plan-class` writes **one spec** into `docs/specs/`.

@@ -1,0 +1,129 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" path="res://assets/vfx/infusions/fire/t_fire01.png" id="1_fire"]
+[ext_resource type="Texture2D" path="res://assets/vfx/infusions/fire/t_vfx_basic1.png" id="2_spark"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_trail"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+vertex_color_use_as_albedo = true
+vertex_color_is_srgb = true
+albedo_texture = ExtResource("1_fire")
+billboard_mode = 3
+billboard_keep_scale = true
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
+
+[sub_resource type="Curve" id="Curve_alpha"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(1e-05, 1), 0.0, 0.0, 0, 0, Vector2(0.7770701, 1), 0.0, 0.0, 0, 0, Vector2(0.99999, 0), 0.0, 0.0, 0, 0, Vector2(1, 1), 0.0, 0.0, 0, 0]
+point_count = 5
+
+[sub_resource type="CurveTexture" id="CurveTexture_alpha"]
+texture_mode = 1
+curve = SubResource("Curve_alpha")
+
+[sub_resource type="Gradient" id="Gradient_trail"]
+offsets = PackedFloat32Array(0, 0.622449)
+colors = PackedColorArray(3.2944162, 0.45654368, 0, 1, 0.125, 0.06630109, 0.04069262, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_trail"]
+gradient = SubResource("Gradient_trail")
+
+[sub_resource type="Curve" id="Curve_scale"]
+_data = [Vector2(0, 0.61797756), 0.0, 0.0, 0, 0, Vector2(0.09009009, 1), 0.0, 0.0, 0, 0, Vector2(0.8248408, 0.6942148), -2.2371032, -2.2371032, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 4
+
+[sub_resource type="CurveTexture" id="CurveTexture_scale"]
+curve = SubResource("Curve_scale")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_trail"]
+lifetime_randomness = 0.08
+particle_flag_rotate_y = true
+emission_shape = 1
+emission_sphere_radius = 0.2
+angle_min = -179.99998
+angle_max = 180.00002
+direction = Vector3(0, 0, -1)
+spread = 25.0
+initial_velocity_min = 1.0
+initial_velocity_max = 1.0
+gravity = Vector3(0, 1, 0)
+radial_accel_min = -2.2351742e-06
+radial_accel_max = 0.49999776
+scale_min = 0.7
+scale_max = 0.9
+scale_curve = SubResource("CurveTexture_scale")
+color = Color(1.3002294, 1.353256, 0, 1)
+color_ramp = SubResource("GradientTexture1D_trail")
+alpha_curve = SubResource("CurveTexture_alpha")
+
+[sub_resource type="QuadMesh" id="QuadMesh_trail"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_spark"]
+render_priority = 1
+transparency = 1
+blend_mode = 1
+cull_mode = 2
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = ExtResource("2_spark")
+billboard_mode = 3
+billboard_keep_scale = true
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
+
+[sub_resource type="Gradient" id="Gradient_spark"]
+offsets = PackedFloat32Array(0, 0.24489796, 1)
+colors = PackedColorArray(3.294, 2.884, 1.697, 1, 4.278612, 1.9099184, 0.20779598, 1, 4.416, 1.774, 0, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_spark"]
+gradient = SubResource("Gradient_spark")
+
+[sub_resource type="Curve" id="Curve_spark"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(0.09909909, 0.20224726), 0.0, 0.0, 0, 0, Vector2(0.13963965, 0.8988764), 0.0, 0.0, 0, 0, Vector2(0.23873875, 0.49438208), 0.0, 0.0, 0, 0, Vector2(0.2927928, 0.70786524), 0.0, 0.0, 0, 0, Vector2(0.33333334, 0.23595512), 0.0, 0.0, 0, 0, Vector2(0.4009009, 1), 0.0, 0.0, 0, 0, Vector2(0.5045045, 0.022471905), 0.0, 0.0, 0, 0, Vector2(0.5810811, 0.79775286), 0.0, 0.0, 0, 0, Vector2(0.72072077, 0.1460675), 0.0, 0.0, 0, 0, Vector2(0.7657658, 0.6966293), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 12
+
+[sub_resource type="CurveTexture" id="CurveTexture_spark"]
+curve = SubResource("Curve_spark")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_spark"]
+lifetime_randomness = 0.2
+emission_shape = 1
+emission_sphere_radius = 0.2
+direction = Vector3(0, 0, -1)
+spread = 25.0
+initial_velocity_max = 2.0
+gravity = Vector3(0, 1, 0)
+scale_min = 0.03
+scale_max = 0.089999996
+scale_curve = SubResource("CurveTexture_spark")
+color_ramp = SubResource("GradientTexture1D_spark")
+
+[sub_resource type="QuadMesh" id="QuadMesh_spark"]
+
+[node name="FireBoltPersist" type="Node3D"]
+
+[node name="FireTrail" type="GPUParticles3D" parent="." groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.9587594e-08, 0)
+material_override = SubResource("StandardMaterial3D_trail")
+cast_shadow = 0
+amount = 100
+lifetime = 1.4
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+local_coords = false
+process_material = SubResource("ParticleProcessMaterial_trail")
+draw_pass_1 = SubResource("QuadMesh_trail")
+
+[node name="FireSparks" type="GPUParticles3D" parent="." groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 0.99999994, 0, 0, 0, 0.99999994, 0, 3.9587594e-08, 0)
+material_override = SubResource("StandardMaterial3D_spark")
+cast_shadow = 0
+amount = 150
+lifetime = 2.0
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+local_coords = false
+process_material = SubResource("ParticleProcessMaterial_spark")
+draw_pass_1 = SubResource("QuadMesh_spark")

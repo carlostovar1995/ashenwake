@@ -9,13 +9,27 @@ var _run: StringName = &""
 var _attack: StringName = &""
 var _cast: StringName = &""
 var _death: StringName = &""
+var _direct1_full: StringName = &""
+var _direct1_load: StringName = &""
+var _direct1_cast: StringName = &""
+var _direct2_load: StringName = &""
+var _direct2_cast: StringName = &""
+var _call_load: StringName = &""
+var _call_cast: StringName = &""
+var _omni_load: StringName = &""
+var _omni_cast: StringName = &""
+var _spell_phase: int = 0
+var _spell_load_clip: StringName = &""
+var _spell_release_clip: StringName = &""
+var _spell_auto_release: bool = false
+var _spell_release_started: bool = false
+var _spell_release_elapsed: float = 0.0
 var _busy: bool = false
 var _corpse: bool = false
 var _death_started: bool = false
 var _running: bool = false
 var _still_time: float = 0.0
-var _was_winding: bool = false
-var _aa_recover: float = 0.0
+var _aa_phase: int = 0
 var _dodge: StringName = &""
 var _dodge_left: float = 0.0
 var _skel: Skeleton3D
@@ -34,6 +48,13 @@ static var _recolor_cache: Dictionary = {}
 const _HOVER_SHADER := preload("res://scripts/visual/hover_outline.gdshader")
 const _INFUSION_SHADER := preload("res://scripts/visual/infusion_tint.gdshader")
 const _FREEZE_SHADER := preload("res://scripts/visual/freeze_tint.gdshader")
+const SPELL_NONE := 0
+const SPELL_LOAD := 1
+const SPELL_HOLD := 2
+const SPELL_RELEASE := 3
+const AA_NONE := 0
+const AA_WINDUP := 1
+const AA_FOLLOW := 2
 
 
 func setup(unit: Unit, model_path: String, model_scale: float, yaw: float = PI, y_offset: float = 0.0, pitch: float = 0.0) -> void:
@@ -67,10 +88,14 @@ func setup(unit: Unit, model_path: String, model_scale: float, yaw: float = PI, 
 		_player = AnimationPlayer.new()
 		_player.name = "AnimationPlayer"
 		model.add_child(_player)
-	# Don't graft humanoid UAL clips onto a foreign skeleton that already has animations.
-	if not native:
+	var kevdev := CharacterCatalog.uses_kevdev_anims(model_path)
+	if kevdev:
+		_import_kevdev_libraries()
+		_retarget_tracks_to_skel()
+	elif not native:
+		# Don't graft humanoid UAL clips onto a foreign skeleton that already has animations.
 		_import_libraries()
-	_bind_clips(native)
+	_bind_clips(native, kevdev)
 	_player.playback_default_blend_time = 0.08
 	if not _player.animation_finished.is_connected(_on_animation_finished):
 		_player.animation_finished.connect(_on_animation_finished)
@@ -86,6 +111,8 @@ func _sharpen_meshes(n: Node) -> void:
 
 
 func _hide_placeholders(unit: Unit) -> void:
+	if unit == null or not is_instance_valid(unit):
+		return
 	var mesh := unit.get_node_or_null("MeshInstance3D") as MeshInstance3D
 	if mesh:
 		mesh.visible = false
@@ -115,40 +142,104 @@ func _import_libraries() -> void:
 			_player.add_animation_library(dest_name, lib.duplicate(true))
 
 
-func _bind_clips(native: bool = false) -> void:
+func _import_kevdev_libraries() -> void:
+	if _player == null:
+		return
+	var i := 0
+	for lib in CharacterCatalog.kevdev_animation_libraries():
+		var dest_name := StringName("kev_%s" % i)
+		i += 1
+		if not _player.has_animation_library(dest_name):
+			_player.add_animation_library(dest_name, lib.duplicate(true))
+
+
+func _retarget_tracks_to_skel() -> void:
+	if _player == null or _skel == null:
+		return
+	var root := _player.get_node_or_null(_player.root_node)
+	if root == null:
+		root = _player.get_parent()
+	if root == null:
+		return
+	var skel_path := String(root.get_path_to(_skel))
+	if skel_path.is_empty() or skel_path == ".":
+		skel_path = _skel.name
+	for anim_name in _player.get_animation_list():
+		var anim := _player.get_animation(anim_name)
+		if anim == null:
+			continue
+		for i in range(anim.get_track_count() - 1, -1, -1):
+			var path := String(anim.track_get_path(i))
+			if path.find(":") < 0:
+				continue
+			var bone := path.get_slice(":", 1)
+			if bone.is_empty():
+				continue
+			if _skel.find_bone(bone) < 0:
+				anim.remove_track(i)
+				continue
+			anim.track_set_path(i, NodePath("%s:%s" % [skel_path, bone]))
+
+
+func _bind_clips(native: bool = false, kevdev: bool = false) -> void:
 	if _player == null:
 		return
 	var names: PackedStringArray = _player.get_animation_list()
-	_idle = _pick(names, ["Idle", "Hover"])
-	_walk = _pick(names, ["Walk", "Hover"])
-	_run = _pick(names, ["Jog_Fwd", "Sprint", "Run", "Walk", "Hover"])
-	if _unit and _unit.is_melee:
-		_attack = _pick(names, ["Attack", "Sword_Attack", "Sword_Regular_A", "Punch_Cross"])
-	else:
-		_attack = _pick(names, ["Attack", "Spell_Simple_Shoot", "Pistol_Shoot", "OverhandThrow", "Punch_Cross"])
-	_cast = _pick(names, ["ChargeUp", "Cast", "Spell_Simple_Shoot", "OverhandThrow", "Pistol_Shoot", "Attack"])
-	_death = _pick(names, ["Death01", "Death"])
-	_dodge = _pick(names, ["Roll", "Sword_Dash", "Shield_Dash", "Slide_Start"])
-	if not native:
+	if kevdev:
+		_idle = _pick(names, ["HumanF_Idle01", "HumanF@Idle01"])
+		_walk = _pick(names, ["HumanF_Walk01_Forward", "Walk01_Forward"])
+		_run = _pick(names, ["HumanF_Run01_Forward", "Run01_Forward"])
 		if _unit and _unit.is_melee:
-			_attack = _alias(_attack, "Sword_Attack")
+			_attack = _pick(names, ["HumanF_Attack1H01_R", "Attack1H01_R"])
 		else:
-			_attack = _alias(_attack, "Spell_Simple_Shoot")
-		_idle = _alias(_idle, "Idle")
-		_walk = _alias(_walk, "Walk")
-		_run = _alias(_run, "Jog_Fwd")
-		_cast = _alias(_cast, "Spell_Simple_Shoot")
-		_death = _alias(_death, "Death01")
-		if _dodge != &"":
-			_dodge = _alias(_dodge, "Roll")
+			_attack = _pick(names, ["HumanF_ThrowBall01_R", "ThrowBall01_R", "HumanF_MagicAttackDirect1H01_R", "HumanF_MagicAttackOmni01"])
+		_cast = _pick(names, ["HumanF_CastingIdle01", "CastingIdle01", "HumanF_CastingEnter01", "HumanF_MagicAttackOmni01"])
+		_direct1_full = _pick(names, ["HumanF@MagicAttackDirect1H01_L"])
+		_direct1_load = _pick(names, ["HumanF@MagicAttackDirect1H01_R_Load", "MagicAttackDirect1H01_R_Load"])
+		_direct1_cast = _pick(names, ["HumanF@MagicAttackDirect1H01_R_Cast", "MagicAttackDirect1H01_R_Cast"])
+		_direct2_load = _pick(names, ["HumanF@MagicAttackDirect2H01_Load", "MagicAttackDirect2H01_Load"])
+		_direct2_cast = _pick(names, ["HumanF@MagicAttackDirect2H01_Cast", "MagicAttackDirect2H01_Cast"])
+		_call_load = _pick(names, ["HumanF@MagicAttackCall1H01_L_Load", "MagicAttackCall1H01_L_Load"])
+		_call_cast = _pick(names, ["HumanF@MagicAttackCall1H01_L_Cast", "MagicAttackCall1H01_L_Cast"])
+		_omni_load = _pick(names, ["HumanF@MagicAttackOmni01_Load", "MagicAttackOmni01_Load"])
+		_omni_cast = _pick(names, ["HumanF@MagicAttackOmni01_Cast", "MagicAttackOmni01_Cast"])
+		_death = _pick(names, ["HumanF_Death01", "Death01"])
+		_dodge = _pick(names, ["HumanF_Jump01", "Jump01"])
+	else:
+		_idle = _pick(names, ["Idle", "Hover"])
+		_walk = _pick(names, ["Walk", "Hover"])
+		_run = _pick(names, ["Jog_Fwd", "Sprint", "Run", "Walk", "Hover"])
+		if _unit and _unit.is_melee:
+			_attack = _pick(names, ["Attack", "Sword_Attack", "Sword_Regular_A", "Punch_Cross"])
+		else:
+			_attack = _pick(names, ["Attack", "Spell_Simple_Shoot", "Pistol_Shoot", "OverhandThrow", "Punch_Cross"])
+		_cast = _pick(names, ["ChargeUp", "Cast", "Spell_Simple_Shoot", "OverhandThrow", "Pistol_Shoot", "Attack"])
+		_death = _pick(names, ["Death01", "Death"])
+		_dodge = _pick(names, ["Roll"])
+		if _dodge == &"":
+			_dodge = _pick(names, ["Sword_Dash", "Shield_Dash", "Slide_Start"])
+		if not native:
+			if _unit and _unit.is_melee:
+				_attack = _alias(_attack, "Sword_Attack")
+			else:
+				_attack = _alias(_attack, "Spell_Simple_Shoot")
+			_idle = _alias(_idle, "Idle")
+			_walk = _alias(_walk, "Walk")
+			_run = _alias(_run, "Jog_Fwd")
+			_cast = _alias(_cast, "Spell_Simple_Shoot")
+			_death = _alias(_death, "Death01")
+			if _dodge != &"":
+				_dodge = _alias(_dodge, "Roll")
 	_set_loop(_idle, true)
 	_set_loop(_walk, true)
 	_set_loop(_run, true)
 	_set_loop(_attack, false)
-	_set_loop(_cast, false)
+	_set_loop(_cast, kevdev and String(_cast).find("CastingIdle") >= 0)
+	for clip in [_direct1_full, _direct1_load, _direct1_cast, _direct2_load, _direct2_cast, _call_load, _call_cast, _omni_load, _omni_cast]:
+		_set_loop(clip, false)
 	_set_loop(_death, false)
 	_set_loop(_dodge, false)
-	if not native:
+	if kevdev or not native:
 		_prepare_loco_clip(_idle)
 		_prepare_loco_clip(_walk)
 		_prepare_loco_clip(_run)
@@ -240,24 +331,10 @@ func _process(delta: float) -> void:
 			_player.speed_scale = 0.0
 			_player.pause()
 		return
-	var winding := _unit.auto_attack != null and _unit.auto_attack.winding
-	if winding:
-		if not _was_winding:
-			_start_attack_anim()
-		_was_winding = true
-		_running = false
+	if _tick_spell_anim(delta):
 		return
-	if _was_winding:
-		_was_winding = false
-		_aa_recover = 0.22
-	if _aa_recover > 0.0:
-		_aa_recover = maxf(0.0, _aa_recover - delta)
-		var planar := Vector3(_unit.velocity.x, 0.0, _unit.velocity.z).length()
-		if planar > 0.9:
-			_aa_recover = 0.0
-		else:
-			_running = false
-			return
+	if _tick_aa_anim(delta):
+		return
 	if _unit.controller and _unit.controller.is_casting():
 		_running = false
 		_reset_speed()
@@ -270,6 +347,10 @@ func _process(delta: float) -> void:
 		return
 	_reset_speed()
 	_update_loco(delta)
+
+
+func _is_loco_root_bone(bone: String) -> bool:
+	return bone == "root" or bone == "Root" or bone == "B-root" or bone == "B-Root"
 
 
 func _prepare_loco_clip(clip: StringName) -> void:
@@ -287,7 +368,7 @@ func _prepare_loco_clip(clip: StringName) -> void:
 			continue
 		var path := String(anim.track_get_path(i))
 		var bone := path.get_slice(":", 1) if path.find(":") >= 0 else path
-		if bone != "root" and bone != "Root":
+		if not _is_loco_root_bone(bone):
 			continue
 		for k in anim.track_get_key_count(i):
 			var v: Vector3 = anim.track_get_key_value(i, k)
@@ -319,10 +400,351 @@ func _boss_is_casting() -> bool:
 	return false
 
 
+func play_spell_load(ab: AbilityDef, auto_release: bool = false, windup: float = 0.0) -> void:
+	_clear_aa()
+	match SpellAnimPolicy.mode_for(ab):
+		SpellAnimPolicy.Mode.NONE:
+			_clear_spell_phase()
+			return
+		SpellAnimPolicy.Mode.COMBINED:
+			_start_combined(ab, windup)
+			return
+		SpellAnimPolicy.Mode.HOLD:
+			_start_split_load(ab, false, windup)
+			return
+		SpellAnimPolicy.Mode.WINDUP_HOLD:
+			_start_split_load(ab, false, 0.0)
+			return
+	_start_split_load(ab, auto_release, windup)
+
+
+func play_spell_release(ab: AbilityDef, remaining_until_fire: float = -1.0, replace: bool = false) -> void:
+	_clear_aa()
+	if SpellAnimPolicy.mode_for(ab) == SpellAnimPolicy.Mode.COMBINED:
+		if not replace and (_spell_release_started or _spell_phase == SPELL_RELEASE):
+			return
+		_start_combined(ab, remaining_until_fire if remaining_until_fire > 0.0 else 0.0)
+		return
+	if SpellAnimPolicy.mode_for(ab) == SpellAnimPolicy.Mode.WINDUP_HOLD and remaining_until_fire < 0.0:
+		cancel_spell_anim()
+		return
+	if not replace and (_spell_release_started or _spell_phase == SPELL_RELEASE):
+		return
+	var pair := _spell_pair(ab)
+	if not pair.is_empty():
+		if pair[1] != "":
+			_spell_release_clip = StringName(pair[1])
+		elif pair[0] != "" and _spell_release_clip == &"":
+			_spell_release_clip = StringName(pair[0])
+	var seek_t := 0.0
+	if remaining_until_fire >= 0.0:
+		var overlap := release_overlap_seconds(ab)
+		if remaining_until_fire < overlap:
+			var length := _clip_length(_spell_release_clip)
+			seek_t = clampf(overlap - remaining_until_fire, 0.0, maxf(length - 0.05, 0.0))
+	elif SpellAnimPolicy.mode_for(ab) == SpellAnimPolicy.Mode.HOLD:
+		# Confirm with no overlap tick: start already a quarter in so completion still matches.
+		seek_t = release_overlap_seconds(ab)
+	_start_spell_release(seek_t)
+
+
+func release_overlap_seconds(ab: AbilityDef) -> float:
+	var frac := SpellAnimPolicy.overlap_frac(ab)
+	if frac <= 0.0:
+		return 0.0
+	var pair := _spell_pair(ab)
+	if pair.is_empty():
+		return 0.15
+	var length := _clip_length(StringName(pair[1]))
+	if length <= 0.0:
+		return 0.15
+	return length * frac
+
+
+func cancel_spell_anim() -> void:
+	if _spell_phase == SPELL_NONE:
+		return
+	_clear_spell_phase()
+	_resume_loco()
+
+
+func hold_spell_channel_pose(ab: AbilityDef) -> void:
+	_clear_aa()
+	var pair := _spell_pair(ab)
+	if pair.is_empty():
+		return
+	if pair[1] != "":
+		_spell_release_clip = StringName(pair[1])
+	elif pair[0] != "":
+		_spell_release_clip = StringName(pair[0])
+	var length := _clip_length(_spell_release_clip)
+	var pose_t := length * SpellAnimPolicy.overlap_frac(ab)
+	if pose_t <= 0.0:
+		pose_t = length
+	_spell_auto_release = false
+	_spell_release_started = true
+	_running = false
+	_hold_clip_at(_spell_release_clip, pose_t)
+
+
+func _resume_loco() -> void:
+	if _dodge_left > 0.0 or _corpse:
+		return
+	var should_run := false
+	if _unit != null and _unit.movement:
+		should_run = _unit.movement.has_target or _unit.movement.current_speed > 0.7
+	_play_loco(should_run)
+
+
+func play_auto_windup(windup: float) -> void:
+	if _spell_phase != SPELL_NONE or _dodge_left > 0.0:
+		return
+	if _attack == &"" or _player == null or not _player.has_animation(_attack):
+		return
+	_aa_phase = AA_WINDUP
+	_running = false
+	_set_loop(_attack, false)
+	_player.stop()
+	_player.speed_scale = AutoAnimPolicy.fitted_speed(_clip_length(_attack), windup)
+	_player.play(_attack, 0.04)
+	_player.seek(0.0, true)
+
+
+func finish_auto_windup() -> void:
+	if _aa_phase != AA_WINDUP:
+		return
+	_aa_phase = AA_FOLLOW
+
+
+func cancel_auto_anim() -> void:
+	_clear_aa()
+
+
+func _tick_aa_anim(_delta: float) -> bool:
+	if _aa_phase == AA_NONE:
+		return false
+	if _aa_phase == AA_WINDUP:
+		_running = false
+		return true
+	var planar := 0.0
+	var commanded := 0.0
+	if _unit != null:
+		planar = Vector3(_unit.velocity.x, 0.0, _unit.velocity.z).length()
+		if _unit.movement:
+			commanded = _unit.movement.current_speed
+	if commanded > 0.7 or planar > 0.7:
+		_clear_aa()
+		return false
+	if _player == null or not _player.is_playing():
+		_clear_aa()
+		return false
+	_running = false
+	return true
+
+
+func _clear_aa() -> void:
+	_aa_phase = AA_NONE
+
+
+func _tick_spell_anim(delta: float) -> bool:
+	if _spell_phase == SPELL_NONE:
+		return false
+	_running = false
+	if _spell_phase == SPELL_HOLD:
+		if not _should_hold_spell():
+			_clear_spell_phase()
+			return false
+		return true
+	if _spell_phase == SPELL_LOAD:
+		if _player != null and _spell_load_clip != &"" and _player.has_animation(_spell_load_clip):
+			var anim := _player.get_animation(_spell_load_clip)
+			if anim != null and _player.current_animation_position >= maxf(anim.length - 0.02, 0.0) and not _player.is_playing():
+				_on_spell_load_finished()
+		return true
+	if _spell_phase == SPELL_RELEASE:
+		_spell_release_elapsed += delta
+		return true
+	return false
+
+
+func _on_spell_load_finished() -> void:
+	if _spell_phase != SPELL_LOAD:
+		return
+	if _spell_auto_release:
+		_start_spell_release()
+		return
+	if _should_hold_spell():
+		_hold_clip_end(_spell_load_clip)
+		return
+	_clear_spell_phase()
+
+
+func _should_hold_spell() -> bool:
+	if _unit == null or _unit.controller == null:
+		return false
+	return _unit.controller.is_casting()
+
+
+func _hold_clip_end(clip: StringName) -> void:
+	_hold_clip_at(clip, _clip_length(clip))
+
+
+func _hold_clip_at(clip: StringName, at: float) -> void:
+	_spell_phase = SPELL_HOLD
+	_pause_clip_at(clip, at)
+
+
+func _pause_clip_end(clip: StringName) -> void:
+	_pause_clip_at(clip, _clip_length(clip))
+
+
+func _pause_clip_at(clip: StringName, at: float) -> void:
+	if _player == null or clip == &"" or not _player.has_animation(clip):
+		return
+	var anim := _player.get_animation(clip)
+	if anim == null:
+		return
+	_player.play(clip, 0.0)
+	_player.seek(clampf(at, 0.0, anim.length), true)
+	_player.pause()
+
+
+func _start_spell_release(seek_t: float = 0.0) -> void:
+	if _spell_release_clip == &"":
+		_clear_spell_phase()
+		return
+	_spell_auto_release = false
+	_spell_release_started = true
+	_spell_release_elapsed = 0.0
+	_running = false
+	_play_spell_clip(_spell_release_clip, 0.0, seek_t)
+	_spell_phase = SPELL_RELEASE
+
+
+func _start_split_load(ab: AbilityDef, auto_release: bool, windup: float) -> void:
+	var pair := _spell_pair(ab)
+	if pair.is_empty():
+		return
+	_spell_load_clip = StringName(pair[0])
+	_spell_release_clip = StringName(pair[1])
+	_spell_release_started = false
+	if _spell_load_clip == &"":
+		play_spell_release(ab, 0.0 if auto_release else -1.0, true)
+		return
+	_spell_auto_release = auto_release
+	_spell_release_elapsed = 0.0
+	_running = false
+	_play_spell_clip(_spell_load_clip, windup)
+	_spell_phase = SPELL_LOAD
+
+
+func _start_combined(ab: AbilityDef, windup: float) -> void:
+	var clip := _combined_clip_for(ab)
+	if clip == &"" or _player == null or not _player.has_animation(clip):
+		_start_split_load(ab, false, windup)
+		return
+	_spell_load_clip = &""
+	_spell_release_clip = clip
+	_spell_auto_release = false
+	_spell_release_started = true
+	_spell_release_elapsed = 0.0
+	_running = false
+	_play_fitted(clip, windup, SpellAnimPolicy.fire_frac(ab))
+	_spell_phase = SPELL_RELEASE
+
+
+func _combined_clip_for(ab: AbilityDef) -> StringName:
+	if ab == null:
+		return &""
+	match ab.delivery:
+		AbilityDef.Delivery.BOLT:
+			return _direct1_full
+		_:
+			return &""
+
+
+func _play_fitted(clip: StringName, gameplay_window: float, at_frac: float) -> void:
+	if clip == &"" or _player == null or not _player.has_animation(clip):
+		return
+	_set_loop(clip, false)
+	_player.stop()
+	_player.speed_scale = SpellAnimPolicy.fitted_speed(_clip_length(clip), gameplay_window, at_frac)
+	_player.play(clip, 0.04)
+	_player.seek(0.0, true)
+
+
+func _play_spell_clip(clip: StringName, windup: float, seek_t: float = 0.0) -> void:
+	if clip == &"" or _player == null or not _player.has_animation(clip):
+		return
+	_set_loop(clip, false)
+	var speed := 1.0
+	var anim := _player.get_animation(clip)
+	if anim != null and windup > 0.05 and anim.length > windup:
+		speed = anim.length / windup
+	_player.speed_scale = speed
+	_player.stop()
+	_player.play(clip, 0.04)
+	_player.seek(seek_t, true)
+
+
+func _clip_length(clip: StringName) -> float:
+	if clip == &"" or _player == null or not _player.has_animation(clip):
+		return 0.0
+	var anim := _player.get_animation(clip)
+	return anim.length if anim else 0.0
+
+
+func _clear_spell_phase() -> void:
+	_spell_phase = SPELL_NONE
+	_spell_auto_release = false
+	_spell_release_started = false
+	_spell_release_elapsed = 0.0
+	_reset_speed()
+
+
+func _spell_pair(ab: AbilityDef) -> PackedStringArray:
+	if ab == null or ab.is_toggle or ab.delivery == AbilityDef.Delivery.AURA:
+		return PackedStringArray()
+	var load_clip := &""
+	var release_clip := &""
+	match ab.delivery:
+		AbilityDef.Delivery.NOVA:
+			load_clip = _omni_load
+			release_clip = _omni_cast
+		AbilityDef.Delivery.METEOR:
+			load_clip = _direct2_load
+			release_clip = _direct2_cast
+		AbilityDef.Delivery.GROUND_AOE, AbilityDef.Delivery.AOE_EXPLOSION, AbilityDef.Delivery.WALL:
+			load_clip = _call_load
+			release_clip = _call_cast
+		AbilityDef.Delivery.MISSILES, AbilityDef.Delivery.RAY:
+			load_clip = _direct1_load
+			release_clip = _direct1_cast
+		_:
+			load_clip = _direct1_load
+			release_clip = _direct1_cast
+	if load_clip == &"":
+		load_clip = _cast
+	if release_clip == &"":
+		release_clip = _attack if _attack != &"" else _cast
+	if load_clip == &"" and release_clip == &"":
+		return PackedStringArray()
+	return PackedStringArray([String(load_clip), String(release_clip)])
+
+
+func _same_clip(a: StringName, b: StringName) -> bool:
+	if a == &"" or b == &"":
+		return false
+	if a == b:
+		return true
+	return _leaf(String(a)).to_lower() == _leaf(String(b)).to_lower()
+
+
 func play_dodge(duration: float) -> void:
+	_clear_spell_phase()
+	_clear_aa()
 	_dodge_left = maxf(duration, 0.08)
 	_running = false
-	_aa_recover = 0.0
 	if _dodge == &"" or _player == null or not _player.has_animation(_dodge):
 		return
 	_set_loop(_dodge, false)
@@ -375,6 +797,21 @@ func _ensure_death() -> void:
 
 
 func _on_animation_finished(anim_name: StringName) -> void:
+	if _spell_phase == SPELL_LOAD and _same_clip(anim_name, _spell_load_clip):
+		_on_spell_load_finished()
+		return
+	if _spell_phase == SPELL_RELEASE and _same_clip(anim_name, _spell_release_clip):
+		if _should_hold_spell():
+			_hold_clip_end(_spell_release_clip)
+			return
+		_clear_spell_phase()
+		return
+	if _aa_phase == AA_WINDUP and _same_clip(anim_name, _attack):
+		_pause_clip_end(_attack)
+		return
+	if _aa_phase == AA_FOLLOW and _same_clip(anim_name, _attack):
+		_clear_aa()
+		return
 	if _unit == null or not _unit.is_dead:
 		return
 	if _leaf(String(anim_name)).to_lower().find("death") < 0 and anim_name != _death:
@@ -413,15 +850,6 @@ func _reset_speed() -> void:
 		_player.speed_scale = 1.0
 
 
-func _start_attack_anim() -> void:
-	if _attack == &"" or _player == null or not _player.has_animation(_attack):
-		return
-	_aa_recover = 0.0
-	_player.speed_scale = 1.85
-	_player.play(_attack, 0.02)
-	_player.seek(0.0, true)
-
-
 func set_hover_outline(enabled: bool, color: Color = Color(1.0, 0.82, 0.28, 0.92), width: float = 0.01) -> void:
 	_hover_on = enabled
 	if enabled:
@@ -450,7 +878,7 @@ func set_freeze_tint(enabled: bool, color: Color = Color(0.62, 0.9, 1.0, 1.0)) -
 		if _player:
 			_player.speed_scale = 0.0
 			_player.pause()
-	elif was_frozen and _player:
+	elif was_frozen and _player and _spell_phase != SPELL_HOLD:
 		_player.speed_scale = 1.0
 		if not _player.is_playing() and String(_player.current_animation) != "":
 			_player.play()
@@ -533,7 +961,7 @@ func _cache_skeleton(n: Node) -> void:
 	_skel = _find_skel(n)
 	if _skel == null:
 		return
-	var hints := ["hand_r", "Hand_R", "RightHand", "mixamorig:RightHand", "hand.R"]
+	var hints := ["hand_r", "Hand_R", "RightHand", "mixamorig:RightHand", "hand.R", "B-hand.R", "B-Hand.R"]
 	for hint in hints:
 		var idx := _skel.find_bone(hint)
 		if idx >= 0:

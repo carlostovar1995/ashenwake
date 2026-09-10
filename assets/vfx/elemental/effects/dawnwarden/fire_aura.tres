@@ -1,0 +1,58 @@
+[gd_resource type="VisualShader" format=3 uid="uid://bcfpexnun6bx"]
+
+[ext_resource type="Texture2D" uid="uid://dg7umucne2vet" path="res://assets/vfx/elemental/effects/dawnwarden/fire_body.png" id="1_stbpx"]
+
+[sub_resource type="VisualShaderNodeColorConstant" id="VisualShaderNodeColorConstant_020f2"]
+constant = Color(4.416, 1.774, 0, 1)
+
+[sub_resource type="VisualShaderNodeFloatParameter" id="VisualShaderNodeFloatParameter_fade"]
+parameter_name = "fade_alpha"
+default_value_enabled = true
+default_value = 1.0
+
+[sub_resource type="VisualShaderNodeFloatOp" id="VisualShaderNodeFloatOp_fade"]
+operator = 2
+
+[sub_resource type="VisualShaderNodeVectorDecompose" id="VisualShaderNodeVectorDecompose_fade"]
+default_input_values = [0, Quaternion(0, 0, 0, 0)]
+op_type = 2
+
+[sub_resource type="VisualShaderNodeTexture" id="VisualShaderNodeTexture_3kqur"]
+expanded_output_ports = [0]
+texture = ExtResource("1_stbpx")
+texture_type = 1
+
+[sub_resource type="VisualShaderNodeUVFunc" id="VisualShaderNodeUVFunc_1mos1"]
+
+[sub_resource type="VisualShaderNodeInput" id="VisualShaderNodeInput_v66mq"]
+input_name = "time"
+
+[sub_resource type="VisualShaderNodeVectorOp" id="VisualShaderNodeVectorOp_nh6ml"]
+default_input_values = [0, Vector2(0, 0), 1, Vector2(0.1, 3)]
+op_type = 0
+operator = 2
+
+[resource]
+modes/cull = 2
+flags/unshaded = true
+flags/shadows_disabled = true
+flags/ambient_light_disabled = true
+flags/fog_disabled = true
+nodes/fragment/0/position = Vector2(720, 20)
+nodes/fragment/4/node = SubResource("VisualShaderNodeTexture_3kqur")
+nodes/fragment/4/position = Vector2(80, 20)
+nodes/fragment/7/node = SubResource("VisualShaderNodeUVFunc_1mos1")
+nodes/fragment/7/position = Vector2(-180, 20)
+nodes/fragment/8/node = SubResource("VisualShaderNodeInput_v66mq")
+nodes/fragment/8/position = Vector2(-700, 20)
+nodes/fragment/9/node = SubResource("VisualShaderNodeVectorOp_nh6ml")
+nodes/fragment/9/position = Vector2(-380, 20)
+nodes/fragment/10/node = SubResource("VisualShaderNodeColorConstant_020f2")
+nodes/fragment/10/position = Vector2(360, 20)
+nodes/fragment/11/node = SubResource("VisualShaderNodeFloatParameter_fade")
+nodes/fragment/11/position = Vector2(360, 140)
+nodes/fragment/12/node = SubResource("VisualShaderNodeFloatOp_fade")
+nodes/fragment/12/position = Vector2(540, 80)
+nodes/fragment/13/node = SubResource("VisualShaderNodeVectorDecompose_fade")
+nodes/fragment/13/position = Vector2(300, 80)
+nodes/fragment/connections = PackedInt32Array(8, 0, 9, 0, 9, 0, 7, 2, 10, 0, 0, 0, 7, 0, 4, 0, 4, 0, 13, 0, 13, 0, 12, 0, 11, 0, 12, 1, 12, 0, 0, 1)

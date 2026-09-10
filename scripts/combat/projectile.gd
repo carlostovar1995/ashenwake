@@ -12,7 +12,6 @@ var skillshot: bool = true
 var traveled: float = 0.0
 var authoritative: bool = true
 var element: int = 0
-var mark_damage_bonus: float = 0.0
 var splash_radius: float = 0.0
 var splash_ratio: float = 0.0
 var splash_vfx: String = ""
@@ -34,10 +33,11 @@ var hit_cooldown_reduction: float = 0.0
 var pierce: bool = false
 var ghost_enemies: bool = false
 var vfx_layers: Array = []
+var vfx_persist: Array = []
+var vfx_impact: Array = []
 var arc_side: float = 0.0
 var arc_width: float = 0.0
 var arc_lift: float = 0.0
-var arc_min: float = 0.0
 var _arc_origin: Vector3 = Vector3.ZERO
 var _arc_u: float = 0.0
 var _resolved: bool = false
@@ -82,7 +82,6 @@ static func _make(p_source: Unit, origin: Vector3, cfg: Dictionary, auth: bool) 
 		for v in extras:
 			packed.append(int(v))
 		p.extra_elements = packed
-	p.mark_damage_bonus = float(cfg.get("mark_damage_bonus", 0.0))
 	p.splash_radius = float(cfg.get("splash_radius", 0.0))
 	p.splash_ratio = float(cfg.get("splash_ratio", 0.0))
 	p.splash_vfx = String(cfg.get("splash_vfx", ""))
@@ -107,12 +106,17 @@ static func _make(p_source: Unit, origin: Vector3, cfg: Dictionary, auth: bool) 
 	var layers = cfg.get("vfx_layers", [])
 	if layers is Array:
 		p.vfx_layers = layers
+	var persist = cfg.get("vfx_persist", [])
+	if persist is Array:
+		p.vfx_persist = persist
+	var impact = cfg.get("vfx_impact", [])
+	if impact is Array:
+		p.vfx_impact = impact
 	p.authoritative = auth
 	p.homing = cfg.get("homing", null)
 	p.arc_side = float(cfg.get("arc_side", 0.0))
 	p.arc_width = float(cfg.get("arc_width", 0.0))
 	p.arc_lift = float(cfg.get("arc_lift", 0.0))
-	p.arc_min = float(cfg.get("arc_min", 0.0))
 	p._arc_origin = origin
 	p._spawn_cfg = cfg.duplicate(true)
 	if cfg.has("direction"):
@@ -137,10 +141,20 @@ static func _make(p_source: Unit, origin: Vector3, cfg: Dictionary, auth: bool) 
 	p.add_child(col)
 	var used_vfx := false
 	var wave_ab := p_source._ability_def(p.ability_id) if p_source != null else null
-	if AbilityDef.matches_base(p.ability_id, "wave") or (wave_ab != null and wave_ab.delivery == AbilityDef.Delivery.WAVE):
+	var is_wave := AbilityDef.matches_base(p.ability_id, "wave") or (wave_ab != null and wave_ab.delivery == AbilityDef.Delivery.WAVE)
+	if is_wave:
 		var pal := SpellBaseFx.palette(wave_ab) if wave_ab != null else {"core": Color(0.62, 0.82, 1.0), "rim": Color(0.32, 0.55, 0.95)}
 		WaveFx.attach(p, p.radius * 2.0, pal.core, pal.rim)
 		used_vfx = true
+	var parent: Node = ArenaState.arena if ArenaState.arena else p_source.get_tree().current_scene
+	parent.add_child(p)
+	p.global_position = origin
+	if p.direction.length_squared() > 0.0001:
+		var look_at_pos := origin + p.direction
+		if absf(p.direction.dot(Vector3.UP)) < 0.98:
+			p.look_at(look_at_pos, Vector3.UP)
+	if is_wave:
+		SpellVfx.attach_persist_cfg(p, cfg)
 	else:
 		used_vfx = SpellVfx.attach_projectile(p, cfg)
 	if not used_vfx:
@@ -157,13 +171,6 @@ static func _make(p_source: Unit, origin: Vector3, cfg: Dictionary, auth: bool) 
 		mat.emission_energy_multiplier = 2.4
 		mesh.material_override = mat
 		p.add_child(mesh)
-	var parent: Node = ArenaState.arena if ArenaState.arena else p_source.get_tree().current_scene
-	parent.add_child(p)
-	p.global_position = origin
-	if p.direction.length_squared() > 0.0001:
-		var look_at_pos := origin + p.direction
-		if absf(p.direction.dot(Vector3.UP)) < 0.98:
-			p.look_at(look_at_pos, Vector3.UP)
 	p.body_entered.connect(p._on_body_entered)
 	if AbilityDef.matches_base(p.ability_id, "firebolt") or AbilityDef.matches_base(p.ability_id, "energy_bolt") or AbilityDef.matches_base(p.ability_id, "bolt"):
 		p._travel_sfx = AudioManager.play_on("firebolt.travel", p)
@@ -180,6 +187,7 @@ func _add_fire_trail(vfx_scale: float = 0.95) -> void:
 	p.amount = 28
 	p.lifetime = 0.28
 	p.emitting = true
+	p.local_coords = false
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	p.position = Vector3(0.0, 0.0, 0.45 * s)
 	var mesh := QuadMesh.new()
@@ -289,7 +297,6 @@ func snapshot() -> Dictionary:
 	snap["skillshot"] = skillshot
 	snap["element"] = element
 	snap["extra_elements"] = extra_elements.duplicate()
-	snap["mark_damage_bonus"] = mark_damage_bonus
 	snap["splash_radius"] = splash_radius
 	snap["splash_ratio"] = splash_ratio
 	snap["splash_vfx"] = splash_vfx
@@ -312,12 +319,13 @@ func snapshot() -> Dictionary:
 	snap["fire_wall_bonus"] = fire_wall_bonus
 	snap["fire_wall_amped"] = _fire_wall_amped
 	snap["vfx_layers"] = vfx_layers.duplicate()
+	snap["vfx_persist"] = vfx_persist.duplicate()
+	snap["vfx_impact"] = vfx_impact.duplicate()
 	snap["homing"] = homing
 	snap["direction"] = direction
 	snap["arc_side"] = arc_side
 	snap["arc_width"] = arc_width
 	snap["arc_lift"] = arc_lift
-	snap["arc_min"] = arc_min
 	snap["portal_hops"] = _portal_hops
 	return snap
 
@@ -328,6 +336,7 @@ func swallow() -> void:
 	_resolved = true
 	AudioManager.stop_loop(_travel_sfx, 0.0)
 	_travel_sfx = 0
+	AbilityFx.finish(self)
 	queue_free()
 
 
@@ -389,9 +398,15 @@ func _next_step(delta: float) -> Vector3:
 	return direction * speed * delta
 
 
+func _arc_offset() -> float:
+	# World-space lateral offset. Independent of travel distance so volley
+	# spacing stays the same at any range.
+	return maxf(arc_width, 0.05)
+
+
 func _arc_length(dest: Vector3) -> float:
 	var chord := dest.distance_to(_arc_origin)
-	return chord + absf(arc_side) * maxf(chord * arc_width, arc_min) * 1.7 + absf(arc_lift)
+	return chord + absf(arc_side) * _arc_offset() * 0.45 + absf(arc_lift)
 
 
 func _arc_point(dest: Vector3, t: float) -> Vector3:
@@ -407,9 +422,9 @@ func _arc_point(dest: Vector3, t: float) -> Vector3:
 		side = Vector3.RIGHT
 	else:
 		side = side.normalized()
-	var width := arc_side * maxf(dist * arc_width, arc_min)
+	var width := arc_side * _arc_offset()
 	var p1 := _arc_origin + fwd * dist * 0.12 + side * width + Vector3.UP * arc_lift
-	var p2 := _arc_origin + fwd * dist * 0.58 + side * width * 0.52 + Vector3.UP * (arc_lift * 0.22)
+	var p2 := _arc_origin + fwd * dist * 0.80 + side * width * 0.92 + Vector3.UP * (arc_lift * 0.38)
 	return _cubic_bezier(_arc_origin, p1, p2, dest, clampf(t, 0.0, 1.0))
 
 
@@ -458,7 +473,7 @@ func _hit_spell_wall(wall: Variant) -> void:
 		return
 	var proxy := barrier.target_proxy()
 	if proxy != null:
-		proxy.receive_ability_hit(src, element, damage, mark_damage_bonus, extra_elements, false, true, true, overheat_cast_id, infusion_double, ability_id, combat_text_cast_id)
+		proxy.receive_ability_hit(src, element, damage, 0.0, extra_elements, false, true, true, overheat_cast_id, infusion_double, ability_id, combat_text_cast_id)
 		return
 	var display_element := element
 	if display_element == AbilityDef.Element.NONE and not extra_elements.is_empty():
@@ -650,6 +665,7 @@ func _hit_unit(u: Unit) -> void:
 		UnitWind.apply_on_skillshot(u, _fired_ability(), self)
 	_on_land()
 	if pierce:
+		_splash_around(u)
 		return
 	_explode(u)
 
@@ -674,29 +690,65 @@ func _explode(primary: Unit) -> void:
 	elif AbilityDef.matches_base(ability_id, "auto"):
 		AudioManager.play_at("auto.hit", global_position)
 	_play_splash_fx(origin)
-	if not vfx_layers.is_empty() and not AbilityDef.matches_base(ability_id, "wave") and splash_radius <= 0.0:
-		SpellVfx.play_impact(origin, {"vfx_layers": vfx_layers})
-	if authoritative and splash_radius > 0.0:
-		var splash_dmg := damage * splash_ratio
-		if splash_dmg > 0.0:
-			for other in ArenaState.units:
-				var u := other as Unit
-				if u == null or u == primary or not is_instance_valid(u) or u.is_dead:
-					continue
-				if u.is_structure:
-					continue
-				var src := _src()
-				if src and u.team == src.team:
-					var splash_ab := _fired_ability()
-					if splash_ab != null and splash_ab.altered and u.global_position.distance_to(origin) <= splash_radius + u.radius:
-						u.apply_altered_from(splash_ab)
-					continue
-				if u.global_position.distance_to(origin) <= splash_radius + u.radius:
-					if _splash_blocked(u, origin):
-						continue
-					_deal_hit(u, splash_dmg)
-			SpellWall.apply_radius_hit(_src(), origin, splash_radius, splash_dmg, "hit", Color(0, 0, 0, 0), combat_text_cast_id, true)
+	if not vfx_impact.is_empty():
+		SpellVfx.play_impact(origin, {"vfx_impact": vfx_impact})
+	_splash_around(primary)
+	AbilityFx.finish(self)
 	queue_free()
+
+
+func _splash_around(primary: Unit) -> void:
+	if not authoritative or splash_radius <= 0.0:
+		return
+	var splash_dmg := damage * splash_ratio
+	var origin := _splash_origin()
+	for u in ArenaState.units_near(origin, splash_radius, false, true, true):
+		if u == primary:
+			continue
+		var src := _src()
+		if src and u.team == src.team:
+			_splash_ally_support(u, src, origin)
+			continue
+		if splash_dmg <= 0.05:
+			continue
+		if _splash_blocked(u, origin):
+			continue
+		_deal_hit(u, splash_dmg)
+	if splash_dmg > 0.05:
+		SpellWall.apply_radius_hit(_src(), origin, splash_radius, splash_dmg, "hit", Color(0, 0, 0, 0), combat_text_cast_id, true)
+
+
+func _splash_ally_support(u: Unit, src: Unit, origin: Vector3) -> void:
+	if u == null or src == null or splash_ratio <= 0.05:
+		return
+	if _splash_blocked(u, origin):
+		return
+	var ab := _fired_ability()
+	var support := heal_allies or applies_rejuvenation or shield > 0.05 or ally_cast
+	var altered := ab != null and ab.altered
+	if not support and not altered:
+		return
+	if support:
+		var heal_amt := heal if heal > 0.05 else (damage if heal_allies else 0.0)
+		heal_amt *= splash_ratio
+		var shield_amt := shield * splash_ratio
+		u.apply_support_hit(
+			src,
+			heal_amt,
+			shield_amt,
+			shield_duration,
+			applies_rejuvenation,
+			ability_id,
+			blessing_power,
+			extra_elements,
+			element,
+			combat_text_cast_id,
+			false
+		)
+	if ally_cast and ab:
+		src._apply_ally_spell(u, ab, false)
+	elif altered:
+		u.apply_altered_from(ab)
 
 
 func _splash_origin() -> Vector3:
@@ -764,8 +816,8 @@ func _deal_hit(u: Unit, amount: float, apply_fire_wall: bool = false) -> void:
 	if u == null or not is_instance_valid(u) or u.is_dead or amount <= 0.0:
 		return
 	var src := _src()
-	if element != AbilityDef.Element.NONE or mark_damage_bonus > 0.0 or extra_elements.size() > 0:
-		u.receive_ability_hit(src, element, amount, mark_damage_bonus, extra_elements, false, true, true, overheat_cast_id, infusion_double, ability_id, combat_text_cast_id)
+	if element != AbilityDef.Element.NONE or extra_elements.size() > 0:
+		u.receive_ability_hit(src, element, amount, 0.0, extra_elements, false, true, true, overheat_cast_id, infusion_double, ability_id, combat_text_cast_id)
 	else:
 		u.apply_world_hit(amount, src, "physical", ability_id if not ability_id.is_empty() else "auto", combat_text_cast_id)
 	if apply_fire_wall and fire_wall_bonus > 0.05 and is_instance_valid(u) and not u.is_dead:
@@ -785,6 +837,8 @@ func _deal_hit(u: Unit, amount: float, apply_fire_wall: bool = false) -> void:
 		)
 	if grant_charged and is_instance_valid(u) and not u.is_dead:
 		u._apply_mark(AbilityDef.Element.STORM, src)
+	if ability_id == "auto":
+		TalentCombat.on_auto_attack(src, u)
 
 
 func _splash_blocked(u: Unit, from: Vector3) -> bool:

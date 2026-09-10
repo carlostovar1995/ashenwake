@@ -2,9 +2,9 @@ class_name SpellPower
 extends Object
 
 ## Per-infusion slice, used for damage, healing, and shield:
-## (base * (1 + infusion modifier) / n) * (1 + n * infusion.base) + flat
-## n is the total infusion count. The last term is the shared infusion bonus
-## (1 → 120%, 2 → 140%, 3 → 160%). Damage then applies (1 - resist).
+## (base * (1 + infusion modifier) / n) + flat
+## n is the total infusion count. Each infusion carries its own spell-power,
+## cooldown, and cast-time modifier. Damage then applies (1 - resist).
 ## A crit roll adds crit_damage - 1 to the modifier (default 200% → +100% base).
 
 
@@ -18,25 +18,10 @@ static func infusion_count(ab: AbilityDef) -> int:
 	return ab.infusion_ids.size()
 
 
-static func infusion_base_mult(ab: AbilityDef) -> float:
-	var n := infusion_count(ab)
-	if n <= 0 or skips_infusion_damage(ab):
-		return 1.0
-	return 1.0 + CombatBalance.pct("infusion.base") * float(n)
-
-
-static func share_for(count: int) -> float:
-	if count <= 1:
-		return 1.0
-	if count == 2:
-		return 0.5
-	if count == 3:
-		return 1.0 / 3.0
-	return 1.0 / float(count)
-
-
 static func deals_enemy_damage(ab: AbilityDef) -> bool:
 	if ab == null or ab.infusion_ids.is_empty():
+		return true
+	if ab.altered:
 		return true
 	for id in ab.infusion_ids:
 		var inf := SpellCatalog.get_infusion(id)
@@ -105,7 +90,7 @@ static func _element_deals_damage(ab: AbilityDef, el: int) -> bool:
 		if inf == null or inf.element != el:
 			continue
 		matched = true
-		if inf.offensive:
+		if inf.offensive or ab.altered:
 			return true
 	return not matched
 
@@ -193,6 +178,12 @@ static func _resist_cut(victim: Object, element: int, ability_id: String) -> flo
 	return maxf(0.0, float(victim.call("element_resist", element, ability_id)))
 
 
+static func _taken_mult(victim: Object, element: int) -> float:
+	if victim == null or not victim.has_method("element_taken_mult"):
+		return 1.0
+	return maxf(0.0, float(victim.call("element_taken_mult", element)))
+
+
 static func packet(base: float, ab: AbilityDef, extras: PackedInt32Array, victim: Object, healing: bool, ability_id: String = "", crit: bool = false, primary: int = AbilityDef.Element.NONE, channel: String = "") -> float:
 	var total := 0.0
 	for part in packet_parts(base, ab, extras, victim, healing, ability_id, crit, primary, channel):
@@ -212,8 +203,7 @@ static func _channel_elements(ab: AbilityDef, extras: PackedInt32Array, primary:
 
 static func _slice_amount(base: float, ab: AbilityDef, el: int, healing: bool, mode: String, crit_inc: float) -> float:
 	var n := maxi(infusion_count(ab), 1)
-	var stack := infusion_base_mult(ab)
-	return (base * (1.0 + increase_for(ab, el, healing, mode) + crit_inc) / float(n)) * stack + flat_for(ab, el)
+	return base * (1.0 + increase_for(ab, el, healing, mode) + crit_inc) / float(n) + flat_for(ab, el)
 
 
 static func packet_parts(base: float, ab: AbilityDef, extras: PackedInt32Array, victim: Object, healing: bool, ability_id: String = "", crit: bool = false, primary: int = AbilityDef.Element.NONE, channel: String = "") -> Array:
@@ -231,6 +221,7 @@ static func packet_parts(base: float, ab: AbilityDef, extras: PackedInt32Array, 
 		var raw := base * (1.0 + crit_inc)
 		if mode == "damage":
 			raw *= maxf(0.0, 1.0 - _resist_cut(victim, AbilityDef.Element.NONE, ability_id))
+			raw *= _taken_mult(victim, primary)
 		if raw > 0.0:
 			parts.append({"element": primary, "amount": raw})
 		return parts
@@ -238,6 +229,7 @@ static func packet_parts(base: float, ab: AbilityDef, extras: PackedInt32Array, 
 		var slice := _slice_amount(base, ab, el, healing, mode, crit_inc)
 		if mode == "damage":
 			slice *= maxf(0.0, 1.0 - _resist_cut(victim, el, ability_id))
+			slice *= _taken_mult(victim, el)
 		if slice > 0.0:
 			parts.append({"element": el, "amount": slice})
 	return parts

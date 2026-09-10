@@ -47,3 +47,5 @@ var vfx_yaw: float = 0.0
 var vfx_primary: Color = Color(0, 0, 0, 0)
 var vfx_secondary: Color = Color(0, 0, 0, 0)
 var vfx_tertiary: Color = Color(0, 0, 0, 0)
+## Optional stamps merged with derived delivery/cast tags.
+var extra_tags: PackedStringArray = PackedStringArray()

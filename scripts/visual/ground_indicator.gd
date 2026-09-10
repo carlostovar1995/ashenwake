@@ -87,6 +87,35 @@ static func line_mat(color: Color) -> StandardMaterial3D:
 	return mat
 
 
+static func warmup(parent: Node) -> void:
+	if parent == null:
+		return
+	var holder := Node3D.new()
+	holder.name = "GroundIndicatorWarmup"
+	parent.add_child(holder)
+	holder.global_position = Vector3(0.0, -80.0, 0.0)
+	var circle := MeshInstance3D.new()
+	prepare(circle)
+	circle.mesh = circle_mesh()
+	circle.material_override = shader_mat(Color(1.0, 0.45, 0.1), true, Vector2(4.0, 4.0))
+	holder.add_child(circle)
+	var cone := MeshInstance3D.new()
+	prepare(cone)
+	cone.mesh = cone_fill_mesh(deg_to_rad(160.0), even_radii(8.0, 16))
+	cone.material_override = fill_mat(Color(1.0, 0.4, 0.1))
+	holder.add_child(cone)
+	var outline := MeshInstance3D.new()
+	prepare(outline)
+	outline.mesh = cone_outline_mesh(deg_to_rad(160.0), even_radii(8.0, 16))
+	outline.material_override = line_mat(Color(1.0, 0.55, 0.12))
+	holder.add_child(outline)
+	var tree := holder.get_tree()
+	if tree:
+		tree.create_timer(0.4).timeout.connect(holder.queue_free)
+	else:
+		holder.queue_free()
+
+
 static func circle_mesh() -> PlaneMesh:
 	var p := PlaneMesh.new()
 	p.size = Vector2(2, 2)

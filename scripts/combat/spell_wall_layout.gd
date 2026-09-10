@@ -259,6 +259,37 @@ static func segments(ab: AbilityDef) -> Array[Dictionary]:
 			return [_segment()]
 
 
+## Conservative XZ radius used to ask ArenaState for nearby candidates before
+## applying the exact wall-shape test.
+static func query_radius(ab: AbilityDef) -> float:
+	var style := style_id(ab)
+	if style == "divine":
+		return divine_radius(ab)
+	if style == "nature":
+		return nature_radius(ab)
+	if style == "lightning":
+		return lightning_radius(ab)
+	if style == "illusion":
+		return illusion_radius(ab)
+	if style == "ice":
+		return maxf(ice_length(ab) * 0.5 + ice_radius(ab), ice_zone_radius(ab))
+	var length := length_of(ab)
+	var thickness := thickness_of(ab)
+	var reach := sqrt(length * length * 0.25 + thickness * thickness * 0.25)
+	for raw in segments(ab):
+		var segment_length := float(raw.get("length", length))
+		var segment_thickness := float(raw.get("thickness", thickness))
+		if segment_length <= 0.0:
+			segment_length = length
+		if segment_thickness <= 0.0:
+			segment_thickness = thickness
+		var offset: Vector3 = raw.get("offset", Vector3.ZERO)
+		var segment_reach := Vector2(offset.x, offset.z).length()
+		segment_reach += sqrt(segment_length * segment_length * 0.25 + segment_thickness * segment_thickness * 0.25)
+		reach = maxf(reach, segment_reach)
+	return reach
+
+
 static func _segment(
 	offset: Vector3 = Vector3.ZERO,
 	yaw: float = 0.0,

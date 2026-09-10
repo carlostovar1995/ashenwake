@@ -1,0 +1,6 @@
+[mcp_servers.godot-editor]
+command = "npx"
+args = [
+    "-y",
+    "@keeveeg/godot-mcp",
+]

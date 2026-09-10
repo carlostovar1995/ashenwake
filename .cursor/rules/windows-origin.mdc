@@ -1,15 +1,13 @@
 ---
-description: Windows + GitHub daily workflow — Ashenwake lives on this PC, not Ubuntu
+description: Windows + GitHub daily workflow
 alwaysApply: true
 ---
 
 # Windows + GitHub
 
 - The working copy is `C:\Users\carlo\OneDrive\Desktop\Projects\Ashenwake`.
-- GitHub is the only daily remote: `https://github.com/carlostovar1995/ashenwake.git`.
-- Open this folder in Cursor and Godot. Do not open `\\wsl$\Ubuntu\home\carlo\game-sync` or `~/game-sync`.
+- GitHub is the only remote: `https://github.com/carlostovar1995/ashenwake.git`.
+- Open this folder in Cursor and Godot.
 - End of a session: `git add`, commit, `git push origin`. On the laptop: `git pull` in a local clone of the same repo.
-- The desktop shortcut **Sync Ashenwake** runs `scripts/windows/Sync-Ashenwake.ps1` (native PowerShell). Do not send the user into WSL to sync.
-- Do not ask them to pipe Origin `install.sh` to `sh` in PowerShell. Origin CLI is optional leftover kit, not the daily loop.
-- Do not run `scripts/push-both.sh` or treat Cursor Origin as upstream.
-- Windows `git` and `gh` talk to GitHub directly. The WSL `github-git.sh` helper is not required.
+- The desktop shortcut **Sync Ashenwake** runs `scripts/windows/Sync-Ashenwake.ps1`.
+- Windows `git` and `gh` talk to GitHub directly.

@@ -2,9 +2,8 @@ class_name SpellRecipe
 extends RefCounted
 
 const DEFAULT_INFUSIONS := 2
-const MAX_INFUSIONS := 3
+const MAX_INFUSIONS := 2
 const MAX_AUGMENTS := 3
-const OVERFLOW_ID := "overflow"
 
 var base_id: String = "bolt"
 var infusion_ids: PackedStringArray = PackedStringArray()
@@ -68,17 +67,6 @@ func toggle_infusion(infusion_id: String) -> void:
 func toggle_augment(augment_id: String) -> void:
 	if augment_id.is_empty():
 		return
-	if augment_id == OVERFLOW_ID:
-		if has_overflow():
-			augment_ids = PackedStringArray()
-		else:
-			augment_ids = PackedStringArray([OVERFLOW_ID])
-		normalize()
-		return
-	if has_overflow():
-		augment_ids = PackedStringArray([augment_id])
-		normalize()
-		return
 	augment_ids = _toggle(augment_ids, augment_id, MAX_AUGMENTS)
 	normalize()
 
@@ -91,22 +79,19 @@ func has_augment(augment_id: String) -> bool:
 	return augment_ids.has(augment_id)
 
 
-func has_overflow() -> bool:
-	return has_augment(OVERFLOW_ID)
-
-
 func infusion_cap() -> int:
-	var base := SpellCatalog.get_base(base_id)
+	if SpellCatalog.is_class_skill(base_id):
+		return 0
+	var base := SpellCatalog.resolve_base(base_id)
 	var cap := DEFAULT_INFUSIONS
 	if base != null and base.max_infusions > 0:
 		cap = base.max_infusions
-	if has_overflow() and cap >= DEFAULT_INFUSIONS:
-		return MAX_INFUSIONS
-	return cap
+	return mini(cap, MAX_INFUSIONS)
 
 
 func normalize() -> void:
-	augment_ids = _normalized_augments(augment_ids)
+	augment_ids = _capped(augment_ids, MAX_AUGMENTS)
+	augment_ids = _exclusive_augments(augment_ids)
 	augment_ids = _fits_base(base_id, augment_ids)
 	infusion_ids = _capped(infusion_ids, infusion_cap())
 
@@ -119,10 +104,21 @@ static func _fits_base(base_id: String, ids: PackedStringArray) -> PackedStringA
 	return out
 
 
-static func _normalized_augments(ids: PackedStringArray) -> PackedStringArray:
-	var out := _capped(ids, MAX_AUGMENTS)
-	if out.has(OVERFLOW_ID):
-		return PackedStringArray([OVERFLOW_ID])
+static func _exclusive_augments(ids: PackedStringArray) -> PackedStringArray:
+	var blocked: Dictionary = {}
+	var kept_rev := PackedStringArray()
+	for i in range(ids.size() - 1, -1, -1):
+		var id := String(ids[i])
+		if id.is_empty() or blocked.has(id):
+			continue
+		var aug := SpellCatalog.get_augment(id)
+		if aug != null:
+			for other in aug.exclusive_with:
+				blocked[String(other)] = true
+		kept_rev.append(id)
+	var out := PackedStringArray()
+	for i in range(kept_rev.size() - 1, -1, -1):
+		out.append(kept_rev[i])
 	return out
 
 

@@ -1,0 +1,39 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://assets/vfx/infusions/wind/wind_aura.tres" id="1_aura"]
+[ext_resource type="Shader" path="res://assets/vfx/infusions/wind/wind_aura_overlay.tres" id="2_overlay"]
+[ext_resource type="ArrayMesh" path="res://assets/vfx/infusions/wind/wind_aura.obj" id="3_aura_mesh"]
+[ext_resource type="Shader" path="res://assets/vfx/infusions/wind/wind_core.tres" id="4_core"]
+[ext_resource type="ArrayMesh" path="res://assets/vfx/infusions/wind/wind_core.obj" id="5_core_mesh"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_aura"]
+render_priority = 0
+shader = ExtResource("1_aura")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_overlay"]
+render_priority = 0
+shader = ExtResource("2_overlay")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_core"]
+render_priority = 0
+shader = ExtResource("4_core")
+
+[node name="WindBoltBody" type="Node3D"]
+
+[node name="WindAura" type="MeshInstance3D" parent="." groups=["fx_body", "fx_aura"]]
+material_override = SubResource("ShaderMaterial_aura")
+material_overlay = SubResource("ShaderMaterial_overlay")
+cast_shadow = 0
+mesh = ExtResource("3_aura_mesh")
+
+[node name="WindCore" type="MeshInstance3D" parent="." groups=["fx_body", "fx_core"]]
+material_override = SubResource("ShaderMaterial_core")
+cast_shadow = 0
+mesh = ExtResource("5_core_mesh")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="." groups=["fx_body"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.335529e-09, 0)
+light_color = Color(0.42, 0.85, 0.92, 1)
+light_energy = 5.0
+omni_range = 3.0
+shadow_enabled = false

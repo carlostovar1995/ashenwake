@@ -81,7 +81,6 @@ def main() -> None:
     convert(KENNEY / "knifeSlice.ogg", OUT / "auto_hit.ogg")
     convert(KENNEY / "chop.ogg", OUT / "melee_hit.ogg")
 
-    convert(JAG / "magical_4.ogg", OUT / "combust.ogg", "asetrate=44100*0.92,aresample=44100")
     convert(KENNEY / "doorClose_1.ogg", OUT / "cataclysm.ogg", "volume=1.6")
     convert(ICE / "qubodupIceDamage02.flac", OUT / "shatter.ogg")
 

@@ -15,7 +15,6 @@ var radius: float = 2.0
 var extras: PackedInt32Array = PackedInt32Array()
 var overheat_cast_id: int = -1
 var infusion_double: int = 0
-var combust_mult: float = 2.0
 var combat_text_cast_id: int = -1
 
 var _land: Vector3
@@ -34,7 +33,7 @@ func _ability_color() -> Color:
 	return ability.color
 
 
-static func drop(p_caster: Node, point: Vector3, ab: AbilityDef, p_damage: float, p_radius: float, p_extras: PackedInt32Array, p_overheat_cast_id: int = -1, p_infusion_double: int = 0, p_combust_mult: float = 2.0, p_combat_text_cast_id: int = -1) -> Node3D:
+static func drop(p_caster: Node, point: Vector3, ab: AbilityDef, p_damage: float, p_radius: float, p_extras: PackedInt32Array, p_overheat_cast_id: int = -1, p_infusion_double: int = 0, p_combat_text_cast_id: int = -1) -> Node3D:
 	var fx := new()
 	fx.caster = p_caster
 	fx.ability = ab
@@ -43,7 +42,6 @@ static func drop(p_caster: Node, point: Vector3, ab: AbilityDef, p_damage: float
 	fx.extras = p_extras
 	fx.overheat_cast_id = p_overheat_cast_id
 	fx.infusion_double = p_infusion_double
-	fx.combust_mult = p_combust_mult
 	fx.combat_text_cast_id = p_combat_text_cast_id
 	fx._land = Vector3(point.x, 0.28, point.z)
 	var inbound := Vector3.FORWARD
@@ -84,19 +82,21 @@ func _build() -> void:
 			rock_cfg["secondary_color"] = ability.vfx_secondary
 		if ability.vfx_tertiary.a > 0.0:
 			rock_cfg["tertiary_color"] = ability.vfx_tertiary
-	var vfx := AbilityFx.attach(AbilityFx.FIRE_PROJECTILE, _rock, rock_cfg)
+	var body := AbilityFx.FIRE_PROJECTILE
+	if ability and not ability.vfx_body.is_empty():
+		body = ability.vfx_body
+	var vfx := AbilityFx.attach(body, _rock, rock_cfg)
 	if vfx:
 		# Fire trail sits on the smaller rock; keep the tail from stretching as far.
 		vfx.scale = Vector3(0.52, 1.12, 1.12)
 		if vfx.has_method("open"):
 			vfx.call("open")
 	if ability:
-		SpellVfx.attach_to_node(_rock, ability, 0.55)
+		SpellVfx.attach_persist(_rock, ability, 0.55)
 	var charge_vol := clampf((radius - 2.0) / 3.4, 0.0, 1.0)
 	# Clip opens with ~1s of travel; start it on drop so the boom lands with the hit.
 	AudioManager.play_at("meteor.impact", _land, {"volume_db": lerpf(-2.0, 3.0, charge_vol)})
 	_make_core()
-	_make_light()
 	var tw := create_tween()
 	tw.set_trans(Tween.TRANS_QUAD)
 	tw.set_ease(Tween.EASE_IN)
@@ -143,10 +143,6 @@ func _make_core() -> void:
 	_rock.add_child(core)
 
 
-func _make_light() -> void:
-	FxHeroLights.bind(_rock, _ability_color(), 3.4, radius * 2.4)
-
-
 func _set_flight(t: float) -> void:
 	if _rock == null:
 		return
@@ -179,11 +175,14 @@ func _impact() -> void:
 		return
 	_hit = true
 	if _rock:
-		_rock.visible = false
-	_spawn_impact_blast()
+		AbilityFx.finish(_rock)
+		_rock.queue_free()
+		_rock = null
+	if ability == null or ability.vfx_impact.is_empty():
+		_spawn_impact_blast()
 	if is_instance_valid(caster) and ability and caster.has_method("_ground_burst"):
-		caster._ground_burst(_land, ability, damage, radius, extras, overheat_cast_id, infusion_double, combust_mult, combat_text_cast_id)
-	else:
+		caster._ground_burst(_land, ability, damage, radius, extras, overheat_cast_id, infusion_double, combat_text_cast_id)
+	elif ability == null or ability.vfx_impact.is_empty():
 		AbilityFx.play_at(AbilityFx.GROUND_EXPLOSION, _land, {
 			"scale": maxf(radius / 5.0, 0.35),
 			"area_radius": radius,

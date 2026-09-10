@@ -5,6 +5,8 @@ enum TargetMode { NONE, SKILLSHOT, UNIT, GROUND, ATTACK_MOVE }
 
 var targeting: TargetMode = TargetMode.NONE
 var targeting_index: int = -1
+var _portal_lock_active: bool = false
+var _portal_lock_pos: Vector3 = Vector3.ZERO
 
 var _overlay: TargetingOverlay
 var _click_fx: ClickMarker
@@ -29,6 +31,9 @@ var _aim_ground: Vector3 = Vector3.ZERO
 var _aim_from_frame: bool = false
 var _aim_unit_at_ms: int = 0
 var _aim_ready: bool = false
+var _mouse_unit_cache_frame: int = -1
+var _mouse_unit_cache_include_self: bool = false
+var _mouse_unit_cache: Unit = null
 
 const _AIM_GRACE_MS := 800
 
@@ -63,6 +68,7 @@ func _process(delta: float) -> void:
 		_show_target_cursor(false)
 		_reset_mouse_edges()
 		_clear_aim_cache()
+		_clear_portal_lock()
 		return
 	_refresh_aim_cache()
 	# Button events often never reach _input (HUD Controls mark them handled).
@@ -71,31 +77,39 @@ func _process(delta: float) -> void:
 	_tick_rmb_hold(delta, u)
 	if _overlay == null:
 		return
-	var channeling := u.controller != null and u.controller.is_channeling()
+	var ctrl := u.controller
+	var channeling := ctrl != null and ctrl.is_channeling()
+	var steer_ab: AbilityDef = null
+	if ctrl != null and ctrl.is_steering_ray():
+		steer_ab = ctrl.casting_ability()
+		ctrl.reaim_ray(ground_at_mouse())
 	var burst_ab := _burst_cast_lock(u)
-	if channeling:
-		var ch_ab := u.controller.casting_ability()
-		if SpellWallLayout.is_protection(ch_ab):
-			_overlay.hide_lock()
-			_overlay.hide_fx()
-		elif ch_ab:
+	if channeling and (SpellWallLayout.is_protection(ctrl.casting_ability()) or steer_ab != null):
+		_overlay.hide_lock()
+		_overlay.hide_fx()
+	elif steer_ab != null:
+		_overlay.hide_lock()
+		_overlay.show_skillshot(u, ctrl.cast_point, steer_ab)
+	elif channeling:
+		var ch_ab := ctrl.casting_ability()
+		if ch_ab:
 			_overlay.show_locked_aoe(
 				u,
-				u.controller.cast_point,
-				ch_ab.scaled_radius(u.controller.channel_charge()),
+				ctrl.cast_point,
+				ch_ab.scaled_radius(ctrl.channel_charge()),
 				ch_ab.color,
 				ch_ab
 			)
 		else:
 			_overlay.hide_lock()
 	elif burst_ab:
-		_overlay.show_locked_aoe(u, u.controller.cast_point, burst_ab.aoe_radius, burst_ab.color, burst_ab)
+		_overlay.show_locked_aoe(u, ctrl.cast_point, burst_ab.aoe_radius, burst_ab.color, burst_ab)
 	else:
 		_overlay.hide_lock()
 	if targeting == TargetMode.NONE:
-		if not channeling:
+		if not channeling and steer_ab == null:
 			_overlay.hide_fx()
-		_refresh_hover(u, u.controller.casting_ability() if channeling else null, channeling)
+		_refresh_hover(u, steer_ab if steer_ab != null else (ctrl.casting_ability() if channeling else null), channeling and steer_ab == null)
 		_show_target_cursor(false)
 		return
 	var ground := ground_at_mouse()
@@ -108,7 +122,10 @@ func _process(delta: float) -> void:
 				_overlay.show_skillshot(u, ground, ab)
 		TargetMode.GROUND:
 			if ab:
-				_overlay.show_ground(u, ground, ab)
+				if _portal_lock_active:
+					_overlay.show_illusion_portal_aim(_portal_lock_pos, ground, ab)
+				else:
+					_overlay.show_ground(u, ground, ab)
 		TargetMode.UNIT:
 			if ab:
 				_overlay.show_range(u, ab.range)
@@ -293,6 +310,8 @@ func _activate_ability(u: Unit, index: int, from_bar: bool) -> bool:
 		u.controller.issue_cast_local(index, u.global_position, u if ab.can_target_allies() else null)
 		_cancel_targeting()
 		return true
+	if _is_illusion_outlet_recast(u, index):
+		return _handle_illusion_outlet_targeting(u, index, ab, from_bar)
 	if GameSession.smart_cast and not _shift_held():
 		if _smart_fire(u, index, ab, from_bar):
 			return true
@@ -301,6 +320,8 @@ func _activate_ability(u: Unit, index: int, from_bar: bool) -> bool:
 
 
 func _begin_targeting(index: int, ab: AbilityDef) -> void:
+	if index != targeting_index:
+		_clear_portal_lock()
 	targeting_index = index
 	match ab.target_mode:
 		AbilityDef.TargetMode.SKILLSHOT:
@@ -333,6 +354,8 @@ func _smart_fire(u: Unit, index: int, ab: AbilityDef, from_bar: bool) -> bool:
 	var ground := _point_aim_ground(from_bar)
 	if ab.target_mode == AbilityDef.TargetMode.GROUND:
 		ground = u.clamped_ground_point(ground, ab.range)
+	elif ab.target_mode == AbilityDef.TargetMode.SKILLSHOT:
+		ground = u.clamped_skillshot_point(ground, ab)
 	u.controller.issue_cast_local(index, ground, null)
 	_click_fx.ping(ground, ab.color)
 	_cancel_targeting()
@@ -526,9 +549,17 @@ func _confirm_ability(u: Unit, forced_target: Unit = null) -> void:
 		return
 	var ab: AbilityDef = u.abilities[targeting_index]
 	if targeting == TargetMode.SKILLSHOT or targeting == TargetMode.GROUND:
+		if _is_illusion_outlet_recast(u, targeting_index):
+			if not _portal_lock_active:
+				_lock_illusion_outlet(u, ab, false)
+				return
+			_finish_illusion_outlet_aim(u)
+			return
 		var ground := ground_at_mouse()
 		if targeting == TargetMode.GROUND:
 			ground = u.clamped_ground_point(ground, ab.range)
+		elif targeting == TargetMode.SKILLSHOT:
+			ground = u.clamped_skillshot_point(ground, ab)
 		u.controller.issue_cast_local(targeting_index, ground, null)
 		_click_fx.ping(ground, ab.color)
 		_cancel_targeting()
@@ -556,10 +587,72 @@ func _confirm_ability(u: Unit, forced_target: Unit = null) -> void:
 func _cancel_targeting() -> void:
 	targeting = TargetMode.NONE
 	targeting_index = -1
+	_clear_portal_lock()
 	if _overlay != null:
 		_overlay.hide_fx()
 	_clear_hover()
 	_show_target_cursor(false)
+
+
+func _clear_portal_lock() -> void:
+	_portal_lock_active = false
+	_portal_lock_pos = Vector3.ZERO
+
+
+func _is_illusion_outlet_recast(u: Unit, index: int) -> bool:
+	if u == null or index < 0 or index >= u.abilities.size():
+		return false
+	if not u.has_recast_ready(index):
+		return false
+	var ab := u.abilities[index]
+	if ab == null or ab.delivery != AbilityDef.Delivery.WALL:
+		return false
+	if SpellWallLayout.style_id(ab) != "illusion":
+		return false
+	return SpellWall.needs_outlet(u)
+
+
+func _handle_illusion_outlet_targeting(u: Unit, index: int, ab: AbilityDef, from_bar: bool) -> bool:
+	if targeting_index == index and targeting != TargetMode.NONE:
+		if _portal_lock_active:
+			_finish_illusion_outlet_aim(u)
+		else:
+			_lock_illusion_outlet(u, ab, from_bar)
+		return true
+	_begin_targeting(index, ab)
+	if GameSession.smart_cast and not _shift_held():
+		if from_bar and not _aim_ready:
+			return true
+		_lock_illusion_outlet(u, ab, from_bar)
+	return true
+
+
+func _lock_illusion_outlet(u: Unit, ab: AbilityDef, from_bar: bool) -> void:
+	if from_bar and not _aim_ready:
+		return
+	var ground := _point_aim_ground(from_bar)
+	ground = u.clamped_ground_point(ground, ab.range)
+	_portal_lock_active = true
+	_portal_lock_pos = ground
+	_click_fx.ping(ground, ab.color)
+
+
+func _finish_illusion_outlet_aim(u: Unit) -> void:
+	if targeting_index < 0 or targeting_index >= u.abilities.size():
+		_cancel_targeting()
+		return
+	var ab: AbilityDef = u.abilities[targeting_index]
+	var pos := _portal_lock_pos
+	var dir := ground_at_mouse() - pos
+	dir.y = 0.0
+	if dir.length_squared() < 0.0001:
+		dir = Vector3(pos.x - u.global_position.x, 0.0, pos.z - u.global_position.z)
+	if dir.length_squared() < 0.0001:
+		dir = u.facing_dir()
+	u.set_illusion_exit_dir(dir)
+	u.controller.issue_cast_local(targeting_index, pos, null)
+	_click_fx.ping(pos, ab.color)
+	_cancel_targeting()
 
 
 func _show_target_cursor(on: bool) -> void:
@@ -595,7 +688,7 @@ func _make_target_cursor() -> Texture2D:
 
 func _refresh_hover(caster: Unit, ab: AbilityDef = null, locked_aoe: bool = false) -> void:
 	var wanted: Dictionary = {}
-	if ab and (locked_aoe or targeting == TargetMode.GROUND or targeting == TargetMode.SKILLSHOT):
+	if ab and (locked_aoe or targeting == TargetMode.GROUND or targeting == TargetMode.SKILLSHOT or ab.delivery == AbilityDef.Delivery.RAY):
 		var spell_c := ab.color.lightened(0.18)
 		spell_c.a = 0.92
 		for u in _preview_aoe_units(caster, ab, locked_aoe):
@@ -631,12 +724,17 @@ func _preview_aoe_units(caster: Unit, ab: AbilityDef, locked_aoe: bool) -> Array
 		return _units_in_circle(caster, caster.controller.cast_point, ab.scaled_radius(caster.controller.channel_charge()))
 	if targeting == TargetMode.GROUND:
 		if ab.delivery == AbilityDef.Delivery.WALL:
+			if _portal_lock_active:
+				return out
 			return _units_in_wall(caster, ab)
 		var pos := caster.clamped_ground_point(ground_at_mouse(), ab.range)
 		return _units_in_circle(caster, pos, ab.aoe_radius)
-	if targeting != TargetMode.SKILLSHOT:
+	var aiming_ray := ab.delivery == AbilityDef.Delivery.RAY
+	if targeting != TargetMode.SKILLSHOT and not aiming_ray:
 		return out
 	var aim := ground_at_mouse()
+	if aiming_ray and caster.controller != null and caster.controller.is_steering_ray():
+		aim = caster.controller.cast_point
 	var dir := aim - caster.global_position
 	dir.y = 0.0
 	if dir.length_squared() < 0.001:
@@ -644,18 +742,22 @@ func _preview_aoe_units(caster: Unit, ab: AbilityDef, locked_aoe: bool) -> Array
 	dir = dir.normalized()
 	if ab.is_cone():
 		return _units_in_cone(caster, dir, ab)
-	var max_len := minf(ab.skillshot_length, ab.range) if ab.skillshot_length > 0.05 else ab.range
+	var max_len := ab.skillshot_reach()
 	max_len = caster.wall_travel_distance(dir, max_len, false)
 	var length := max_len
-	if ab.splash_radius > 0.05:
+	if ab.splash_radius > 0.05 or ab.clamps_skillshot_to_cursor():
 		var to_cursor := Vector2(aim.x - caster.global_position.x, aim.z - caster.global_position.z).length()
 		length = clampf(to_cursor, 0.4, max_len)
+	elif aiming_ray and caster.controller != null and caster.controller.is_steering_ray():
+		var to_aim := Vector2(aim.x - caster.global_position.x, aim.z - caster.global_position.z).length()
+		length = clampf(to_aim, 0.4, max_len)
 	var start: Vector3 = caster.global_position
 	var end: Vector3 = caster.global_position + dir * length
 	var half_w := ab.skillshot_width * 0.5
-	for raw in ArenaState.units:
-		var u := raw as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead or u == caster:
+	var query_center := start.lerp(end, 0.5)
+	var query_radius := length * 0.5 + maxf(half_w, ab.splash_radius)
+	for u in ArenaState.units_near(query_center, query_radius, true, true, true):
+		if u == caster:
 			continue
 		if u.team == caster.team:
 			continue
@@ -664,6 +766,18 @@ func _preview_aoe_units(caster: Unit, ab: AbilityDef, locked_aoe: bool) -> Array
 		var in_splash := ab.splash_radius > 0.05 and u.global_position.distance_to(end) <= ab.splash_radius + u.radius
 		if in_shot or in_splash:
 			out.append(u)
+	if aiming_ray and not ab.pierces_skillshot() and out.size() > 1:
+		var origin := Vector3(caster.global_position.x, 0.0, caster.global_position.z)
+		var best: Unit = null
+		var best_along := INF
+		for u in out:
+			var along := Vector3(u.global_position.x - origin.x, 0.0, u.global_position.z - origin.z).dot(dir)
+			if along < best_along:
+				best_along = along
+				best = u
+		out.clear()
+		if best != null:
+			out.append(best)
 	return out
 
 
@@ -671,9 +785,8 @@ func _units_in_wall(caster: Unit, ab: AbilityDef) -> Array[Unit]:
 	var out: Array[Unit] = []
 	var pos := caster.clamped_ground_point(ground_at_mouse(), ab.range)
 	var dir := SpellWallLayout.aim_dir(caster.global_position, pos, caster.facing_dir())
-	for raw in ArenaState.units:
-		var u := raw as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead or u == caster:
+	for u in ArenaState.units_near(pos, SpellWallLayout.query_radius(ab), true, true, true):
+		if u == caster:
 			continue
 		if u.team == caster.team and SpellWallLayout.style_id(ab) != "nature" and SpellWallLayout.style_id(ab) != "divine":
 			continue
@@ -684,13 +797,10 @@ func _units_in_wall(caster: Unit, ab: AbilityDef) -> Array[Unit]:
 
 func _units_in_circle(caster: Unit, point: Vector3, radius: float) -> Array[Unit]:
 	var out: Array[Unit] = []
-	for raw in ArenaState.units:
-		var u := raw as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead or u == caster:
+	for u in ArenaState.units_near(point, radius, true, true, true):
+		if u == caster:
 			continue
 		if u.team == caster.team:
-			continue
-		if u.hit_distance_to(point) > radius:
 			continue
 		if not u.is_structure and not caster._burst_has_los(point, u.global_position):
 			continue
@@ -700,11 +810,10 @@ func _units_in_circle(caster: Unit, point: Vector3, radius: float) -> Array[Unit
 
 func _units_in_cone(caster: Unit, dir: Vector3, ab: AbilityDef) -> Array[Unit]:
 	var out: Array[Unit] = []
-	var length := ab.range if ab.range > 0.05 else ab.skillshot_length
+	var length := ab.skillshot_reach()
 	var half := ab.cone_angle * 0.5
-	for raw in ArenaState.units:
-		var u := raw as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead or u == caster:
+	for u in ArenaState.units_near(caster.global_position, length, true, true, true):
+		if u == caster:
 			continue
 		if u.team == caster.team:
 			continue
@@ -818,8 +927,7 @@ func ground_at_mouse() -> Vector3:
 func _attackable_near_point(caster: Unit, point: Vector3) -> Unit:
 	var best: Unit = null
 	var best_d := _ATTACK_CLICK_ACQUIRE
-	for raw in ArenaState.units:
-		var other := raw as Unit
+	for other in ArenaState.units_near(point, _ATTACK_CLICK_ACQUIRE, true, true, true):
 		if other == null or other == caster or not is_instance_valid(other) or other.is_dead:
 			continue
 		if other.is_structure:
@@ -835,6 +943,10 @@ func _attackable_near_point(caster: Unit, point: Vector3) -> Unit:
 
 
 func unit_at_mouse(include_self: bool = false) -> Unit:
+	var frame := Engine.get_process_frames()
+	if _mouse_unit_cache_frame == frame and _mouse_unit_cache_include_self == include_self:
+		if _mouse_unit_cache == null or is_instance_valid(_mouse_unit_cache):
+			return _mouse_unit_cache
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return null
@@ -852,21 +964,21 @@ func unit_at_mouse(include_self: bool = false) -> Unit:
 		if score < best_score:
 			best_score = score
 			best = u
-	var tree := get_tree()
-	if tree:
-		for node in tree.get_nodes_in_group("spell_hittable_walls"):
-			if node == null or not is_instance_valid(node) or not (node is SpellWall):
-				continue
-			var wall := node as SpellWall
-			if not wall.can_be_targeted_by(self_unit):
-				continue
-			var proxy := wall.target_proxy()
-			if proxy == null:
-				continue
-			var wall_score := _wall_click_score(cam, mouse, wall)
-			if wall_score < best_score:
-				best_score = wall_score
-				best = proxy
+	for wall in SpellWall.living_walls():
+		if wall == null or not is_instance_valid(wall):
+			continue
+		if not wall.can_be_targeted_by(self_unit):
+			continue
+		var proxy := wall.target_proxy()
+		if proxy == null:
+			continue
+		var wall_score := _wall_click_score(cam, mouse, wall)
+		if wall_score < best_score:
+			best_score = wall_score
+			best = proxy
+	_mouse_unit_cache_frame = frame
+	_mouse_unit_cache_include_self = include_self
+	_mouse_unit_cache = best
 	return best
 
 

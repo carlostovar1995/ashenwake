@@ -2,6 +2,8 @@ class_name SpellHotkeySlot
 extends Panel
 
 var slot_index: int = 0
+var accepts_base: bool = true
+var accepts_infusion: bool = true
 signal pressed
 signal piece_dropped(index: int, data: Dictionary)
 
@@ -67,7 +69,13 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 		modulate = Color.WHITE
 		return false
 	var kind := String(data.get("kind", ""))
-	var ok := kind == "base" or kind == "infusion" or kind == "augment"
+	var ok := false
+	if kind == "augment":
+		ok = true
+	elif kind == "base":
+		ok = accepts_base
+	elif kind == "infusion":
+		ok = accepts_infusion
 	modulate = Color(1.12, 1.06, 0.82) if ok else Color.WHITE
 	return ok
 

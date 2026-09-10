@@ -12,6 +12,10 @@ var _radius: float = 3.6
 var _primary: Color = Color(1.0, 0.72, 0.28)
 var _secondary: Color = Color(1.0, 0.38, 0.08)
 
+static var _spark_materials: Dictionary = {}
+static var _spark_processes: Dictionary = {}
+static var _spark_curve_texture: CurveTexture
+
 
 static func play(point: Vector3, radius: float, ab: AbilityDef) -> Node3D:
 	var fx := new()
@@ -90,15 +94,36 @@ func _make_sparks() -> GPUParticles3D:
 	var mesh := QuadMesh.new()
 	mesh.size = Vector2(0.1, 0.28)
 	p.draw_pass_1 = mesh
-	var smat := ShaderMaterial.new()
-	smat.shader = _WISP_SHADER
-	smat.set_shader_parameter("color", Color(_primary.r, _primary.g, _primary.b, 0.82))
-	p.material_override = smat
+	p.material_override = _spark_material(_primary)
+	p.process_material = _spark_process(_primary, _radius)
+	add_child(p)
+	return p
+
+
+static func _spark_material(color: Color) -> ShaderMaterial:
+	var tint := Color(color.r, color.g, color.b, 0.82)
+	var key := tint.to_html(true)
+	var cached := _spark_materials.get(key) as ShaderMaterial
+	if cached != null:
+		return cached
+	var material := ShaderMaterial.new()
+	material.shader = _WISP_SHADER
+	material.set_shader_parameter("color", tint)
+	_spark_materials[key] = material
+	return material
+
+
+static func _spark_process(color: Color, radius: float) -> ParticleProcessMaterial:
+	var ring_radius := radius * 0.55
+	var key := "%s|%.3f" % [color.to_html(true), ring_radius]
+	var cached := _spark_processes.get(key) as ParticleProcessMaterial
+	if cached != null:
+		return cached
 	var pp := ParticleProcessMaterial.new()
 	pp.particle_flag_align_y = true
 	pp.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_RING
 	pp.emission_ring_axis = Vector3.UP
-	pp.emission_ring_radius = _radius * 0.55
+	pp.emission_ring_radius = ring_radius
 	pp.emission_ring_inner_radius = 0.08
 	pp.emission_ring_height = 0.06
 	pp.direction = Vector3(0.0, 1.0, 0.0)
@@ -110,14 +135,19 @@ func _make_sparks() -> GPUParticles3D:
 	pp.damping_max = 2.6
 	pp.scale_min = 0.65
 	pp.scale_max = 1.2
+	pp.scale_curve = _spark_curve()
+	pp.color = color
+	_spark_processes[key] = pp
+	return pp
+
+
+static func _spark_curve() -> CurveTexture:
+	if _spark_curve_texture != null:
+		return _spark_curve_texture
 	var curve := Curve.new()
 	curve.add_point(Vector2(0.0, 0.35))
 	curve.add_point(Vector2(0.18, 1.0))
 	curve.add_point(Vector2(1.0, 0.0))
-	var tex := CurveTexture.new()
-	tex.curve = curve
-	pp.scale_curve = tex
-	pp.color = _primary
-	p.process_material = pp
-	add_child(p)
-	return p
+	_spark_curve_texture = CurveTexture.new()
+	_spark_curve_texture.curve = curve
+	return _spark_curve_texture

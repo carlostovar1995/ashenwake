@@ -1,0 +1,362 @@
+[gd_scene format=3 uid="uid://vblqw5olexvk"]
+
+[ext_resource type="Texture2D" uid="uid://dr6jmvdh4htcn" path="res://assets/vfx/elemental/effects/dawnwarden/T_Cracks336.png" id="1_0x4v2"]
+[ext_resource type="Shader" uid="uid://f67mtx8bj6im" path="res://assets/vfx/elemental/effects/dawnwarden/mirror_fire_core.tres" id="1_s8c5k"]
+[ext_resource type="Shader" uid="uid://bcfpexnun6bx" path="res://assets/vfx/elemental/effects/dawnwarden/fire_aura.tres" id="2_0x4v2"]
+[ext_resource type="Shader" uid="uid://ku48lleqfhq4" path="res://assets/vfx/elemental/effects/dawnwarden/pebble_1.tres" id="3_40b3b"]
+[ext_resource type="PackedScene" uid="uid://dymk12t5i2v2c" path="res://assets/vfx/elemental/effects/dawnwarden/mirror_base.glb" id="3_g6xcl"]
+[ext_resource type="PackedScene" uid="uid://bcraomdsno3ew" path="res://assets/vfx/elemental/effects/dawnwarden/mirror_pillar.glb" id="4_40b3b"]
+[ext_resource type="PackedScene" uid="uid://1bb0nebdiri4" path="res://assets/vfx/elemental/effects/dawnwarden/mirror.glb" id="5_r2fo0"]
+[ext_resource type="AudioStream" uid="uid://bupl36gpmsbv5" path="res://assets/audio/sfx/earth_rumble.ogg" id="6_rumble"]
+
+[sub_resource type="Animation" id="Animation_ftlje"]
+resource_name = "Mirror Pillars"
+length = 8.0
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("AudioStreamPlayer3D:playing")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0.53333336),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [true]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Pillar:position")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 4),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Vector3(0, -4.8, 0), Vector3(0, 0, 0)]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Pillar:rotation")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 4),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0, 3.1415925, 0)]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Decal:size")
+tracks/3/interp = 1
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0, 0.23333333, 4),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(3, 2, 3), Vector3(12, 2, 12), Vector3(12, 2, 12)]
+}
+tracks/4/type = "value"
+tracks/4/imported = false
+tracks/4/enabled = true
+tracks/4/path = NodePath("Small Debris:emitting")
+tracks/4/interp = 1
+tracks/4/loop_wrap = true
+tracks/4/keys = {
+"times": PackedFloat32Array(0, 0.24, 4),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 1,
+"values": [false, true, false]
+}
+tracks/5/type = "value"
+tracks/5/imported = false
+tracks/5/enabled = true
+tracks/5/path = NodePath("Pillar/Mirror:rotation")
+tracks/5/interp = 1
+tracks/5/loop_wrap = true
+tracks/5/keys = {
+"times": PackedFloat32Array(4, 5),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Vector3(0, 7.105429e-15, 0), Vector3(-0.34906584, 0, 0)]
+}
+tracks/6/type = "value"
+tracks/6/imported = false
+tracks/6/enabled = true
+tracks/6/path = NodePath("Decal:albedo_mix")
+tracks/6/interp = 1
+tracks/6/loop_wrap = true
+tracks/6/keys = {
+"times": PackedFloat32Array(0, 0.24, 4, 8),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [0.0, 1.0, 1.0, 0.0]
+}
+
+[sub_resource type="Animation" id="Animation_wwrqv"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("AudioStreamPlayer3D:playing")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Pillar:position")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Vector3(0, -4.8, 0)]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Pillar:rotation")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Vector3(0, 0, 0)]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Decal:size")
+tracks/3/interp = 1
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Vector3(3, 2, 3)]
+}
+tracks/4/type = "value"
+tracks/4/imported = false
+tracks/4/enabled = true
+tracks/4/path = NodePath("Small Debris:emitting")
+tracks/4/interp = 1
+tracks/4/loop_wrap = true
+tracks/4/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+tracks/5/type = "value"
+tracks/5/imported = false
+tracks/5/enabled = true
+tracks/5/path = NodePath("Pillar/Mirror:rotation")
+tracks/5/interp = 1
+tracks/5/loop_wrap = true
+tracks/5/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Vector3(0, 0, 0)]
+}
+tracks/6/type = "value"
+tracks/6/imported = false
+tracks/6/enabled = true
+tracks/6/path = NodePath("Decal:albedo_mix")
+tracks/6/interp = 1
+tracks/6/loop_wrap = true
+tracks/6/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [0.0]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_msacc"]
+_data = {
+&"Mirror Pillars": SubResource("Animation_ftlje"),
+&"RESET": SubResource("Animation_wwrqv")
+}
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_7pjr8"]
+render_priority = 0
+shader = ExtResource("3_40b3b")
+
+[sub_resource type="Curve" id="Curve_oxgc7"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="CurveTexture_rvse8"]
+curve = SubResource("Curve_oxgc7")
+
+[sub_resource type="Curve" id="Curve_r2fo0"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(1e-05, 1), 0.0, 0.0, 0, 0, Vector2(0.56398106, 1), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 4
+
+[sub_resource type="CurveTexture" id="CurveTexture_3l2vh"]
+curve = SubResource("Curve_r2fo0")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_3fiaa"]
+particle_flag_rotate_y = true
+emission_shape = 3
+emission_box_extents = Vector3(1, 0.41, 1)
+angle_min = -179.99998
+angle_max = 180.00002
+direction = Vector3(0, 1, 0)
+spread = 15.0
+initial_velocity_min = 3.0
+initial_velocity_max = 5.0
+angular_velocity_min = 199.99998
+angular_velocity_max = 600.0
+radial_velocity_min = 0.99997765
+radial_velocity_max = 1.9999776
+radial_velocity_curve = SubResource("CurveTexture_rvse8")
+scale_curve = SubResource("CurveTexture_3l2vh")
+color = Color(0.59607846, 0.4745098, 0.21568628, 1)
+collision_mode = 1
+collision_friction = 0.5
+collision_bounce = 0.0
+collision_use_scale = true
+
+[sub_resource type="QuadMesh" id="QuadMesh_w1cd7"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_4wkxp"]
+render_priority = 0
+shader = ExtResource("1_s8c5k")
+
+[sub_resource type="SphereMesh" id="SphereMesh_3l2vh"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_l5yrs"]
+render_priority = 0
+shader = ExtResource("2_0x4v2")
+shader_parameter/fade_alpha = 1.0
+
+[sub_resource type="SphereMesh" id="SphereMesh_3fiaa"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3fiaa"]
+cull_mode = 2
+shading_mode = 0
+vertex_color_use_as_albedo = true
+vertex_color_is_srgb = true
+billboard_mode = 3
+billboard_keep_scale = true
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
+
+[sub_resource type="Curve" id="Curve_60o10"]
+_data = [Vector2(0, 0), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="Curve" id="Curve_mxoj4"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(1, 1), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="Curve" id="Curve_x12oq"]
+_data = [Vector2(0, 0), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="CurveXYZTexture" id="CurveXYZTexture_da1wa"]
+curve_x = SubResource("Curve_60o10")
+curve_y = SubResource("Curve_mxoj4")
+curve_z = SubResource("Curve_x12oq")
+
+[sub_resource type="Curve" id="Curve_vo2wq"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(1, 0.7865169), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="CurveTexture_xvfxg"]
+curve = SubResource("Curve_vo2wq")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_3l2vh"]
+directional_velocity_min = -5.200016
+directional_velocity_max = -5.200016
+directional_velocity_curve = SubResource("CurveXYZTexture_da1wa")
+gravity = Vector3(0, 0, 0)
+scale_min = 0.5
+scale_max = 0.5
+scale_curve = SubResource("CurveTexture_xvfxg")
+color = Color(1.5720325, 0.9315799, 0.28894123, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_02j6r"]
+
+[node name="MirrorPillars" type="Node3D" unique_id=684327944]
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=969711539]
+libraries/ = SubResource("AnimationLibrary_msacc")
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="." unique_id=16555147]
+stream = ExtResource("6_rumble")
+volume_db = -6.0
+unit_size = 16.0
+max_distance = 80.0
+bus = &"SFX"
+
+[node name="Decal" type="Decal" parent="." unique_id=1384980484]
+size = Vector3(3, 2, 3)
+texture_albedo = ExtResource("1_0x4v2")
+modulate = Color(0, 0, 0, 1)
+albedo_mix = 0.0
+upper_fade = 1.009073
+
+[node name="Small Debris" type="GPUParticles3D" parent="." unique_id=352079989]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1438179, 0)
+material_override = SubResource("ShaderMaterial_7pjr8")
+emitting = false
+amount = 40
+lifetime = 2.5
+process_material = SubResource("ParticleProcessMaterial_3fiaa")
+draw_pass_1 = SubResource("QuadMesh_w1cd7")
+
+[node name="GPUParticlesCollisionBox3D" type="GPUParticlesCollisionBox3D" parent="." unique_id=621146411]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.24752045, 0)
+size = Vector3(12.07251, 0.1, 12.385864)
+
+[node name="Pillar" type="Node3D" parent="." unique_id=220687554]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -4.8, 0)
+
+[node name="FireCore" type="MeshInstance3D" parent="Pillar" unique_id=683870388]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.2, 0)
+material_override = SubResource("ShaderMaterial_4wkxp")
+cast_shadow = 0
+mesh = SubResource("SphereMesh_3l2vh")
+
+[node name="FireAura" type="MeshInstance3D" parent="Pillar" unique_id=851840259]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.2, 0)
+material_override = SubResource("ShaderMaterial_l5yrs")
+cast_shadow = 0
+mesh = SubResource("SphereMesh_3fiaa")
+
+[node name="Fire shots" type="GPUParticles3D" parent="Pillar" unique_id=1007903671]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.0367703, 0)
+material_override = SubResource("StandardMaterial3D_3fiaa")
+cast_shadow = 0
+emitting = false
+amount = 1
+lifetime = 0.5
+one_shot = true
+explosiveness = 1.0
+process_material = SubResource("ParticleProcessMaterial_3l2vh")
+draw_pass_1 = SubResource("SphereMesh_02j6r")
+
+[node name="Mirror Base2" parent="Pillar" unique_id=675877252 instance=ExtResource("3_g6xcl")]
+
+[node name="Mirror Pillar" parent="Pillar" unique_id=286265727 instance=ExtResource("4_40b3b")]
+
+[node name="Mirror" parent="Pillar" unique_id=840166809 instance=ExtResource("5_r2fo0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.530426, 0)
+
+[node name="ShotOrigin" type="Marker3D" parent="Pillar/Mirror" unique_id=1729341552]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.78, 0.16)

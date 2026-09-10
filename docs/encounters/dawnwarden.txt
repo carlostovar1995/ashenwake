@@ -1,0 +1,113 @@
+DAWNWARDEN
+==========
+
+KEY ART
+File: assets/ui/hud/boss_game_dawnwarden.png
+Paste that PNG into the Google Doc separately. Google Docs will not load a repo file path.
+
+Boss HP: 150,000
+Auto: 200 damage every 1.4s
+Move speed: 11 (double the old 5.5)
+Arena: 10 pillars in a ring about 17m from the boss. Floor radius 28m.
+
+
+PULL
+Do not pull on spawn.
+The raid starts on the south edge, outside the pillar ring.
+The fight starts when a player walks inside the pillar ring (the radius from the boss to the pillars), or when a player hits the boss.
+Allied AI stay parked until pull.
+
+
+PILLARS
+Pillars start buried. They do not change color.
+On pull the boss begins an uninterruptible 5s Raise Pillars cast. While that cast happens, every mirror pillar rises with a shake, rotates, and seats its mirror. An earth rumble plays once as the rise starts. A crack decal lights the ground under each pillar, then fades as they plant. The fireball grows over the same 5s and the mirror feed particles start at 4.5s. They start shooting after they finish planting.
+Destroyed pillars stop shooting and shatter into rigid gold shards (base, shaft, and mirror). The rest keep going.
+Pillars stop shooting for the whole Solar Corona and Solar Collapse casts, then resume.
+At 15% HP the boss repeats the same 5s Raise Pillars cast. Destroyed pillars rise again. Living pillars stay up.
+Pillars never gain Judgment stacks.
+
+Gun cadence
+After they plant, every living pillar walks a full circle:
+
+1. 5s Raise Pillars (rise from the ground, no shooting).
+2. Each pillar fires 2 shots/s around its whole circumference, 21° per shot. The mirror turns to face the shot, then keeps turning toward the next step. Bolts fly until they hit a player, a wall, another pillar, or the arena rim.
+3. Start yaw and clockwise/counter-clockwise are random per pillar so lanes do not line up.
+
+Each pillar shot: 1 Judgment stack.
+
+
+ADDS
+None. Pillars are the only extra shooters.
+No Sun Totems. No Solar Echoes. No dummy add spawns.
+
+
+JUDGMENT (Solar Brand)
+Players only. No cap.
+Each stack: +0.5% all damage taken.
+Lasts the whole fight.
+
+Stack sources
+Pillar shot: 1 per hit
+Searing Cleave: 2 (4 in P2)
+Sunspot: 10
+Judgment Ray: 4 per tick
+Solar Collapse: 50 if hit
+Solar Corona: 50 if hit
+
+
+ABILITIES THAT HIT PLAYERS AND PILLARS
+Searing Cleave
+Tank cone. 2 Judgment stacks. P2: double damage and double stacks.
+
+Sunspot
+Ground circles on non-tank players. 10 Judgment stacks. P2: radius +50%.
+
+Judgment Ray
+Two players at a time.
+The boss stands still and does not auto-attack for the warning and the channel.
+Player damage is half of the old ray (125 total).
+Tick rate stays the same. P1 channel 1.8s. Two full rays kill a pillar.
+P2 channel lasts twice as long (3.6s), so one soaked ray kills a pillar.
+Allies and walls can still soak.
+
+Solar Corona
+4s cast. The boss runs to the arena center as this starts, then stays there for Collapse. Pillars stop shooting for this cast and the Collapse that follows. Safe inside 7.2m of the boss. 100 damage on hit, including pillars. 50 Judgment if a player is hit.
+The screen washes to full white over 4.1s, then clears in 0.3s. Doughnut floor telegraph stays.
+
+Solar Collapse
+Casts immediately after Corona. 4.5s cast. Pillars stay off until this lands, then resume. 100 damage on hit, including pillars. 50 Judgment if a player is hit.
+The collapsing sun stays a small glow above the boss, then blows out into a huge fading shell on impact. The screen still gets a short wash.
+No orange floor telegraph. Pillars throw a triangle shadow away from the sun; it darkens as the sun brightens.
+No cover save. No Lingering Dawn. No wipe.
+
+
+PHASE 1 (100% to 50%)
+On pull: uninterruptible 5s Raise Pillars while all pillars rise.
+Wait 15s: Searing Cleave and Sunspot together.
+Wait 15s: Judgment Ray on 2 players.
+Wait 10s: Solar Corona, then Solar Collapse right after.
+Repeat that loop.
+
+
+PHASE 2 (50%)
+No auto-attack damage bonus.
+Searing Cleave: double damage and double Judgment stacks.
+Sunspot: radius +50%.
+Judgment Ray: lasts twice as long (can one-shot a pillar).
+Do not change the 15 / 15 / 10 waits between mechanics.
+
+
+PHASE 3 (15%)
+Double current Judgment stacks on all players.
+Uninterruptible 5s Raise Pillars. Destroyed pillars rise from the ground again.
+
+
+REMOVED FROM THIS FIGHT
+Umbral Well (center darkness, +50% damage taken).
+Solar Echoes (dummy adds from pillars).
+Sun Totems (dummy-model adds).
+Lingering Dawn after Collapse.
+Instant pull on spawn.
+Collapse / Corona as 9999 wipes.
+Cover immunity on Collapse.
+P2 auto damage bonus.

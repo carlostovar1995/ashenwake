@@ -1,5 +1,5 @@
 # Pull, optionally commit, and push Ashenwake to GitHub.
-# No WSL. No Origin. Run from the desktop shortcut or this file.
+# Run from the desktop shortcut or this file.
 $ErrorActionPreference = "Stop"
 
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path

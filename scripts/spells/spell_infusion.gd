@@ -16,6 +16,7 @@ var description: String = ""
 var damage_mult: float = 1.0
 var heal_mult: float = 1.0
 var cooldown_mult: float = 1.0
+var cast_time_mult: float = 1.0
 var shield_from_base: float = 0.0
 var heal_allies: bool = false
 var applies_rejuvenation: bool = false

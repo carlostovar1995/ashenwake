@@ -42,6 +42,7 @@ var _fade: float = 1.0
 var _pulse_tw: Tween
 var wind_pull: bool = false
 var vacuum_hit: bool = false
+var _undertow_tagged: Dictionary = {}
 
 
 static func spawn(
@@ -90,6 +91,8 @@ static func spawn(
 	z.global_position = Vector3(point.x, 0.10, point.z)
 	z.reset_physics_interpolation()
 	z._build()
+	SpellVfx.attach_persist(z, ab)
+	SpellVfx.play_ability_impact(ab, z.global_position)
 	return z
 
 
@@ -211,6 +214,10 @@ func _pull_enemies(delta: float) -> void:
 		to.y = 0.0
 		if to.length() > radius + u.radius:
 			continue
+		var id := u.get_instance_id()
+		if not _undertow_tagged.has(id):
+			_undertow_tagged[id] = true
+			TalentCombat.on_wind_pull(source, u)
 		UnitWind.pull_toward(u, global_position, speed, delta)
 
 

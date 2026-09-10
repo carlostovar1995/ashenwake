@@ -22,17 +22,22 @@ Ashenwake combat must stay bounded under pack + overlapping-AoE stress. Do not r
 
 ## Simulation and queries
 
-- Use `ArenaState.units_near(point, radius)` instead of scanning `ArenaState.units`.
-- Batch same-source same-window procs (shock chains) and keep summed damage. Time-slice AoE pulses and chain flushes with a per-physics-frame budget.
-- One runner ticks many instances. Do not give each damage number, bolt, or meter row its own `_process`.
+- Never linearly scan `ArenaState.units` on a hot path. Use typed `ArenaState` spatial helpers.
+- Match the gameplay shape: radius, cone, segment/capsule, and wall queries use a spatial broad phase followed by exact geometry. Preserve team, structure, line-of-sight, origin, width, endpoint, and boundary semantics; a radius approximation is not parity.
+- Batch same-source same-window procs and keep summed damage. Time-slice AoE pulses and chain flushes with an explicit per-physics-frame budget.
+- One shared runner ticks many instances, including repeated proc/chain drains. Do not give every unit, zone, label, bolt, or meter row its own `_process` or duplicate global drain.
+- Refresh zone/wall auras at a bounded cadence and distribute work across frames. Immediate enter/exit behavior remains correct where gameplay depends on it.
 
 ## HUD and combat text
 
 - Index live combat text (periodic / cast / queue). Do not linear-scan `_live` on every hit.
-- Throttle HUD rebuilds (~10 Hz). Dirty-flag, then refresh.
+- Use dirty/versioned HUD sections. Keep health/cast animation responsive; refresh buffs, target frames, ability art, and meters only when changed or at a bounded cadence (normally no faster than ~10 Hz).
 
-## When adding a system
+## Evidence and acceptance
 
-Ask: what is the 60-dummy × 5-AoE cost? If it is `O(zones × units × hops)` per tick or allocates per hit, batch, index, pool, or budget it before shipping.
+- Capture before/after profiler evidence for frame/script time, object/material counts, and orphan nodes. Pool, cache materials, or redesign only where the data shows sustained churn or cost.
+- Preserve established bounded designs unless profiling proves they are the bottleneck. Do not replace working pooling/budget code speculatively.
+- Ask what the 60-dummy × overlapping-AoE cost is. If it is `O(zones × units × hops)` per tick or allocates per hit, batch, index, pool, or budget it before shipping.
+- Combat/VFX/HUD hot-path changes pass the local 60-dummy manual gate with overlapping AoEs, lightning, walls/projectiles, HUD, and damage numbers active: unchanged behavior, stable object counts, equal-or-better frame/script time.
 
-Reference implementations: `thunder_wave_fx.gd`, `damage_number.gd`, `ground_aoe_fx.gd`, `arena_state.units_near`, shock-chain flush on `unit.gd`.
+Reference implementations: the bounded pools/budgets in `thunder_wave_fx.gd`, `damage_number.gd`, and `ground_aoe_fx.gd`, plus typed spatial helpers owned by `arena_state.gd`.

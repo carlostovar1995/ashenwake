@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://d2uw08jc00wgm"]
+
+[ext_resource type="PackedScene" uid="uid://di1ikyvyjb3r5" path="res://assets/models/props/fantasy/Pillar Styalized.glb" id="1_5gto3"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_3l2vh"]
+height = 5.4408035
+radius = 1.4135742
+
+[node name="ObstaclePillar" type="StaticBody3D" unique_id=438161882]
+collision_mask = 0
+
+[node name="Pillar" parent="." unique_id=1282663095 instance=ExtResource("1_5gto3")]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=299510741]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7204018, 0)
+shape = SubResource("CylinderShape3D_3l2vh")

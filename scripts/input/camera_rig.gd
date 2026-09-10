@@ -10,12 +10,18 @@ extends Node3D
 @export var lerp_speed: float = 11.0
 @export var drag_sensitivity: float = 0.027
 @export var limit_margin: float = 4.0
+@export var zoom_min: float = 0.42
+@export var zoom_max: float = 1.75
+@export var zoom_step: float = 0.10
+@export var zoom_lerp: float = 14.0
 
 var follow_locked: bool = true
 var _cam: Camera3D
 var _look: Vector3 = Vector3(0, 0, 12)
 var _dragging: bool = false
 var _drag_last: Vector2 = Vector2.ZERO
+var _zoom: float = 1.0
+var _zoom_target: float = 1.0
 
 
 func _ready() -> void:
@@ -29,7 +35,7 @@ func _ready() -> void:
 	_cam.current = true
 	_cam.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	add_child(_cam)
-	_cam.position = Vector3(0.0, height, back)
+	_apply_zoom(0.0)
 	_cam.rotation_degrees = Vector3(pitch_deg, 0.0, 0.0)
 	var listener := AudioListener3D.new()
 	listener.name = "AudioListener3D"
@@ -42,7 +48,22 @@ func get_camera() -> Camera3D:
 	return _cam
 
 
+func _nudge_zoom(notches: float) -> void:
+	_zoom_target = clampf(_zoom_target + notches * zoom_step, zoom_min, zoom_max)
+
+
+func _apply_zoom(delta: float) -> void:
+	if _cam == null:
+		return
+	if delta <= 0.0001:
+		_zoom = _zoom_target
+	else:
+		_zoom = lerpf(_zoom, _zoom_target, 1.0 - exp(-zoom_lerp * delta))
+	_cam.position = Vector3(0.0, height * _zoom, back * _zoom)
+
+
 func _process(delta: float) -> void:
+	_apply_zoom(delta)
 	if follow_locked:
 		var u: Node3D = GameSession.active_unit
 		if u and is_instance_valid(u):
@@ -73,6 +94,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				_look = _follow_origin(u)
 				global_position = _look
 		get_viewport().set_input_as_handled()
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_nudge_zoom(-maxf(event.factor, 1.0))
+			get_viewport().set_input_as_handled()
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_nudge_zoom(maxf(event.factor, 1.0))
+			get_viewport().set_input_as_handled()
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE:
 		_dragging = event.pressed
 		_drag_last = event.position

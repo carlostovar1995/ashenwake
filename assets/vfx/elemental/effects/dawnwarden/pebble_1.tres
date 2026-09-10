@@ -1,0 +1,38 @@
+[gd_resource type="VisualShader" format=3 uid="uid://ku48lleqfhq4"]
+
+[ext_resource type="Texture2D" uid="uid://b1ni2vufqc2vm" path="res://assets/vfx/elemental/effects/dawnwarden/pebble_1_shaded.png" id="1_oxgc7"]
+
+[sub_resource type="VisualShaderNodeVectorOp" id="VisualShaderNodeVectorOp_2k2yq"]
+operator = 2
+
+[sub_resource type="VisualShaderNodeInput" id="VisualShaderNodeInput_go5ur"]
+input_name = "color"
+
+[sub_resource type="VisualShaderNodeTexture" id="VisualShaderNodeTexture_10avb"]
+expanded_output_ports = [0]
+texture = ExtResource("1_oxgc7")
+
+[sub_resource type="VisualShaderNodeStep" id="VisualShaderNodeStep_magfx"]
+output_port_for_preview = 0
+default_input_values = [0, 0.32, 1, 0.0]
+
+[sub_resource type="VisualShaderNodeBillboard" id="VisualShaderNodeBillboard_w4oom"]
+billboard_type = 3
+keep_scale = true
+
+[resource]
+modes/blend = 4
+modes/cull = 2
+nodes/vertex/2/node = SubResource("VisualShaderNodeBillboard_w4oom")
+nodes/vertex/2/position = Vector2(-140, 240)
+nodes/vertex/connections = PackedInt32Array(2, 0, 0, 10)
+nodes/fragment/0/position = Vector2(380, 120)
+nodes/fragment/2/node = SubResource("VisualShaderNodeTexture_10avb")
+nodes/fragment/2/position = Vector2(-140, 180)
+nodes/fragment/5/node = SubResource("VisualShaderNodeStep_magfx")
+nodes/fragment/5/position = Vector2(140, 240)
+nodes/fragment/10/node = SubResource("VisualShaderNodeVectorOp_2k2yq")
+nodes/fragment/10/position = Vector2(140, 40)
+nodes/fragment/11/node = SubResource("VisualShaderNodeInput_go5ur")
+nodes/fragment/11/position = Vector2(-240, 60)
+nodes/fragment/connections = PackedInt32Array(2, 0, 5, 1, 5, 0, 0, 1, 2, 0, 10, 1, 10, 0, 0, 0, 10, 0, 0, 5, 11, 0, 10, 0)

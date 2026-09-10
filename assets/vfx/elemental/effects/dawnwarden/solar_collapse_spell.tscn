@@ -1,0 +1,395 @@
+[gd_scene format=3 uid="uid://ddo203aqv7acg"]
+
+[ext_resource type="Script" uid="uid://bq7m2n8p4scfx" path="res://scripts/visual/solar_collapse_fx.gd" id="1_fx"]
+[ext_resource type="Texture2D" uid="uid://bbdlo2rykj5wl" path="res://assets/textures/arena/Shadow.png" id="1_1c3mb"]
+[ext_resource type="Shader" uid="uid://b6watefkxuc7i" path="res://assets/vfx/elemental/effects/dawnwarden/solar_collapse_core.tres" id="1_5ysri"]
+[ext_resource type="Shader" uid="uid://bcfpexnun6bx" path="res://assets/vfx/elemental/effects/dawnwarden/fire_aura.tres" id="2_d5vl2"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_207cn"]
+render_priority = 0
+shader = ExtResource("1_5ysri")
+shader_parameter/fade_alpha = 1.0
+
+[sub_resource type="SphereMesh" id="SphereMesh_3l2vh"]
+radial_segments = 16
+rings = 10
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_2tduo"]
+render_priority = 0
+shader = ExtResource("2_d5vl2")
+shader_parameter/fade_alpha = 1.0
+
+[sub_resource type="SphereMesh" id="SphereMesh_3fiaa"]
+radial_segments = 16
+rings = 10
+
+[sub_resource type="Animation" id="Animation_wvwk3"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Meshes:position")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Vector3(0, 2.2, -2.8)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Meshes:scale")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Vector3(0.1, 0.1, 0.1)]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Pillar Shadows/PillarShadow:albedo_mix")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [1.0]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Pillar Shadows/PillarShadow2:albedo_mix")
+tracks/3/interp = 1
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [1.0]
+}
+tracks/4/type = "value"
+tracks/4/imported = false
+tracks/4/enabled = true
+tracks/4/path = NodePath("Pillar Shadows/PillarShadow3:albedo_mix")
+tracks/4/interp = 1
+tracks/4/loop_wrap = true
+tracks/4/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [1.0]
+}
+tracks/5/type = "value"
+tracks/5/imported = false
+tracks/5/enabled = true
+tracks/5/path = NodePath("Pillar Shadows/PillarShadow4:albedo_mix")
+tracks/5/interp = 1
+tracks/5/loop_wrap = true
+tracks/5/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [1.0]
+}
+tracks/6/type = "value"
+tracks/6/imported = false
+tracks/6/enabled = true
+tracks/6/path = NodePath("Pillar Shadows/PillarShadow5:albedo_mix")
+tracks/6/interp = 1
+tracks/6/loop_wrap = true
+tracks/6/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [1.0]
+}
+tracks/7/type = "value"
+tracks/7/imported = false
+tracks/7/enabled = true
+tracks/7/path = NodePath("Pillar Shadows/PillarShadow6:albedo_mix")
+tracks/7/interp = 1
+tracks/7/loop_wrap = true
+tracks/7/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [1.0]
+}
+tracks/8/type = "value"
+tracks/8/imported = false
+tracks/8/enabled = true
+tracks/8/path = NodePath("Pillar Shadows/PillarShadow7:albedo_mix")
+tracks/8/interp = 1
+tracks/8/loop_wrap = true
+tracks/8/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [1.0]
+}
+tracks/9/type = "value"
+tracks/9/imported = false
+tracks/9/enabled = true
+tracks/9/path = NodePath("Pillar Shadows/PillarShadow8:albedo_mix")
+tracks/9/interp = 1
+tracks/9/loop_wrap = true
+tracks/9/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [1.0]
+}
+tracks/10/type = "value"
+tracks/10/imported = false
+tracks/10/enabled = true
+tracks/10/path = NodePath("Pillar Shadows/PillarShadow9:albedo_mix")
+tracks/10/interp = 1
+tracks/10/loop_wrap = true
+tracks/10/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [1.0]
+}
+tracks/11/type = "value"
+tracks/11/imported = false
+tracks/11/enabled = true
+tracks/11/path = NodePath("Pillar Shadows/PillarShadow10:albedo_mix")
+tracks/11/interp = 1
+tracks/11/loop_wrap = true
+tracks/11/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [1.0]
+}
+
+[sub_resource type="Animation" id="Animation_bp5hn"]
+resource_name = "Solar Collpase Animation"
+length = 4.6
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Meshes:position")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0.0009999999, 4.4),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Vector3(0, 2.2, -2.8), Vector3(0, 16, 0)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Meshes:scale")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0.0009999999, 4.4, 4.6),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(0.1, 0.1, 0.1), Vector3(10, 10, 10), Vector3(40, 40, 40)]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Pillar Shadows/PillarShadow:albedo_mix")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 4.4),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 1.0]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Pillar Shadows/PillarShadow2:albedo_mix")
+tracks/3/interp = 1
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0, 4.4),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 1.0]
+}
+tracks/4/type = "value"
+tracks/4/imported = false
+tracks/4/enabled = true
+tracks/4/path = NodePath("Pillar Shadows/PillarShadow3:albedo_mix")
+tracks/4/interp = 1
+tracks/4/loop_wrap = true
+tracks/4/keys = {
+"times": PackedFloat32Array(0, 4.4),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 1.0]
+}
+tracks/5/type = "value"
+tracks/5/imported = false
+tracks/5/enabled = true
+tracks/5/path = NodePath("Pillar Shadows/PillarShadow4:albedo_mix")
+tracks/5/interp = 1
+tracks/5/loop_wrap = true
+tracks/5/keys = {
+"times": PackedFloat32Array(0, 4.4),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 1.0]
+}
+tracks/6/type = "value"
+tracks/6/imported = false
+tracks/6/enabled = true
+tracks/6/path = NodePath("Pillar Shadows/PillarShadow5:albedo_mix")
+tracks/6/interp = 1
+tracks/6/loop_wrap = true
+tracks/6/keys = {
+"times": PackedFloat32Array(0, 4.4),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 1.0]
+}
+tracks/7/type = "value"
+tracks/7/imported = false
+tracks/7/enabled = true
+tracks/7/path = NodePath("Pillar Shadows/PillarShadow6:albedo_mix")
+tracks/7/interp = 1
+tracks/7/loop_wrap = true
+tracks/7/keys = {
+"times": PackedFloat32Array(0, 4.4),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 1.0]
+}
+tracks/8/type = "value"
+tracks/8/imported = false
+tracks/8/enabled = true
+tracks/8/path = NodePath("Pillar Shadows/PillarShadow7:albedo_mix")
+tracks/8/interp = 1
+tracks/8/loop_wrap = true
+tracks/8/keys = {
+"times": PackedFloat32Array(0, 4.4),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 1.0]
+}
+tracks/9/type = "value"
+tracks/9/imported = false
+tracks/9/enabled = true
+tracks/9/path = NodePath("Pillar Shadows/PillarShadow8:albedo_mix")
+tracks/9/interp = 1
+tracks/9/loop_wrap = true
+tracks/9/keys = {
+"times": PackedFloat32Array(0, 4.4),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 1.0]
+}
+tracks/10/type = "value"
+tracks/10/imported = false
+tracks/10/enabled = true
+tracks/10/path = NodePath("Pillar Shadows/PillarShadow9:albedo_mix")
+tracks/10/interp = 1
+tracks/10/loop_wrap = true
+tracks/10/keys = {
+"times": PackedFloat32Array(0, 4.4),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 1.0]
+}
+tracks/11/type = "value"
+tracks/11/imported = false
+tracks/11/enabled = true
+tracks/11/path = NodePath("Pillar Shadows/PillarShadow10:albedo_mix")
+tracks/11/interp = 1
+tracks/11/loop_wrap = true
+tracks/11/keys = {
+"times": PackedFloat32Array(0, 4.4),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 1.0]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_bosh4"]
+_data = {
+&"RESET": SubResource("Animation_wvwk3"),
+&"Solar Collpase Animation": SubResource("Animation_bp5hn")
+}
+
+[node name="Solar Collapse spell" type="Node3D" unique_id=1412703328]
+script = ExtResource("1_fx")
+
+[node name="Pillar Shadows" type="Node3D" parent="." unique_id=1024763451]
+
+[node name="PillarShadow" type="Decal" parent="Pillar Shadows" unique_id=47367290]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 24.346012, -0.04284668, -0.23252606)
+size = Vector3(7.900879, 0.6425781, 17.503296)
+texture_albedo = ExtResource("1_1c3mb")
+
+[node name="PillarShadow2" type="Decal" parent="Pillar Shadows" unique_id=574774926]
+transform = Transform3D(-0.5770743, 0, -0.81669164, 0, 1, 0, 0.81669164, 0, -0.5770743, 19.496342, -0.04284668, 13.839985)
+size = Vector3(7.900879, 0.6425781, 17.503296)
+texture_albedo = ExtResource("1_1c3mb")
+
+[node name="PillarShadow3" type="Decal" parent="Pillar Shadows" unique_id=1507212699]
+transform = Transform3D(-0.9487639, 0, -0.31598607, 0, 1, 0, 0.31598607, 0, -0.9487639, 7.659733, -0.04284668, 22.352558)
+size = Vector3(7.900879, 0.6425781, 17.503296)
+texture_albedo = ExtResource("1_1c3mb")
+
+[node name="PillarShadow4" type="Decal" parent="Pillar Shadows" unique_id=96016400]
+transform = Transform3D(-0.9325408, 0, 0.36106494, 0, 1, 0, -0.36106494, 0, -0.9325408, -7.724468, -0.04284668, 22.690601)
+size = Vector3(7.900879, 0.6425781, 17.503296)
+texture_albedo = ExtResource("1_1c3mb")
+
+[node name="PillarShadow5" type="Decal" parent="Pillar Shadows" unique_id=287679307]
+transform = Transform3D(-0.59896797, 0, 0.800773, 0, 1, 0, -0.800773, 0, -0.59896797, -19.47955, -0.04284668, 14.242207)
+size = Vector3(7.900879, 0.6425781, 17.503296)
+texture_albedo = ExtResource("1_1c3mb")
+
+[node name="PillarShadow6" type="Decal" parent="Pillar Shadows" unique_id=1069142512]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -24.275806, -0.04284668, 0.26106524)
+size = Vector3(7.900879, 0.6425781, 17.503296)
+texture_albedo = ExtResource("1_1c3mb")
+
+[node name="PillarShadow7" type="Decal" parent="Pillar Shadows" unique_id=1606179647]
+transform = Transform3D(0.5183898, 0, 0.8551443, 0, 1, 0, -0.8551443, 0, 0.5183898, -19.716278, -0.08569336, -14.073114)
+size = Vector3(7.900879, 0.6425781, 17.503296)
+texture_albedo = ExtResource("1_1c3mb")
+
+[node name="PillarShadow8" type="Decal" parent="Pillar Shadows" unique_id=965865530]
+transform = Transform3D(0.9163383, 0, 0.40040457, 0, 1, 0, -0.40040457, 0, 0.9163383, -8.115139, -0.04284668, -22.661785)
+size = Vector3(7.900879, 0.6425781, 17.503296)
+texture_albedo = ExtResource("1_1c3mb")
+
+[node name="PillarShadow9" type="Decal" parent="Pillar Shadows" unique_id=763108747]
+transform = Transform3D(0.9309108, 0, -0.36524624, 0, 1, 0, 0.36524624, 0, 0.9309108, 7.839451, -0.04284668, -23.047771)
+size = Vector3(7.900879, 0.6425781, 17.503296)
+texture_albedo = ExtResource("1_1c3mb")
+
+[node name="PillarShadow10" type="Decal" parent="Pillar Shadows" unique_id=1567683036]
+transform = Transform3D(0.5312125, 0, -0.8472384, 0, 1, 0, 0.8472384, 0, 0.5312125, 19.45139, -0.08569336, -13.820122)
+size = Vector3(7.900879, 0.6425781, 17.503296)
+texture_albedo = ExtResource("1_1c3mb")
+
+[node name="Meshes" type="Node3D" parent="." unique_id=1143529580]
+transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, 0, 2.2, -2.8)
+
+[node name="Solar Collapse Core" type="MeshInstance3D" parent="Meshes" unique_id=554059561]
+material_override = SubResource("ShaderMaterial_207cn")
+mesh = SubResource("SphereMesh_3l2vh")
+
+[node name="Solar Collapse Aura" type="MeshInstance3D" parent="Meshes" unique_id=1446481341]
+transform = Transform3D(1.1, 0, 0, 0, 1.1, 0, 0, 0, 1.1, 0, 0, 0)
+material_override = SubResource("ShaderMaterial_2tduo")
+mesh = SubResource("SphereMesh_3fiaa")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1946473521]
+libraries/ = SubResource("AnimationLibrary_bosh4")

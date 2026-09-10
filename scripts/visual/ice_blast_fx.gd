@@ -6,6 +6,10 @@ const _WISP_SHADER := preload("res://scripts/visual/ice_wisp.gdshader")
 const _CRYSTAL_SHADER := preload("res://scripts/visual/ice_crystal.gdshader")
 const _HeroLights := preload("res://scripts/visual/fx_hero_lights.gd")
 
+static var _wisp_materials: Dictionary = {}
+static var _particle_processes: Dictionary = {}
+static var _fade_curve_texture: CurveTexture
+
 var _sheet_mat: ShaderMaterial
 var _crystal_mat: ShaderMaterial
 var _glow_mat: StandardMaterial3D
@@ -110,7 +114,7 @@ func _set_crystal_grow(v: float) -> void:
 		if n == null or not is_instance_valid(n):
 			continue
 		var s := _crystal_scales[i] if i < _crystal_scales.size() else 1.0
-		n.scale = Vector3(s * (0.35 + v * 0.65), s * v, s * (0.35 + v * 0.65))
+		n.scale = Vector3(s * (0.35 + v * 0.65), s * maxf(v, 0.04), s * (0.35 + v * 0.65))
 
 
 func _make_sheet(spoke_lengths: PackedFloat32Array = PackedFloat32Array()) -> void:
@@ -159,7 +163,7 @@ func _make_crystals() -> void:
 		var s := lerpf(2.15, 0.85, dist_t) * rng.randf_range(0.7, 1.15)
 		if i < 8:
 			s *= 1.12
-		n.scale = Vector3.ZERO
+		n.scale = Vector3(s * 0.35, s * 0.04, s * 0.35)
 		_crystals.append(n)
 		_crystal_scales.append(s)
 		add_child(n)
@@ -283,11 +287,26 @@ func _make_particles(amount: int, life: float, size: Vector2, color: Color, spee
 	mesh.size = size
 	p.draw_pass_1 = mesh
 	p.material_override = _wisp_mat(color)
+	p.process_material = _particle_process(color, speed)
+	add_child(p)
+	return p
+
+
+func _particle_process(color: Color, speed: float) -> ParticleProcessMaterial:
+	var half := _angle * 0.5
+	var emit_scale := Vector3(
+		sin(half) * minf(_radius * 0.22, 1.1),
+		0.12,
+		minf(_radius * 0.2, 1.0)
+	)
+	var key := "%s|%s|%.3f" % [color.to_html(true), str(emit_scale), speed]
+	var cached := _particle_processes.get(key) as ParticleProcessMaterial
+	if cached != null:
+		return cached
 	var pp := ParticleProcessMaterial.new()
 	pp.particle_flag_align_y = true
 	pp.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	var half := _angle * 0.5
-	pp.emission_shape_scale = Vector3(sin(half) * minf(_radius * 0.22, 1.1), 0.12, minf(_radius * 0.2, 1.0))
+	pp.emission_shape_scale = emit_scale
 	pp.direction = Vector3(0.0, 1.0, 0.0)
 	pp.spread = 12.0
 	pp.initial_velocity_min = speed * 0.4
@@ -299,42 +318,29 @@ func _make_particles(amount: int, life: float, size: Vector2, color: Color, spee
 	pp.scale_max = 1.35
 	pp.scale_curve = _fade_curve()
 	pp.color = color
-	p.process_material = pp
-	add_child(p)
-	return p
+	_particle_processes[key] = pp
+	return pp
 
 
 static func _fade_curve() -> CurveTexture:
+	if _fade_curve_texture != null:
+		return _fade_curve_texture
 	var curve := Curve.new()
 	curve.add_point(Vector2(0.0, 0.35))
 	curve.add_point(Vector2(0.18, 1.0))
 	curve.add_point(Vector2(1.0, 0.0))
-	var tex := CurveTexture.new()
-	tex.curve = curve
-	return tex
+	_fade_curve_texture = CurveTexture.new()
+	_fade_curve_texture.curve = curve
+	return _fade_curve_texture
 
 
 static func _wisp_mat(color: Color) -> ShaderMaterial:
+	var key := color.to_html(true)
+	var cached := _wisp_materials.get(key) as ShaderMaterial
+	if cached != null:
+		return cached
 	var mat := ShaderMaterial.new()
 	mat.shader = _WISP_SHADER
 	mat.set_shader_parameter("color", color)
+	_wisp_materials[key] = mat
 	return mat
-
-
-static func _puff_process() -> ParticleProcessMaterial:
-	var pp := ParticleProcessMaterial.new()
-	pp.particle_flag_align_y = true
-	pp.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	pp.emission_shape_scale = Vector3(0.28, 0.12, 0.28)
-	pp.direction = Vector3(0.0, 1.0, 0.0)
-	pp.spread = 28.0
-	pp.initial_velocity_min = 1.4
-	pp.initial_velocity_max = 3.4
-	pp.gravity = Vector3(0.0, 0.8, 0.0)
-	pp.damping_min = 1.2
-	pp.damping_max = 2.4
-	pp.scale_min = 0.7
-	pp.scale_max = 1.4
-	pp.scale_curve = _fade_curve()
-	pp.color = Color(0.9, 0.98, 1.0, 0.9)
-	return pp

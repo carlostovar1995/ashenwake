@@ -49,3 +49,7 @@ Only user-supplied clips are shipped. Placeholder packs were removed.
 - Used for: Overcharge buff sustain rumble.
 - File: `overcharge_end.ogg` (from `sound_of_energy_bein_#2-1787854316793.wav`)
 - Used for: Overcharge buff end.
+
+## Custom earth rumble
+- File: `earth_rumble.ogg` (from `earth_rumbling_#3-1788981655991.mp3`)
+- Used for: Dawnwarden Raise Pillars as the mirrors start to rise.

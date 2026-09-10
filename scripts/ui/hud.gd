@@ -11,7 +11,7 @@ const _SHIELD_GRAY := Color(0.86, 0.90, 0.96, 0.95)
 const _SLOT_HOVER := Color(1.42, 1.26, 0.72)
 const _RECAST_GOLD := Color(1.0, 0.84, 0.32)
 const _SPARK_PX := 32.0
-const _METER_REFRESH_INTERVAL := 0.10
+const _STRUCTURAL_REFRESH_INTERVAL := 0.10
 
 var _lobby: Control
 var _ip: LineEdit
@@ -55,6 +55,9 @@ var _cd_clock_tex: Texture2D
 var _boss_buttons: Dictionary = {}
 var _play_button: Button
 var _play_popup: PopupPanel
+var _ai_raid_toggle: CheckBox
+var _dev_test_toggle: CheckBox
+var _role_buttons: Dictionary = {}
 var _ally_rows: Array[Control] = []
 var _ally_bars: Array[ProgressBar] = []
 var _ally_shields: Array[ColorRect] = []
@@ -100,7 +103,6 @@ var _meter_col_rate: Label
 var _meter_rows: Array[Dictionary] = []
 var _meter_handle: Control
 var _meter_locked: bool = false
-var _meter_refresh_acc: float = _METER_REFRESH_INTERVAL
 var _player_handle: Control
 var _player_locked: bool = false
 var _target_handle: Control
@@ -139,11 +141,13 @@ var _balance_pct_menu: Control
 var _balance_flat_list: VBoxContainer
 var _balance_pct_list: VBoxContainer
 var _hover_meter_unit: Unit
+var _hover_meter_threat: bool = false
 var _meter_break: Panel
 var _meter_break_title: Label
 var _meter_break_rows: Array[Dictionary] = []
 var _hud_tex_cache: Dictionary = {}
 var _fps_label: Label
+var _refresh_scheduler := HudRefreshScheduler.new(_STRUCTURAL_REFRESH_INTERVAL)
 
 
 func _ready() -> void:
@@ -184,8 +188,8 @@ func _exit_tree() -> void:
 func _process(delta: float) -> void:
 	_tick_fps()
 	if _combat.visible:
-		_meter_refresh_acc += delta
-		_refresh_combat()
+		var structural_due := _refresh_scheduler.advance(delta)
+		_refresh_combat(structural_due)
 		_tick_hud_life(delta)
 		if _tip and _tip.visible:
 			if _hover_ability >= 0:
@@ -200,7 +204,7 @@ func _process(delta: float) -> void:
 				_place_target_status_tip()
 			elif _tip_follow_mouse:
 				_place_status_tip()
-		if _edit_mode:
+		if _edit_mode and structural_due:
 			_sync_edit_handles()
 	if Input.is_action_just_pressed("restart") and ArenaState.outcome != "":
 		GameSession.restart()
@@ -276,6 +280,7 @@ func _on_session_started() -> void:
 	_sync_hero_audio_window()
 	_show_lobby(false)
 	_combat.visible = true
+	_refresh_scheduler.force_refresh()
 	_refresh_training_tools()
 
 
@@ -306,6 +311,7 @@ func _show_lobby(show: bool) -> void:
 	if _meter_break:
 		_meter_break.visible = false
 		_hover_meter_unit = null
+		_hover_meter_threat = false
 	_refresh_training_tools()
 
 
@@ -316,7 +322,9 @@ func _show_outcome(text: String, color: Color) -> void:
 	_outcome.modulate = color
 
 
-func _refresh_combat() -> void:
+func _refresh_combat(structural_due: bool = true) -> void:
+	if structural_due:
+		_refresh_scheduler.mark_refreshed()
 	var boss := ArenaState.boss
 	if boss:
 		_apply_hp_with_shield(_boss_bar, _boss_shield, boss)
@@ -327,6 +335,8 @@ func _refresh_combat() -> void:
 			_boss_label.text = "%s  —  %s   %d / %d" % [boss.unit_name, phase, int(boss.health), int(boss.max_health)]
 	_refresh_boss_cast_bar()
 	var u := GameSession.active_unit as Unit
+	var active_unit_id := u.get_instance_id() if u != null and is_instance_valid(u) else 0
+	var active_unit_changed := _refresh_scheduler.signature_changed(&"active_unit", active_unit_id)
 	if u:
 		_apply_hp_with_shield(_hp, _hp_shield, u)
 		_mp.max_value = maxf(u.max_mana, 1.0)
@@ -334,9 +344,10 @@ func _refresh_combat() -> void:
 		_hp_label.text = "%d/%d" % [int(u.health), int(u.max_health)]
 		_mp_label.text = "%d/%d" % [int(u.mana), int(u.max_mana)]
 		if _player_name:
-			_player_name.text = u.unit_name
+			_player_name.text = u.unit_name + ("  [TANK]" if ArenaState.tank() == u else "")
 		_pulse_player_frame(u)
-		_refresh_free_cast_hud(u)
+		if structural_due or active_unit_changed:
+			_refresh_free_cast_hud(u)
 		for i in _ability_panels.size():
 			if i >= u.abilities.size():
 				_ability_panels[i].visible = false
@@ -352,29 +363,29 @@ func _refresh_combat() -> void:
 			var gcd: float = u.gcd_display_left(i)
 			var display_cd := maxf(ability_cd, gcd)
 			var display_duration := u.cooldown_duration(i) if ability_cd >= gcd else u.gcd_clock_duration()
-			_ability_cds[i].text = ab.hotkey if ability_cd <= 0.0 or recast_fx else "%0.1f" % ability_cd
-			if i < _ability_names.size():
-				_ability_names[i].text = ab.display_name
-				_ability_names[i].modulate = ab.color.lightened(0.25)
-			var icon_id := ab.icon_id if not ab.icon_id.is_empty() else ab.id
-			var infusion_tag := ab.icon_infusion_tag
-			_paint_ability_art(_ability_panels[i], icon_id, infusion_tag)
-			if ability_cd > 0.0 or recast_fx:
+			_ability_cds[i].text = ab.hotkey if ability_cd <= 0.0 or recast_fx or not ab.implemented else "%0.1f" % ability_cd
+			if structural_due or active_unit_changed:
+				_refresh_ability_identity(i, ab)
+			if not ab.implemented:
+				_ability_panels[i].modulate = Color(0.42, 0.42, 0.46, 0.82)
+			elif ability_cd > 0.0 or recast_fx:
 				_ability_panels[i].modulate = Color(1, 1, 1, 1)
 			else:
 				_ability_panels[i].modulate = Color(1, 1, 1, 1) if u.can_prepare_cast(i) else Color(0.5, 0.5, 0.55)
 			_glow_slot(_ability_panels[i], _hover_ability == i)
 			_refresh_ability_clock(i, display_cd, display_duration)
 			_refresh_recast_fx(i, recast_fx)
-		_refresh_passive_slot()
+		if structural_due or active_unit_changed:
+			_refresh_passive_slot()
 	for i in _ally_bars.size():
 		if i >= ArenaState.allies.size():
 			_ally_bars[i].get_parent().visible = false
 			continue
 		var ally: Unit = ArenaState.allies[i]
 		_ally_bars[i].get_parent().visible = true
-		var tank_tag := ally.immortal and ally.visual_path != CharacterCatalog.TRAINING_DUMMY
-		_ally_names[i].text = ally.unit_name + ("  [YOU]" if ally == GameSession.active_unit else "") + ("  [TANK]" if tank_tag else "")
+		var tank_tag := ally == ArenaState.tank()
+		if structural_due or active_unit_changed:
+			_ally_names[i].text = ally.unit_name + ("  [YOU]" if ally == GameSession.active_unit else "") + ("  [TANK]" if tank_tag else "")
 		_apply_hp_with_shield(_ally_bars[i], _ally_shields[i] if i < _ally_shields.size() else null, ally)
 		_ally_names[i].modulate = Color(1, 0.85, 0.4) if ally == GameSession.active_unit else Color.WHITE
 		var row := _ally_rows[i] if i < _ally_rows.size() else _ally_bars[i].get_parent() as Control
@@ -383,10 +394,11 @@ func _refresh_combat() -> void:
 			row.modulate = Color(1.18, 1.14, 0.92) if hovered else Color.WHITE
 			row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if hovered else Control.CURSOR_ARROW
 	_refresh_cast_bar()
-	_refresh_boss_debuffs()
-	_refresh_player_buffs()
-	_refresh_target_frame()
-	_refresh_combat_meter_if_due()
+	if structural_due:
+		_refresh_boss_debuffs()
+		_refresh_player_buffs()
+	_refresh_target_frame(structural_due)
+	_refresh_combat_meter_if_due(structural_due)
 
 
 func _build() -> void:
@@ -981,15 +993,40 @@ func _build_lobby() -> void:
 	_gold_label(title, 34)
 	box.add_child(title)
 
-	var pick := Label.new()
-	pick.text = "SPELLBOOK"
-	pick.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_gold_label(pick, 14)
-	box.add_child(pick)
+	var tabs := HBoxContainer.new()
+	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
+	tabs.add_theme_constant_override("separation", 8)
+	box.add_child(tabs)
+	var pages := Control.new()
+	pages.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pages.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	pages.clip_contents = true
+	box.add_child(pages)
 	var workshop := SpellWorkshop.new()
+	workshop.set_anchors_preset(Control.PRESET_FULL_RECT)
 	workshop.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	workshop.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(workshop)
+	pages.add_child(workshop)
+	var talents := TalentPane.new()
+	talents.set_anchors_preset(Control.PRESET_FULL_RECT)
+	talents.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	talents.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	talents.visible = false
+	pages.add_child(talents)
+	var book_tab := _btn("SPELLBOOK", func() -> void:
+		workshop.visible = true
+		talents.visible = false
+	)
+	book_tab.custom_minimum_size = Vector2(160, 36)
+	tabs.add_child(book_tab)
+	var talent_tab := _btn("TALENTS", func() -> void:
+		workshop.visible = false
+		talents.visible = true
+	)
+	talent_tab.custom_minimum_size = Vector2(160, 36)
+	tabs.add_child(talent_tab)
+
+	_build_role_picker(box)
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
@@ -1006,6 +1043,72 @@ func _build_lobby() -> void:
 	_play_button.custom_minimum_size = Vector2(220, 48)
 	actions.add_child(_play_button)
 	_build_play_popup()
+
+
+func _build_role_picker(parent: Control) -> void:
+	var wrap := VBoxContainer.new()
+	wrap.add_theme_constant_override("separation", 4)
+	parent.add_child(wrap)
+	var head := Label.new()
+	head.text = "YOUR ROLE"
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_gold_label(head, 14)
+	wrap.add_child(head)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 8)
+	wrap.add_child(row)
+	for info in [
+		{"id": RaidComp.ROLE_TANK, "name": "TANK"},
+		{"id": RaidComp.ROLE_HEALER, "name": "HEALER"},
+		{"id": RaidComp.ROLE_DPS, "name": "DPS"},
+	]:
+		var role_id: String = info["id"]
+		var b := _btn(String(info["name"]), _on_role_picked.bind(role_id))
+		b.custom_minimum_size = Vector2(110, 36)
+		b.tooltip_text = "AI raid skips your role. Tank skips Bulwark; healer skips Mend; DPS keeps both."
+		row.add_child(b)
+		_role_buttons[role_id] = b
+	var hint := Label.new()
+	hint.text = "AI teammates fill the other roles."
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 12)
+	hint.add_theme_color_override("font_color", Color(0.72, 0.78, 0.88))
+	wrap.add_child(hint)
+	_refresh_role_buttons()
+
+
+func _on_role_picked(role_id: String) -> void:
+	GameSession.set_player_role(role_id)
+	_refresh_role_buttons()
+
+
+func _refresh_role_buttons() -> void:
+	var picked := RaidComp.normalize_role(GameSession.player_role)
+	for role_id in _role_buttons.keys():
+		var b: Button = _role_buttons[role_id]
+		_paint_role_button(b, String(role_id) == picked)
+
+
+func _paint_role_button(b: Button, selected: bool) -> void:
+	if b == null:
+		return
+	_style_menu_button(b)
+	if not selected:
+		return
+	var glow := StyleBoxFlat.new()
+	glow.bg_color = Color(0.32, 0.22, 0.08, 0.98)
+	glow.border_color = Color(1.0, 0.86, 0.42)
+	glow.set_border_width_all(2)
+	glow.set_corner_radius_all(4)
+	glow.content_margin_left = 10
+	glow.content_margin_right = 10
+	glow.content_margin_top = 6
+	glow.content_margin_bottom = 6
+	b.add_theme_stylebox_override("normal", glow)
+	b.add_theme_stylebox_override("hover", glow)
+	b.add_theme_stylebox_override("pressed", glow)
+	b.add_theme_stylebox_override("focus", glow)
 
 
 func _build_play_popup() -> void:
@@ -1031,11 +1134,7 @@ func _build_play_popup() -> void:
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_gold_label(head, 14)
 	col.add_child(head)
-	var destinations := [
-		{"id": "training", "name": "TRAINING ARENA", "image": "boss_game_training_arena.png"},
-		{"id": "colossus", "name": "COLOSSUS", "image": "boss_game_colossus.png"},
-		{"id": "dawnwarden", "name": "DAWNWARDEN", "image": "boss_game_dawnwarden.png"},
-	]
+	var destinations := ArenaCatalog.destinations()
 	for info in destinations:
 		var destination_id: String = info["id"]
 		var b := _selection_card(String(info["image"]), String(info["name"]), "", Vector2(320, 92))
@@ -1045,6 +1144,31 @@ func _build_play_popup() -> void:
 		)
 		col.add_child(b)
 		_boss_buttons[destination_id] = b
+	_ai_raid_toggle = CheckBox.new()
+	_ai_raid_toggle.text = "Spawn AI raid"
+	_ai_raid_toggle.tooltip_text = "Fills tank, healer, and DPS around your lobby role. Tank skips Bulwark; healer skips Mend. Turn off for a player-only pull."
+	_ai_raid_toggle.button_pressed = GameSession.spawn_ai_raid
+	_ai_raid_toggle.focus_mode = Control.FOCUS_NONE
+	_ai_raid_toggle.add_theme_font_size_override("font_size", 13)
+	_ai_raid_toggle.add_theme_color_override("font_color", Color(0.82, 0.86, 0.94))
+	_ai_raid_toggle.toggled.connect(func(on: bool) -> void:
+		GameSession.spawn_ai_raid = on
+	)
+	_dev_test_toggle = CheckBox.new()
+	_dev_test_toggle.text = "Dev test mode"
+	_dev_test_toggle.tooltip_text = "You and friendly NPCs cannot die (HP floors at 1). Dawnwarden Judgment Rays always lock onto you."
+	_dev_test_toggle.button_pressed = GameSession.dev_test_mode
+	_dev_test_toggle.focus_mode = Control.FOCUS_NONE
+	_dev_test_toggle.add_theme_font_size_override("font_size", 13)
+	_dev_test_toggle.add_theme_color_override("font_color", Color(0.82, 0.86, 0.94))
+	_dev_test_toggle.toggled.connect(func(on: bool) -> void:
+		GameSession.dev_test_mode = on
+	)
+	var toggles := HBoxContainer.new()
+	toggles.add_theme_constant_override("separation", 14)
+	toggles.add_child(_ai_raid_toggle)
+	toggles.add_child(_dev_test_toggle)
+	col.add_child(toggles)
 	_select_destination(GameSession.selected_destination_id)
 
 
@@ -1056,7 +1180,11 @@ func _open_play_menu() -> void:
 		_play_selected_destination()
 		return
 	_select_destination(GameSession.selected_destination_id)
-	var size := Vector2(344, 360)
+	if _ai_raid_toggle:
+		_ai_raid_toggle.button_pressed = GameSession.spawn_ai_raid
+	if _dev_test_toggle:
+		_dev_test_toggle.button_pressed = GameSession.dev_test_mode
+	var size := Vector2(380, 404)
 	var rect := _play_button.get_global_rect()
 	var pos := Vector2(rect.position.x + rect.size.x - size.x, rect.position.y - size.y - 8.0)
 	pos.x = maxf(16.0, pos.x)
@@ -1150,8 +1278,8 @@ func _set_selection_card_selected(b: Button, selected: bool) -> void:
 
 func _select_destination(destination_id: String) -> void:
 	GameSession.selected_destination_id = destination_id
-	if destination_id != "training":
-		GameSession.selected_boss_id = destination_id
+	if not ArenaCatalog.is_training(destination_id):
+		GameSession.selected_boss_id = ArenaCatalog.boss_id(destination_id)
 	for id in _boss_buttons.keys():
 		var b: Button = _boss_buttons[id]
 		_set_selection_card_selected(b, id == destination_id)
@@ -1161,7 +1289,7 @@ func _play_selected_destination() -> void:
 	if GameSession.fight_started:
 		_on_session_started()
 		return
-	GameSession.request_match(GameSession.selected_destination_id == "training")
+	GameSession.request_match(ArenaCatalog.is_training(GameSession.selected_destination_id))
 
 
 func _btn(text: String, cb: Callable) -> Button:
@@ -1390,6 +1518,9 @@ func _refresh_free_cast_hud(u: Unit) -> void:
 		return
 	var max_charges := u.free_cast_charge_max() if u.has_method("free_cast_charge_max") else 0
 	var charges := u.free_cast_charges() if u.has_method("free_cast_charges") else 0
+	var signature := max_charges * 100 + charges
+	if not _refresh_scheduler.signature_changed(&"free_cast", signature):
+		return
 	_free_cast_row.visible = max_charges > 0
 	for i in _free_cast_hud.size():
 		var pip := _free_cast_hud[i]
@@ -1579,11 +1710,12 @@ func _build_combat_meter() -> void:
 		var idx := i
 		row.mouse_entered.connect(func() -> void:
 			_hover_meter_unit = _meter_rows[idx].get("unit") as Unit
+			_hover_meter_threat = false
 			_refresh_meter_breakdown()
 		)
 		row.mouse_exited.connect(func() -> void:
 			var still := _meter_rows[idx].get("unit") as Unit
-			if _hover_meter_unit == still:
+			if _hover_meter_unit == still and not _hover_meter_threat:
 				_hover_meter_unit = null
 				_refresh_meter_breakdown()
 		)
@@ -1595,10 +1727,9 @@ func _build_combat_meter() -> void:
 	_build_meter_breakdown()
 
 
-func _refresh_combat_meter_if_due() -> void:
-	if _meter_refresh_acc < _METER_REFRESH_INTERVAL:
+func _refresh_combat_meter_if_due(refresh_due: bool) -> void:
+	if not refresh_due:
 		return
-	_meter_refresh_acc = fmod(_meter_refresh_acc, _METER_REFRESH_INTERVAL)
 	_refresh_combat_meter()
 	if _meter_break != null and _meter_break.visible:
 		_refresh_meter_breakdown()
@@ -1607,7 +1738,6 @@ func _refresh_combat_meter_if_due() -> void:
 func _refresh_combat_meter() -> void:
 	if _meter == null:
 		return
-	_meter_refresh_acc = 0.0
 	var healing := CombatMeter.mode == CombatMeter.Mode.HEALING
 	var rows := CombatMeter.ranked_rows()
 	var total := 0.0
@@ -1718,14 +1848,32 @@ func _refresh_meter_breakdown() -> void:
 	if _meter_break == null:
 		return
 	var u := _hover_meter_unit
-	if u == null or not is_instance_valid(u) or _meter == null or not _meter.visible:
+	if u == null or not is_instance_valid(u):
 		_meter_break.visible = false
 		return
-	var spells := CombatMeter.spell_breakdown(u)
+	var spells: Array[Dictionary] = []
+	var mode_name := "Damage"
+	var host: Control = _meter
+	if _hover_meter_threat:
+		if _target_frame == null or not _target_frame.visible:
+			_meter_break.visible = false
+			return
+		var enemy := GameSession.selected_target
+		if enemy == null or not is_instance_valid(enemy) or enemy.is_dead:
+			_meter_break.visible = false
+			return
+		spells = ThreatTable.spell_breakdown(enemy, u)
+		mode_name = "Aggro"
+		host = _target_frame
+	else:
+		if _meter == null or not _meter.visible:
+			_meter_break.visible = false
+			return
+		spells = CombatMeter.spell_breakdown(u)
+		mode_name = "Healing" if CombatMeter.mode == CombatMeter.Mode.HEALING else "Damage"
 	if spells.is_empty():
 		_meter_break.visible = false
 		return
-	var mode_name := "Healing" if CombatMeter.mode == CombatMeter.Mode.HEALING else "Damage"
 	_meter_break_title.text = "%s  —  %s" % [u.unit_name, mode_name]
 	for i in _meter_break_rows.size():
 		var widgets: Dictionary = _meter_break_rows[i]
@@ -1751,10 +1899,13 @@ func _refresh_meter_breakdown() -> void:
 	var w := 220.0
 	var h := 28.0 + float(shown) * 19.0
 	_meter_break.size = Vector2(w, h)
-	var origin := _meter.global_position + Vector2(_meter.size.x + 10.0, 22.0)
+	if host == null:
+		_meter_break.visible = false
+		return
+	var origin := host.global_position + Vector2(host.size.x + 10.0, 22.0)
 	var vp := get_viewport().get_visible_rect().size
 	if origin.x + w > vp.x - 8.0:
-		origin.x = _meter.global_position.x - w - 10.0
+		origin.x = host.global_position.x - w - 10.0
 	if origin.y + h > vp.y - 8.0:
 		origin.y = maxf(8.0, vp.y - h - 8.0)
 	_meter_break.global_position = origin
@@ -1862,7 +2013,6 @@ func _sync_edit_handles() -> void:
 			continue
 		handle.global_position = frame.global_position
 		handle.size = frame.size
-
 
 func _capture_default_layout() -> void:
 	_default_layout.clear()
@@ -2060,6 +2210,8 @@ func _nudge_frame(panel: Control, delta: Vector2) -> void:
 		_sync_player_buff_row()
 	elif panel == _target_frame:
 		_sync_target_status_row()
+	if _edit_mode:
+		_sync_edit_handles()
 
 
 func _sync_player_buff_row() -> void:
@@ -2244,10 +2396,13 @@ func _build_target_frame() -> void:
 	_sync_target_status_row()
 
 
-func _refresh_target_frame() -> void:
+func _refresh_target_frame(structural_due: bool = true) -> void:
 	if _target_frame == null:
 		return
 	var t := GameSession.selected_target
+	var target_id := t.get_instance_id() if t != null and is_instance_valid(t) else 0
+	var target_changed := _refresh_scheduler.signature_changed(&"target", target_id)
+	var rebuild_structure := structural_due or target_changed
 	if t == null or not is_instance_valid(t) or t.is_dead:
 		if t != null and (not is_instance_valid(t) or t.is_dead):
 			GameSession.clear_selected_target()
@@ -2260,29 +2415,33 @@ func _refresh_target_frame() -> void:
 			_target_hp_label.text = "72/100"
 		if _target_status_row:
 			_target_status_row.visible = false
-		_set_target_threat_rows([])
-		_target_debuffs.clear()
-		_hover_target_status = -1
+		if rebuild_structure:
+			_set_target_threat_rows([])
+			_target_debuffs.clear()
+			_hover_target_status = -1
 		return
 	_target_frame.visible = true
 	_target_name.text = t.unit_name
 	var you := GameSession.active_unit as Unit
 	var enemy := you == null or t.team != you.team
 	_target_name.modulate = Color(1.0, 0.72, 0.72) if enemy else Color(0.75, 1.0, 0.78)
-	_paint_flat_bar(_target_hp, _BOSS_RED if enemy else _HP_GREEN)
+	var affinity_changed := _refresh_scheduler.signature_changed(&"target_enemy", enemy)
+	if target_changed or affinity_changed:
+		_paint_flat_bar(_target_hp, _BOSS_RED if enemy else _HP_GREEN)
 	_apply_hp_with_shield(_target_hp, _target_shield, t)
 	_target_hp_label.text = "%d/%d" % [int(t.health), int(t.max_health)]
-	if enemy:
-		_set_target_threat_rows(ThreatTable.ranked_rows(t))
-	else:
-		_set_target_threat_rows([])
-	_refresh_target_debuffs(t)
+	if rebuild_structure:
+		if enemy:
+			_set_target_threat_rows(ThreatTable.ranked_rows(t))
+		else:
+			_set_target_threat_rows([])
+		_refresh_target_debuffs(t)
 
 
 func _make_target_threat_row() -> Dictionary:
 	var row := Control.new()
 	row.custom_minimum_size = Vector2(0, 14)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.visible = false
 	var bar := ProgressBar.new()
 	bar.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -2306,7 +2465,20 @@ func _make_target_threat_row() -> Dictionary:
 	amount.add_theme_font_size_override("font_size", 10)
 	row.add_child(amount)
 	_target_threat_box.add_child(row)
-	return {"row": row, "bar": bar, "fill": fill, "name": name_lbl, "amount": amount}
+	var idx := _target_threat_rows.size()
+	row.mouse_entered.connect(func() -> void:
+		_hover_meter_unit = _target_threat_rows[idx].get("unit") as Unit
+		_hover_meter_threat = true
+		_refresh_meter_breakdown()
+	)
+	row.mouse_exited.connect(func() -> void:
+		var still := _target_threat_rows[idx].get("unit") as Unit
+		if _hover_meter_threat and _hover_meter_unit == still:
+			_hover_meter_unit = null
+			_hover_meter_threat = false
+			_refresh_meter_breakdown()
+	)
+	return {"row": row, "bar": bar, "fill": fill, "name": name_lbl, "amount": amount, "unit": null}
 
 
 func _set_target_threat_rows(rows: Array[Dictionary]) -> void:
@@ -2334,6 +2506,19 @@ func _set_target_threat_rows(rows: Array[Dictionary]) -> void:
 		(widgets["name"] as Label).text = nm
 		(widgets["name"] as Label).modulate = Color(1.0, 0.92, 0.55) if data.get("is_you", false) else Color.WHITE
 		(widgets["amount"] as Label).text = CombatMeter.format_amount(float(data.get("amount", 0.0)))
+		widgets["unit"] = data.get("unit")
+		if _hover_meter_threat and _hover_meter_unit != null and data.get("unit") == _hover_meter_unit:
+			_hover_meter_unit = data.get("unit") as Unit
+	if _hover_meter_threat:
+		var still := false
+		for i in shown:
+			if _target_threat_rows[i].get("unit") == _hover_meter_unit:
+				still = true
+				break
+		if not still:
+			_hover_meter_unit = null
+			_hover_meter_threat = false
+		_refresh_meter_breakdown()
 	_resize_target_frame(shown)
 
 
@@ -2367,7 +2552,11 @@ func _refresh_target_debuffs(t: Unit) -> void:
 	if _target_status_row == null:
 		return
 	var you := GameSession.active_unit as Unit
-	if you != null and t.team == you.team:
+	if t == ArenaState.boss:
+		_target_debuffs.assign(_boss_debuffs)
+	elif t == you:
+		_target_debuffs.assign(_player_buffs)
+	elif you != null and t.team == you.team:
 		_target_debuffs = _merge_status_lists(t.collect_buffs(), t.collect_nameplate_debuffs())
 	else:
 		_target_debuffs = t.collect_nameplate_debuffs()
@@ -2458,10 +2647,12 @@ func _refresh_boss_cast_bar() -> void:
 	_boss_cast_bar.value = brain.ability_progress()
 	if brain.ability_interruptible:
 		_boss_cast_name.text = "%s   ◆ Interrupt" % brain.ability_name
-		_paint_bar(_boss_cast_bar, Color(0.38, 0.78, 1.0))
+		if _refresh_scheduler.signature_changed(&"boss_cast_interruptible", true):
+			_paint_bar(_boss_cast_bar, Color(0.38, 0.78, 1.0))
 	else:
 		_boss_cast_name.text = "%s   🔒" % brain.ability_name
-		_paint_bar(_boss_cast_bar, Color(0.95, 0.62, 0.16))
+		if _refresh_scheduler.signature_changed(&"boss_cast_interruptible", false):
+			_paint_bar(_boss_cast_bar, Color(0.95, 0.62, 0.16))
 
 
 func _build_cast_bar() -> void:
@@ -2520,7 +2711,9 @@ func _refresh_cast_bar() -> void:
 	_cast_bar.value = u.controller.cast_progress()
 	_cast_name.text = ab.display_name if ab else ""
 	if ab:
-		_paint_bar(_cast_bar, ab.color.lightened(0.12))
+		var cast_color := ab.color.lightened(0.12)
+		if _refresh_scheduler.signature_changed(&"player_cast_color", cast_color):
+			_paint_bar(_cast_bar, cast_color)
 
 
 func _enable_ability_hover() -> void:
@@ -2586,6 +2779,34 @@ func _refresh_passive_slot() -> void:
 		return
 	_passive_panel.visible = false
 	_hover_passive = false
+
+
+func _refresh_ability_identity(index: int, ability: AbilityDef) -> void:
+	if index < 0 or index >= _ability_panels.size() or ability == null:
+		return
+	var icon_id := ability.icon_id if not ability.icon_id.is_empty() else ability.id
+	var signature := [
+		ability.id,
+		ability.hotkey,
+		ability.display_name,
+		ability.color,
+		icon_id,
+		ability.icon_infusion_tag,
+		ability.implemented,
+	]
+	var key := StringName("ability_identity_%d" % index)
+	if not _refresh_scheduler.signature_changed(key, signature):
+		return
+	if index < _ability_names.size():
+		_ability_names[index].text = "" if not ability.implemented else ability.display_name
+		_ability_names[index].modulate = ability.color.lightened(0.25)
+	if not ability.implemented:
+		_paint_ability_art(_ability_panels[index], "", "")
+		var art := _ability_panels[index].get_node_or_null("Art") as TextureRect
+		if art:
+			art.visible = false
+		return
+	_paint_ability_art(_ability_panels[index], icon_id, ability.icon_infusion_tag)
 
 
 func _paint_ability_art(panel: Panel, icon_id: String, infusion_tag: String = "") -> void:
@@ -4013,7 +4234,6 @@ func _refresh_recast_fx(index: int, ready: bool) -> void:
 		if spark:
 			spark.visible = false
 		return
-	_paint_recast_ring(ring)
 	var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.007)
 	var pad := 4.0
 	var gr := slot.get_global_rect()

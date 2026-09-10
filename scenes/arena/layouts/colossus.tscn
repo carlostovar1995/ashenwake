@@ -1,0 +1,151 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://scripts/arena/arena_layout.gd" id="1_layout"]
+[ext_resource type="Texture2D" path="res://assets/textures/arena/floor_plaza.png" id="2_floor"]
+[ext_resource type="Texture2D" path="res://assets/textures/arena/metal_plates.png" id="3_rim"]
+[ext_resource type="PackedScene" path="res://assets/models/props/collision/cover_block.tscn" id="4_cover"]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 1
+background_color = Color(0.07, 0.04, 0.035, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.58, 0.42, 0.32, 1)
+ambient_light_energy = 0.42
+tonemap_mode = 2
+glow_enabled = true
+glow_normalized = true
+glow_intensity = 0.5
+glow_strength = 0.9
+glow_bloom = 0.03
+glow_hdr_threshold = 1.08
+glow_hdr_scale = 1.85
+glow_blend_mode = 1
+fog_enabled = true
+fog_light_color = Color(0.14, 0.06, 0.04, 1)
+fog_density = 0.006
+
+[sub_resource type="NavigationMesh" id="NavigationMesh_1"]
+geometry_parsed_geometry_type = 1
+cell_size = 0.25
+cell_height = 0.25
+agent_height = 2.0
+agent_radius = 0.75
+agent_max_climb = 0.25
+agent_max_slope = 40.0
+region_min_size = 1.0
+region_merge_size = 4.0
+
+[sub_resource type="StandardMaterial3D" id="Mat_floor"]
+albedo_color = Color(0.62, 0.54, 0.48, 1)
+albedo_texture = ExtResource("2_floor")
+roughness = 0.94
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(0.12, 0.12, 0.12)
+texture_filter = 5
+
+[sub_resource type="CylinderMesh" id="Mesh_floor"]
+material = SubResource("Mat_floor")
+top_radius = 28.0
+bottom_radius = 28.0
+height = 0.5
+radial_segments = 48
+
+[sub_resource type="CylinderShape3D" id="Shape_floor"]
+radius = 28.0
+height = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_ring"]
+albedo_color = Color(0.55, 0.5, 0.46, 1)
+albedo_texture = ExtResource("3_rim")
+metallic = 0.28
+roughness = 0.55
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(0.2, 0.2, 0.2)
+texture_filter = 5
+
+[sub_resource type="TorusMesh" id="Mesh_edge"]
+material = SubResource("Mat_ring")
+inner_radius = 27.6
+outer_radius = 29.2
+rings = 12
+ring_segments = 48
+
+[node name="ArenaLayout" type="Node3D"]
+editor_description = "Standalone Colossus room. Keep Floor, NavigationRegion3D, PlayerSpawn, BossSpawn, ChasePad, raid markers, and Obstacle* cover. Instance cover from assets/models/props/collision/. Do not add training spawn markers."
+script = ExtResource("1_layout")
+arena_radius = 28.0
+use_stock_decor = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.813, -0.441, 0.38, 0, 0.653, 0.757, -0.582, -0.616, 0.531, 0, 24, 0)
+light_energy = 1.35
+light_color = Color(1, 0.78, 0.55, 1)
+shadow_enabled = true
+
+[node name="FillLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 8)
+light_energy = 0.32
+light_color = Color(0.75, 0.32, 0.18, 1)
+omni_range = 40.0
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("NavigationMesh_1")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
+collision_layer = 1
+collision_mask = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Floor"]
+mesh = SubResource("Mesh_floor")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Floor"]
+shape = SubResource("Shape_floor")
+
+[node name="Edge" type="MeshInstance3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
+mesh = SubResource("Mesh_edge")
+
+[node name="Obstacle1" parent="NavigationRegion3D" instance=ExtResource("4_cover")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, 1.2, 6)
+
+[node name="Obstacle2" parent="NavigationRegion3D" instance=ExtResource("4_cover")]
+transform = Transform3D(0.707, 0, 0.707, 0, 1, 0, -0.707, 0, 0.707, 13, 1.2, 2)
+
+[node name="Obstacle3" parent="NavigationRegion3D" instance=ExtResource("4_cover")]
+transform = Transform3D(0.966, 0, -0.259, 0, 1, 0, 0.259, 0, 0.966, 0, 1.2, -14)
+
+[node name="Spawns" type="Node3D" parent="."]
+
+[node name="PlayerSpawn" type="Marker3D" parent="Spawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 16.5)
+gizmo_extents = 1.4
+
+[node name="BossSpawn" type="Marker3D" parent="Spawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+gizmo_extents = 1.8
+
+[node name="ChasePad" type="Marker3D" parent="Spawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 0.08, 1.5)
+gizmo_extents = 2.2
+
+[node name="RaidTank" type="Marker3D" parent="Spawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 0.1, 15.2)
+gizmo_extents = 1.0
+
+[node name="RaidHeal" type="Marker3D" parent="Spawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.2, 0.1, 15.2)
+gizmo_extents = 1.0
+
+[node name="RaidHex" type="Marker3D" parent="Spawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.2, 0.1, 13.6)
+gizmo_extents = 1.0
+
+[node name="RaidVex" type="Marker3D" parent="Spawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.2, 0.1, 13.6)
+gizmo_extents = 1.0

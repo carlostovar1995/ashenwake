@@ -1,0 +1,33 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://assets/vfx/infusions/fire/fire_aura.tres" id="1_aura"]
+[ext_resource type="ArrayMesh" path="res://assets/vfx/infusions/fire/fire_aura.obj" id="2_aura_mesh"]
+[ext_resource type="Shader" path="res://assets/vfx/infusions/fire/fire_core.tres" id="3_core"]
+[ext_resource type="ArrayMesh" path="res://assets/vfx/infusions/fire/fire_core.obj" id="4_core_mesh"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_aura"]
+render_priority = 0
+shader = ExtResource("1_aura")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_core"]
+render_priority = 0
+shader = ExtResource("3_core")
+
+[node name="FireBoltBody" type="Node3D"]
+
+[node name="FireAura" type="MeshInstance3D" parent="." groups=["fx_body", "fx_aura"]]
+material_override = SubResource("ShaderMaterial_aura")
+cast_shadow = 0
+mesh = ExtResource("2_aura_mesh")
+
+[node name="FireCore" type="MeshInstance3D" parent="." groups=["fx_body", "fx_core"]]
+material_override = SubResource("ShaderMaterial_core")
+cast_shadow = 0
+mesh = ExtResource("4_core_mesh")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="." groups=["fx_body"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.335529e-09, 0)
+light_color = Color(1, 0.46001357, 0.0669049, 1)
+light_energy = 5.0
+omni_range = 3.0
+shadow_enabled = false

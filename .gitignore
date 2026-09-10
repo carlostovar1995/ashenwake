@@ -37,3 +37,17 @@ _incoming/godot472.zip
 assets/_incoming/universal_base_characters_standard.zip
 assets/_incoming/modular_outfits_fantasy_standard.zip
 
+# Transient staging artifacts. Keep real conversion sources such as
+# _incoming/audio/ visible; only generated/download byproducts are ignored.
+_incoming/**/*.import
+_incoming/**/*.zip
+_incoming/**/*.7z
+_incoming/**/*.rar
+_incoming/**/*.part
+_incoming/**/*.tmp
+_incoming/kevdev/**
+!_incoming/kevdev/.gdignore
+assets/_incoming/**/*.zip
+assets/_incoming/**/*.7z
+assets/_incoming/**/*.rar
+

@@ -1,0 +1,28 @@
+---
+description: Typed GDScript APIs, ownership boundaries, diagnostics, and invariants
+globs: "{scripts,tools}/**/*.gd"
+alwaysApply: false
+---
+
+# GDScript style
+
+## Types and interfaces
+
+- Type new public parameters, return values, signals, exported properties, and extracted-component APIs.
+- Improve existing collection types when touching them; do not mass-retype unrelated code.
+- Prefer small named request/value objects over oversized positional combat calls when they clarify meaning without adding hot-path allocations.
+- Keep stable public behavior while refactoring. Do not silently change ordering, timing, defaults, or save-compatible values.
+
+## Ownership
+
+- Give mutable state one owner. Other systems use explicit typed methods, signals, or read-only snapshots/version counters.
+- Do not mutate another class's private fields. Add an owner API instead.
+- Keep color, status, geometry, and lookup maps in one canonical owner rather than copying them across UI/combat code.
+- Extract a component only when its lifecycle, dependencies, and owner are clear.
+
+## Failures and documentation
+
+- Fail loudly once at catalog, resource, persistence, and configuration boundaries with enough context to diagnose the bad input.
+- Do not add assertions, repeated warnings, or logging to per-frame, per-hit, per-tick, or FX spawn paths.
+- Document non-obvious invariants and units near the owning API: ordering guarantees, coordinate space, team/shape filtering, cadence, and lifecycle.
+- Comments explain why a constraint exists; names and types should explain ordinary mechanics.

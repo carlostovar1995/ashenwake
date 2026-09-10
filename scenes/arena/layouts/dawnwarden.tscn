@@ -1,0 +1,126 @@
+[gd_scene format=3 uid="uid://21doeuqq2kid"]
+
+[ext_resource type="Script" uid="uid://dux8d7i1llvr4" path="res://scripts/arena/arena_layout.gd" id="1_layout"]
+[ext_resource type="Texture2D" uid="uid://d2qa1hl0rhrk1" path="res://assets/textures/arena/Ground (11).png" id="2_ukg47"]
+[ext_resource type="ArrayMesh" uid="uid://b4cytt461hh8r" path="res://assets/textures/arena/Arena.obj" id="3_316ow"]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 1
+background_color = Color(0.08, 0.08, 0.09, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.4, 0.4, 0.42, 1)
+ambient_light_energy = 0.45
+tonemap_mode = 2
+
+[sub_resource type="NavigationMesh" id="NavigationMesh_1"]
+geometry_parsed_geometry_type = 1
+agent_height = 2.0
+agent_radius = 0.75
+agent_max_slope = 40.0
+region_min_size = 1.0
+region_merge_size = 4.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7y2ve"]
+albedo_texture = ExtResource("2_ukg47")
+roughness = 0.95
+
+[sub_resource type="CylinderShape3D" id="Shape_floor"]
+height = 0.5
+radius = 28.0
+
+[node name="ArenaLayout" type="Node3D" unique_id=1350288921]
+editor_description = "Standalone Dawnwarden room. Keep Floor, NavigationRegion3D, PlayerSpawn, BossSpawn, ChasePad, raid markers, and PillarSpawn01-10. Replace meshes, lights, and environment freely. Do not rename Floor. Cover that blocks movement must be a StaticBody3D child of NavigationRegion3D named Obstacle*."
+script = ExtResource("1_layout")
+use_stock_decor = false
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=868484066]
+environment = SubResource("Environment_1")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=2124899475]
+transform = Transform3D(0.813, -0.441, 0.38, 0, 0.653, 0.757, -0.582, -0.616, 0.531, 0, 24, 0)
+light_color = Color(1, 0.96, 0.9, 1)
+shadow_enabled = true
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=711157565]
+navigation_mesh = SubResource("NavigationMesh_1")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D" unique_id=274744390]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
+collision_mask = 0
+
+[node name="Floor Texture" type="MeshInstance3D" parent="NavigationRegion3D/Floor" unique_id=690265781]
+transform = Transform3D(0.7, 0, 0, 0, 0.7, 0, 0, 0, 0.7, 0, 0.25, 0)
+material_override = SubResource("StandardMaterial3D_7y2ve")
+mesh = ExtResource("3_316ow")
+skeleton = NodePath("../../..")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Floor" unique_id=956177599]
+shape = SubResource("Shape_floor")
+
+[node name="Spawns" type="Node3D" parent="." unique_id=565543760]
+
+[node name="PlayerSpawn" type="Marker3D" parent="Spawns" unique_id=1626334126]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 22.5)
+gizmo_extents = 1.4
+
+[node name="BossSpawn" type="Marker3D" parent="Spawns" unique_id=51440235]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+gizmo_extents = 1.8
+
+[node name="RaidTank" type="Marker3D" parent="Spawns" unique_id=357840631]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 0.1, 21.2)
+gizmo_extents = 1.0
+
+[node name="RaidHeal" type="Marker3D" parent="Spawns" unique_id=1901053549]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.2, 0.1, 21.2)
+gizmo_extents = 1.0
+
+[node name="RaidHex" type="Marker3D" parent="Spawns" unique_id=45235404]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.2, 0.1, 20)
+gizmo_extents = 1.0
+
+[node name="RaidVex" type="Marker3D" parent="Spawns" unique_id=1116238782]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.2, 0.1, 20)
+gizmo_extents = 1.0
+
+[node name="PillarAnchors" type="Node3D" parent="." unique_id=942012682]
+
+[node name="PillarSpawn01" type="Marker3D" parent="PillarAnchors" unique_id=1383621139]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 17, 0, 0)
+gizmo_extents = 1.4
+
+[node name="PillarSpawn02" type="Marker3D" parent="PillarAnchors" unique_id=1237706483]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.753, 0, 9.992)
+gizmo_extents = 1.4
+
+[node name="PillarSpawn03" type="Marker3D" parent="PillarAnchors" unique_id=1161319779]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.253, 0, 16.168)
+gizmo_extents = 1.4
+
+[node name="PillarSpawn04" type="Marker3D" parent="PillarAnchors" unique_id=1120131003]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.253, 0, 16.168)
+gizmo_extents = 1.4
+
+[node name="PillarSpawn05" type="Marker3D" parent="PillarAnchors" unique_id=87941561]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.753, 0, 9.992)
+gizmo_extents = 1.4
+
+[node name="PillarSpawn06" type="Marker3D" parent="PillarAnchors" unique_id=180210165]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17, 0, 0)
+gizmo_extents = 1.4
+
+[node name="PillarSpawn07" type="Marker3D" parent="PillarAnchors" unique_id=1094828484]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.753, 0, -9.992)
+gizmo_extents = 1.4
+
+[node name="PillarSpawn08" type="Marker3D" parent="PillarAnchors" unique_id=1666151462]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.253, 0, -16.168)
+gizmo_extents = 1.4
+
+[node name="PillarSpawn09" type="Marker3D" parent="PillarAnchors" unique_id=615731237]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.253, 0, -16.168)
+gizmo_extents = 1.4
+
+[node name="PillarSpawn10" type="Marker3D" parent="PillarAnchors" unique_id=255462648]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.753, 0, -9.992)
+gizmo_extents = 1.4

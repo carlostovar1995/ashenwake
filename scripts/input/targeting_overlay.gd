@@ -30,8 +30,6 @@ func _ready() -> void:
 	add_child(_cone_line)
 	hide_fx()
 	hide_lock()
-	if not GameSession.highlight_settings_changed.is_connected(_apply_outline_width):
-		GameSession.highlight_settings_changed.connect(_apply_outline_width)
 	_apply_outline_width()
 
 
@@ -75,7 +73,7 @@ func show_range(u: Unit, radius: float) -> void:
 
 
 func show_skillshot(u: Unit, aim: Vector3, ab: AbilityDef) -> void:
-	show_range(u, ab.range)
+	show_range(u, ab.skillshot_reach())
 	var dir := aim - u.global_position
 	dir.y = 0.0
 	if dir.length_squared() < 0.001:
@@ -84,12 +82,15 @@ func show_skillshot(u: Unit, aim: Vector3, ab: AbilityDef) -> void:
 	if ab.is_cone():
 		_show_cone(u, dir, ab)
 		return
-	var max_len := minf(ab.skillshot_length, ab.range) if ab.skillshot_length > 0.05 else ab.range
+	var max_len := ab.skillshot_reach()
 	max_len = u.wall_travel_distance(dir, max_len, false)
 	var length := max_len
-	if ab.splash_radius > 0.05:
+	if ab.splash_radius > 0.05 or ab.clamps_skillshot_to_cursor():
 		var to_cursor := Vector2(aim.x - u.global_position.x, aim.z - u.global_position.z).length()
 		length = clampf(to_cursor, 0.4, max_len)
+	elif ab.delivery == AbilityDef.Delivery.RAY and u.controller != null and u.controller.is_steering_ray():
+		var to_aim := Vector2(aim.x - u.global_position.x, aim.z - u.global_position.z).length()
+		length = clampf(to_aim, 0.4, max_len)
 	_shot.visible = true
 	var mid := u.global_position + dir * (length * 0.5)
 	_shot.global_position = Vector3(mid.x, 0.1, mid.z)
@@ -109,7 +110,7 @@ func show_skillshot(u: Unit, aim: Vector3, ab: AbilityDef) -> void:
 
 
 func _show_cone(u: Unit, dir: Vector3, ab: AbilityDef) -> void:
-	var radius := ab.range if ab.range > 0.05 else ab.skillshot_length
+	var radius := ab.skillshot_reach()
 	_build_clipped_cone(ab.cone_angle, u.cone_wall_lengths(dir, ab.cone_angle, radius, 20))
 	_cone.visible = true
 	_cone_line.visible = true
@@ -190,6 +191,36 @@ func _show_illusion_wall(pos: Vector3, _dir: Vector3, ab: AbilityDef) -> void:
 	mark.global_position = Vector3(pos.x, 0.1, pos.z)
 	GroundIndicator.set_circle_radius(mark, radius)
 	GroundIndicator.tint_palette(mark.material_override, pal)
+
+
+func show_illusion_portal_aim(origin: Vector3, aim: Vector3, ab: AbilityDef) -> void:
+	hide_fx()
+	var radius := SpellWallLayout.illusion_radius(ab)
+	_ensure_wall_marks(1)
+	var pal := SpellBaseFx.palette(ab)
+	var mark := _wall_marks[0]
+	mark.visible = true
+	mark.global_position = Vector3(origin.x, 0.1, origin.z)
+	GroundIndicator.set_circle_radius(mark, radius)
+	GroundIndicator.tint_palette(mark.material_override, pal)
+	var dir := Vector3(aim.x - origin.x, 0.0, aim.z - origin.z)
+	if dir.length_squared() < 0.0001:
+		dir = Vector3(0, 0, -1)
+	else:
+		dir = dir.normalized()
+	var length := 6.0
+	var width := maxf(radius * 0.55, 0.35)
+	_shot.visible = true
+	var mid := origin + dir * (length * 0.5)
+	_shot.global_position = Vector3(mid.x, 0.11, mid.z)
+	_shot.scale = Vector3(width, 1.0, length)
+	var look := _shot.global_position + dir
+	if look.distance_squared_to(_shot.global_position) > 0.0001:
+		_shot.look_at(look, Vector3.UP)
+	GroundIndicator.tint_palette(_shot.material_override, pal)
+	var sm := _shot.material_override as ShaderMaterial
+	if sm:
+		sm.set_shader_parameter("quad_size", Vector2(width, length))
 
 
 func _show_protection_wall(u: Unit, pos: Vector3, ab: AbilityDef) -> void:

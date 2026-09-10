@@ -1,0 +1,30 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/arena/metal_plates.png" id="1_metal"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_obs"]
+albedo_color = Color(0.78, 0.82, 0.9, 1)
+albedo_texture = ExtResource("1_metal")
+metallic = 0.22
+roughness = 0.48
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(0.32, 0.32, 0.32)
+texture_filter = 5
+
+[sub_resource type="BoxMesh" id="Mesh_obs"]
+material = SubResource("Mat_obs")
+size = Vector3(4, 2.4, 4)
+
+[sub_resource type="BoxShape3D" id="Shape_obs"]
+size = Vector3(4, 2.4, 4)
+
+[node name="CoverBlock" type="StaticBody3D"]
+collision_layer = 1
+collision_mask = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("Mesh_obs")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("Shape_obs")

@@ -38,6 +38,8 @@ enum Delivery {
 @export var slow_duration: float = 0.0
 @export var delay_time: float = 0.0
 @export var vfx_scene: String = ""
+@export var vfx_body: String = ""
+@export var vfx_body_aura: String = ""
 @export var vfx_scale: float = 1.0
 @export var vfx_primary: Color = Color(0, 0, 0, 0)
 @export var vfx_secondary: Color = Color(0, 0, 0, 0)
@@ -65,8 +67,6 @@ enum Delivery {
 @export var mana_cost_reduction: float = 0.0
 @export var cooldown_recovery_rate: float = 1.0
 @export var grant_all_infusions: bool = false
-@export var mark_damage_bonus: float = 0.0
-@export var consume_marks: bool = false
 @export var gcd_exempt: bool = false
 @export var shield_duration: float = 0.0
 @export var atonement_amp: float = 0.0
@@ -74,7 +74,17 @@ enum Delivery {
 @export var free_cast_charges: int = 0
 @export var heal_allies: bool = false
 @export var hit_cooldown_reduction: float = 0.0
+@export var hit_cooldown_refund_cap: float = 0.0
+@export var planted: bool = false
+@export var detonate_on_end: float = 0.0
+@export var crowd_bonus: float = 0.0
+@export var crowd_bonus_cap: float = 0.0
+@export var stillness_bonus: float = 0.0
 @export var projectile_count: int = 1
+@export var pierce: bool = false
+@export var lifesteal: float = 0.0
+@export var execute_health_frac: float = 0.0
+@export var execute_damage_mult: float = 1.0
 @export var extra_elements: PackedInt32Array = PackedInt32Array()
 @export var split_elements: PackedInt32Array = PackedInt32Array()
 @export var split_damage_inc: PackedFloat32Array = PackedFloat32Array()
@@ -82,6 +92,8 @@ enum Delivery {
 @export var split_shield_inc: PackedFloat32Array = PackedFloat32Array()
 @export var split_flat: PackedFloat32Array = PackedFloat32Array()
 @export var vfx_layers: Array = []
+@export var vfx_persist: Array = []
+@export var vfx_impact: Array = []
 @export var can_freeze: bool = false
 @export var holy_pulse_ratio: float = 0.0
 @export var applies_rejuvenation: bool = false
@@ -105,6 +117,7 @@ enum Delivery {
 @export var implemented: bool = true
 @export var threat_mult: float = 1.0
 @export var loadout_slot: int = -1
+@export var skill_id: String = ""
 
 
 func combat_id(slot: int = -1) -> String:
@@ -227,7 +240,22 @@ func ticks_shield() -> bool:
 
 
 func pierces_skillshot() -> bool:
-	return delivery == Delivery.WAVE
+	return pierce or delivery == Delivery.WAVE
+
+
+func clamps_skillshot_to_cursor() -> bool:
+	return skill_id == "ashen_wake"
+
+
+## Cursor past this still fires along the mouse ray and stops here.
+func skillshot_reach() -> float:
+	if skillshot_length > 0.05 and range > 0.05:
+		return minf(skillshot_length, range)
+	if skillshot_length > 0.05:
+		return skillshot_length
+	if range > 0.05:
+		return range
+	return 12.0
 
 
 func has_infusion(infusion_id: String) -> bool:
@@ -274,12 +302,19 @@ func vfx_cfg() -> Dictionary:
 	return cfg
 
 
+func travel_vfx_path() -> String:
+	if not vfx_body.is_empty():
+		return vfx_body
+	return vfx_scene
+
+
 func tooltip() -> String:
 	var recipe: SpellRecipe = null
-	if GameSession.spell_loadout.size() == 6:
-		var idx := SpellCatalog.HOTKEYS.find(hotkey)
-		if idx >= 0 and GameSession.spell_loadout[idx] is SpellRecipe:
-			recipe = GameSession.spell_loadout[idx]
+	var idx := SpellCatalog.HOTKEYS.find(hotkey)
+	if idx >= 0 and SpellCatalog.is_craft_index(idx) and idx < GameSession.spell_loadout.size() and GameSession.spell_loadout[idx] is SpellRecipe:
+		recipe = GameSession.spell_loadout[idx]
+	elif idx >= 0 and SpellCatalog.is_skill_index(idx):
+		recipe = GameSession.skill_recipe(idx - SpellCatalog.CRAFT_SLOTS)
 	return "%s    [%s]\n%s" % [display_name, hotkey, SpellCard.hud(self, recipe)]
 
 

@@ -1,13 +1,11 @@
 [gd_scene format=3 uid="uid://tyec2wcluohr"]
 
-[ext_resource type="Script" uid="uid://csnr3ef07pe1e" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/arena/arena.tscn" id="2_arena"]
 [ext_resource type="Script" uid="uid://cqi741dniaoi4" path="res://scripts/input/camera_rig.gd" id="3_cam"]
 [ext_resource type="Script" uid="uid://cwqeqqksi373n" path="res://scripts/input/player_input.gd" id="4_input"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="5_hud"]
 
 [node name="Main" type="Node" unique_id=95334748]
-script = ExtResource("1_main")
 
 [node name="Arena" parent="." unique_id=1595011020 instance=ExtResource("2_arena")]
 

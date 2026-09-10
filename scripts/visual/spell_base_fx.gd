@@ -127,6 +127,7 @@ static func attach_core(host: Node3D, tint: Color, size: float = 0.14) -> void:
 	var mat := _emis(tint, 0.95, 3.4)
 	core.material_override = mat
 	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	core.add_to_group(AbilityFx.GROUP_BODY)
 	host.add_child(core)
 
 

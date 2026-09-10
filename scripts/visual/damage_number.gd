@@ -349,13 +349,12 @@ static func _is_periodic(kind: String) -> bool:
 		or kind == "tick"
 		or kind == "burn"
 		or kind == "afflicted"
-		or kind == "combust"
 		or kind == "rejuvenation"
 	)
 
 
 static func _is_status_dot(kind: String) -> bool:
-	return kind == "burn" or kind == "afflicted" or kind == "combust"
+	return kind == "burn" or kind == "afflicted"
 
 
 static func _is_status_hot(kind: String) -> bool:
@@ -830,8 +829,6 @@ static func _tint_for(kind: String) -> Color:
 	match kind:
 		"fire", "fire_tick", "burn":
 			return Color(1.0, 0.48, 0.16)
-		"combust":
-			return Color(1.0, 0.28, 0.05)
 		"ice", "ice_tick", "frost":
 			return Color(0.55, 0.86, 1.0)
 		"storm", "storm_tick", "lightning", "lightning_tick", "shocked":

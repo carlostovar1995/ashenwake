@@ -2,24 +2,26 @@ class_name DawnwardenAI
 extends BossAI
 
 const JudgmentBeamScript := preload("res://scripts/combat/judgment_beam.gd")
-const COLLAPSE_FIRST := 16.0
-const COLLAPSE_P1 := 28.0
-const COLLAPSE_P2 := 20.0
-const ECHO_FIRST := 22.0
-const ECHO_P1 := 50.0
-const ECHO_P2 := 40.0
-const ECHO_CAST := 1.55
-const ECHO_GROUP := "solar_echo"
 
-var _collapse_cd: float = COLLAPSE_FIRST
-var _collapsing: bool = false
-var _echo_cd: float = ECHO_FIRST
-var _echoing: bool = false
+enum Seq {
+	WAIT_SLAM,
+	WAIT_RAY,
+	WAIT_NOVA,
+}
+
+var _engaged: bool = false
+var _casting: bool = false
+var _pillar_cast: bool = false
+var _seq: Seq = Seq.WAIT_SLAM
+var _seq_left: float = 0.0
+var _execute: bool = false
 
 
 func _ready() -> void:
 	set_physics_process(false)
 	_cycle = 1.4
+	if unit != null and not unit.damaged.is_connected(_on_boss_damaged):
+		unit.damaged.connect(_on_boss_damaged)
 
 
 func _physics_process(delta: float) -> void:
@@ -28,153 +30,332 @@ func _physics_process(delta: float) -> void:
 	if unit.is_dead:
 		return
 	_tick_ability_display(delta)
+	if not _engaged:
+		_try_pull()
+		return
 	if not _phase2 and unit.health <= unit.max_health * 0.5:
 		_enter_phase2()
+	if not _execute and unit.health <= unit.max_health * CombatBalance.pct("dawnwarden.execute.hp"):
+		_enter_execute()
 	if unit.is_stunned():
 		return
-	if _collapsing or _echoing:
+	if _casting:
 		return
+	_seq_left -= delta
+	if _seq_left > 0.0:
+		_chase()
+		return
+	_run_sequence()
+
+
+func freeze_is_deferred() -> bool:
+	return _casting or _pillar_cast or super.freeze_is_deferred()
+
+
+func _try_pull() -> void:
+	var arena := ArenaState.arena as Arena
+	if arena == null:
+		return
+	var ring := arena.pillar_ring_radius()
+	for ally in ArenaState.living_allies():
+		var u := ally as Unit
+		if u == null or not is_instance_valid(u) or u.is_dead:
+			continue
+		var d := Vector2(u.global_position.x - unit.global_position.x, u.global_position.z - unit.global_position.z).length()
+		if d <= ring:
+			_engage()
+			return
+
+
+func _on_boss_damaged(_victim: Unit, _amount: float, source: Node3D, _spell_id: String = "") -> void:
+	if _engaged:
+		return
+	var src := source as Unit
+	if src == null or not is_instance_valid(src) or src.team != Unit.TEAM_RAID:
+		return
+	_engage()
+
+
+func _engage() -> void:
+	if _engaged:
+		return
+	_engaged = true
+	var arena := ArenaState.arena as Arena
+	if arena:
+		arena.engage_dawnwarden()
+	_raise_pillars(false)
+
+
+func _raise_pillars(destroyed_only: bool) -> void:
+	if _pillar_cast:
+		return
+	_pillar_cast = true
+	_casting = true
+	_root_cast()
+	var dur := CombatBalance.flat("dawnwarden.pillar.warmup")
+	begin_ability("Raise Pillars", dur, Color(1.0, 0.78, 0.28), false)
+	var arena := ArenaState.arena as Arena
+	if arena:
+		arena.raise_dawnwarden_pillars(destroyed_only)
+	var tree := get_tree()
+	if tree:
+		await tree.create_timer(dur).timeout
+	if not is_instance_valid(self):
+		return
+	if arena:
+		arena.plant_dawnwarden_pillars()
+	_pillar_cast = false
+	_casting = false
+	_seq = Seq.WAIT_SLAM
+	_seq_left = CombatBalance.flat("dawnwarden.seq.slam")
+	if destroyed_only:
+		_resume_pillars()
+
+
+func _release_cast() -> bool:
+	if _pillar_cast:
+		return false
+	_casting = false
+	return true
+
+
+func _run_sequence() -> void:
+	match _seq:
+		Seq.WAIT_SLAM:
+			_fire_slam_and_sunspot()
+		Seq.WAIT_RAY:
+			_fire_dual_ray()
+		Seq.WAIT_NOVA:
+			_fire_corona()
+		_:
+			_seq = Seq.WAIT_SLAM
+			_seq_left = CombatBalance.flat("dawnwarden.seq.slam")
+
+
+func _chase() -> void:
 	var target := _pick_target()
 	if target == null:
 		return
-	if unit.in_range_of(target, 0.4):
-		unit.controller.ai_attack(target)
-	else:
-		unit.controller.ai_move(target.global_position)
-	_collapse_cd -= delta
-	_echo_cd -= delta
-	if _collapse_cd <= 0.0:
-		_fire_collapse()
-		return
-	if _echo_cd <= 0.0 and _collapse_cd > 8.0:
-		_fire_echoes()
-		return
-	_cycle -= delta
-	if _cycle > 0.0:
-		return
-	_fire_ability(target)
-	_cycle = [3.2, 4.0, 5.5][_index]
-	_index = (_index + 1) % 3
+	unit.controller.ai_attack(target)
 
 
 func _pick_target() -> Unit:
 	return ThreatTable.pick_target(unit)
 
 
-func _random_non_tank() -> Unit:
-	var tank := ArenaState.tank()
+func _non_tank_raid() -> Array[Unit]:
+	var skip := ThreatTable.aggro_holder(unit)
+	if skip == null:
+		skip = ArenaState.tank()
 	var choices: Array[Unit] = []
 	for u in ArenaState.living_allies():
-		if u == tank or not u.can_be_aggroed():
+		if u == skip or not u.can_be_aggroed():
 			continue
 		choices.append(u)
-	if choices.is_empty():
-		return _pick_target()
-	return choices[randi() % choices.size()]
+	return choices
 
 
-func _fire_ability(_target: Unit) -> void:
-	var tank := _pick_target()
-	match _index:
-		0:
-			if tank == null:
-				return
-			var forward := (tank.global_position - unit.global_position).slide(Vector3.UP)
-			if forward.length_squared() < 0.001:
-				forward = unit.facing_dir()
-			begin_ability("Searing Cleave", 0.9, Color(1.0, 0.55, 0.12))
-			var cleave := Telegraph.cone_cleave(unit, unit.global_position, forward.normalized(), 6.4, deg_to_rad(95.0), 0.9, 90.0)
-			cleave.color = Color(1.0, 0.38, 0.04, 1.0)
-			cleave.warn_vfx = AbilityFx.FIRE_CAST
-			cleave.warn_vfx_cfg = {"scale": 2.0, "lifetime": 1.2, "look": forward.normalized()}
-			cleave.vfx_scene = AbilityFx.GROUND_EXPLOSION
-			cleave.vfx_cfg = {"scale": 2.2, "lifetime": 2.1, "look": forward.normalized()}
-			cleave.sfx_warn = "boss.telegraph.warn"
-			cleave.sfx_impact = "dawnwarden.cleave"
-		1:
-			var marked := _random_non_tank()
-			if marked == null:
-				return
-			begin_ability("Sunspot", 1.2, Color(1.0, 0.72, 0.18))
-			var slam := Telegraph.circle_slam(unit, marked.global_position, 3.8, 1.2, 140.0)
-			slam.color = Color(1.0, 0.32, 0.04, 1.0)
-			slam.warn_vfx = AbilityFx.FIRE_AREA
-			slam.warn_vfx_cfg = {"area_radius": 3.8, "scale": 1.45, "lifetime": 1.45}
-			slam.vfx_scene = AbilityFx.GROUND_EXPLOSION
-			slam.vfx_cfg = {"scale": 2.5, "lifetime": 2.3}
-			slam.sfx_warn = "boss.telegraph.warn"
-			slam.sfx_impact = "dawnwarden.sunspot"
-		2:
-			var locked := _random_non_tank()
-			if locked == null:
-				return
-			begin_ability("Judgment Ray", JudgmentBeamScript.WARNING, Color(1.0, 0.82, 0.28), true)
-			JudgmentBeamScript.fire(unit, locked)
+func _aggro_target() -> Unit:
+	var holder := ThreatTable.aggro_holder(unit)
+	if holder != null:
+		return holder
+	return _pick_target()
+
+
+func _cleave_damage() -> float:
+	var amount := CombatBalance.flat("dawnwarden.cleave")
+	if _phase2:
+		amount *= 2.0
+	return amount
+
+
+func _cleave_brand() -> int:
+	var stacks := maxi(int(round(CombatBalance.flat("dawnwarden.brand.cleave"))), 0)
+	if _phase2:
+		stacks *= 2
+	return stacks
+
+
+func _sunspot_radius() -> float:
+	var r := CombatBalance.flat("dawnwarden.sunspot.radius")
+	if _phase2:
+		r *= 1.0 + CombatBalance.pct("dawnwarden.p2.sunspot")
+	return r
+
+
+func _fire_slam_and_sunspot() -> void:
+	_casting = true
+	var warn := CombatBalance.flat("dawnwarden.cleave.warn")
+	var spot_warn := 1.2
+	begin_ability("Searing Cleave", maxf(warn, spot_warn), Color(1.0, 0.55, 0.12), false)
+	var tank := _aggro_target()
+	if tank != null:
+		var toward := (tank.global_position - unit.global_position).slide(Vector3.UP)
+		if toward.length_squared() < 0.001:
+			toward = unit.facing_dir()
+		else:
+			toward = toward.normalized()
+		unit.snap_facing(toward)
+		var radius := CombatBalance.flat("dawnwarden.cleave.radius")
+		var angle := deg_to_rad(CombatBalance.flat("dawnwarden.cleave.angle"))
+		var forward := unit.facing_dir()
+		var cleave := Telegraph.cone_cleave(unit, unit.global_position, forward, radius, angle, warn, _cleave_damage())
+		cleave.color = Color(1.0, 0.38, 0.04, 1.0)
+		cleave.judgment_stacks = _cleave_brand()
+		cleave.pillar_flat_damage = _cleave_damage()
+		cleave.warn_vfx = AbilityFx.FIRE_CAST
+		cleave.warn_vfx_cfg = {"scale": 1.15, "lifetime": 0.85, "look": forward}
+		cleave.vfx_scene = AbilityFx.GROUND_EXPLOSION
+		cleave.vfx_cfg = {"scale": 1.2, "lifetime": 1.1, "look": forward}
+		cleave.sfx_warn = "boss.telegraph.warn"
+		cleave.sfx_impact = "dawnwarden.cleave"
+	var marked := _non_tank_raid()
+	var spot_r := _sunspot_radius()
+	var spot_dmg := CombatBalance.flat("dawnwarden.sunspot")
+	var brand := maxi(int(round(CombatBalance.flat("dawnwarden.brand.sunspot"))), 0)
+	for victim in marked:
+		if victim == null or not is_instance_valid(victim) or victim.is_dead:
+			continue
+		var slam := Telegraph.circle_slam(unit, victim.global_position, spot_r, spot_warn, spot_dmg)
+		slam.ability_id = "sunspot"
+		slam.color = Color(1.0, 0.32, 0.04, 1.0)
+		slam.judgment_stacks = brand
+		slam.pillar_flat_damage = spot_dmg
+		slam.vfx_scene = AbilityFx.GROUND_EXPLOSION
+		slam.vfx_cfg = {"scale": 1.1, "lifetime": 1.1}
+		slam.sfx_warn = "boss.telegraph.warn"
+		slam.sfx_impact = "dawnwarden.sunspot"
+	var tree := get_tree()
+	if tree:
+		await tree.create_timer(maxf(warn, spot_warn) + 0.05).timeout
+	if not is_instance_valid(self):
+		return
+	if not _release_cast():
+		return
+	_seq = Seq.WAIT_RAY
+	_seq_left = CombatBalance.flat("dawnwarden.seq.ray")
+
+
+func _fire_dual_ray() -> void:
+	_casting = true
+	_root_cast()
+	var picks := _ray_targets()
+	var channel := JudgmentBeamScript.DURATION
+	if _phase2:
+		channel *= 1.0 + CombatBalance.pct("dawnwarden.p2.judgment")
+	begin_ability("Judgment Ray", JudgmentBeamScript.WARNING + channel, Color(1.0, 0.82, 0.28), true)
+	for locked in picks:
+		JudgmentBeamScript.fire(unit, locked)
+	var tree := get_tree()
+	if tree:
+		await tree.create_timer(JudgmentBeamScript.WARNING + channel + 0.1).timeout
+	if not is_instance_valid(self):
+		return
+	if not _release_cast():
+		return
+	_seq = Seq.WAIT_NOVA
+	_seq_left = CombatBalance.flat("dawnwarden.seq.nova")
+
+
+func _ray_targets() -> Array[Unit]:
+	if GameSession.dev_test_mode:
+		var you := GameSession.active_unit as Unit
+		if you != null and is_instance_valid(you) and not you.is_dead and you.team == Unit.TEAM_RAID:
+			return [you, you]
+	var pool := _non_tank_raid()
+	if pool.size() < 2:
+		var tank := _aggro_target()
+		if tank != null and not pool.has(tank):
+			pool.append(tank)
+	var picks: Array[Unit] = []
+	while picks.size() < 2 and not pool.is_empty():
+		var idx := randi() % pool.size()
+		picks.append(pool[idx])
+		pool.remove_at(idx)
+	return picks
+
+
+func _fire_corona() -> void:
+	_casting = true
+	_pause_pillars()
+	_go_to_center()
+	var cast := CombatBalance.flat("dawnwarden.corona.cast")
+	begin_ability("Solar Corona", cast, Color(1.0, 0.42, 0.08), false)
+	var corona := Telegraph.solar_corona(unit, cast, CombatBalance.flat("dawnwarden.corona.damage"))
+	corona.judgment_stacks = maxi(int(round(CombatBalance.flat("dawnwarden.brand.corona"))), 0)
+	corona.pillar_flat_damage = CombatBalance.flat("dawnwarden.corona.damage")
+	var tree := get_tree()
+	if tree:
+		await tree.create_timer(cast + 0.05).timeout
+	if not is_instance_valid(self) or unit == null or not is_instance_valid(unit) or unit.is_dead:
+		_resume_pillars()
+		_release_cast()
+		return
+	if _pillar_cast:
+		return
+	_fire_collapse()
 
 
 func _fire_collapse() -> void:
-	_collapsing = true
-	_collapse_cd = COLLAPSE_P2 if _phase2 else COLLAPSE_P1
-	begin_ability("Solar Collapse", 4.5, Color(1.0, 0.88, 0.35), false)
-	Telegraph.solar_collapse(unit, 4.5, 9999.0)
+	_root_cast()
+	var cast := CombatBalance.flat("dawnwarden.collapse.cast")
+	begin_ability("Solar Collapse", cast, Color(1.0, 0.88, 0.35), false)
+	var collapse := Telegraph.solar_collapse(unit, cast, CombatBalance.flat("dawnwarden.collapse.damage"))
+	collapse.judgment_stacks = maxi(int(round(CombatBalance.flat("dawnwarden.brand.collapse"))), 0)
+	collapse.pillar_flat_damage = CombatBalance.flat("dawnwarden.collapse.damage")
 	var tree := get_tree()
 	if tree:
-		await tree.create_timer(4.65).timeout
+		await tree.create_timer(cast + 0.05).timeout
 	if not is_instance_valid(self):
 		return
-	_collapsing = false
+	_resume_pillars()
+	if not _release_cast():
+		return
+	_seq = Seq.WAIT_SLAM
+	_seq_left = CombatBalance.flat("dawnwarden.seq.slam")
 
 
-func freeze_is_deferred() -> bool:
-	return _collapsing or _echoing or super.freeze_is_deferred()
+func _root_cast() -> void:
+	if unit == null or not is_instance_valid(unit) or unit.controller == null:
+		return
+	unit.controller.ai_stop()
+
+
+func _go_to_center() -> void:
+	if unit == null or not is_instance_valid(unit) or unit.controller == null:
+		return
+	var dest := Vector3.ZERO
+	var arena := ArenaState.arena as Arena
+	if arena != null:
+		dest = arena.global_position
+	dest.y = unit.global_position.y
+	var dx := unit.global_position.x - dest.x
+	var dz := unit.global_position.z - dest.z
+	if dx * dx + dz * dz <= 0.55 * 0.55:
+		unit.controller.ai_stop()
+		return
+	unit.controller.ai_move(dest)
+
+
+func _pause_pillars() -> void:
+	var arena := ArenaState.arena as Arena
+	if arena:
+		arena.pause_dawnwarden_pillars()
+
+
+func _resume_pillars() -> void:
+	var arena := ArenaState.arena as Arena
+	if arena:
+		arena.resume_dawnwarden_pillars()
 
 
 func _enter_phase2() -> void:
 	_phase2 = true
-	unit.attack_damage *= 1.1
-	if _collapse_cd > COLLAPSE_P2:
-		_collapse_cd = COLLAPSE_P2
-	if _echo_cd > ECHO_P2:
-		_echo_cd = ECHO_P2
 
 
-func _fire_echoes() -> void:
+func _enter_execute() -> void:
+	_execute = true
 	var arena := ArenaState.arena as Arena
-	var pillars: Array[ArenaPillar] = []
 	if arena:
-		pillars = arena.living_pillars()
-	if pillars.is_empty():
-		_echo_cd = 8.0
-		return
-	if _living_echo_count() >= maxi(pillars.size() * 2, 4):
-		_echo_cd = 5.0
-		return
-	_echoing = true
-	_echo_cd = ECHO_P2 if _phase2 else ECHO_P1
-	begin_ability("Solar Echoes", ECHO_CAST, Color(1.0, 0.42, 0.12), false)
-	AbilityFx.play_at(AbilityFx.FIRE_CAST, unit.global_position + Vector3(0.0, 1.35, 0.0), {
-		"scale": 2.4,
-		"lifetime": 1.9,
-	})
-	AudioManager.play_at("fire.cast", unit.global_position + Vector3(0.0, 1.65, 0.0))
-	var tree := get_tree()
-	if tree:
-		await tree.create_timer(ECHO_CAST).timeout
-	if not is_instance_valid(self) or unit == null or not is_instance_valid(unit) or unit.is_dead:
-		_echoing = false
-		return
-	if ArenaState.arena and ArenaState.arena.has_method("spawn_dawnwarden_echoes"):
-		ArenaState.arena.spawn_dawnwarden_echoes()
-	_echoing = false
-
-
-func _living_echo_count() -> int:
-	var n := 0
-	var tree := get_tree()
-	if tree == null:
-		return 0
-	for node in tree.get_nodes_in_group(ECHO_GROUP):
-		var u := node as Unit
-		if u != null and is_instance_valid(u) and not u.is_dead:
-			n += 1
-	return n
+		arena.double_raid_judgment()
+	_raise_pillars(true)

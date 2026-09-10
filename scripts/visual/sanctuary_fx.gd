@@ -7,6 +7,7 @@ const GOLD := Color(0.95, 0.84, 0.38)
 const ALLY_PULSE := 1.0
 const DR_PERCENT := 0.25
 const DR_REFRESH := 0.12
+const DR_REFRESH_INTERVAL := 0.10
 const DRAW_PRIORITY := 4
 
 var source: Unit
@@ -20,10 +21,16 @@ var ability_id: String = "sanctuary"
 var element: int = AbilityDef.Element.NONE
 var extra_elements: PackedInt32Array = PackedInt32Array()
 var combat_text_cast_id: int = -1
+var ally_dr: float = DR_PERCENT
+var caster_dr: float = DR_PERCENT
+var threat_pulse: float = 0.0
+
+static var _active: Array[SanctuaryZone] = []
 
 var _elapsed: float = 0.0
 var _tick_acc: float = 0.0
 var _shield_acc: float = 0.0
+var _dr_refresh_acc: float = DR_REFRESH_INTERVAL
 var _ticks: int = 0
 var _max_ticks: int = 16
 var _allies_pulsed: bool = false
@@ -64,7 +71,23 @@ static func spawn(
 	z.global_position = Vector3(point.x, 0.10, point.z)
 	z.reset_physics_interpolation()
 	z._build()
+	_active.append(z)
 	return z
+
+
+static func blocks_knockback(u: Unit) -> bool:
+	if u == null or u.is_dead:
+		return false
+	for zone in _active:
+		if zone == null or not is_instance_valid(zone) or zone._closing:
+			continue
+		if zone.source == null or not is_instance_valid(zone.source):
+			continue
+		if u.team != zone.source.team:
+			continue
+		if zone._contains(u):
+			return true
+	return false
 
 
 func _build() -> void:
@@ -102,35 +125,35 @@ func _physics_process(delta: float) -> void:
 		while _shield_acc >= ALLY_PULSE:
 			_shield_acc -= ALLY_PULSE
 			_pulse_allies()
-	_refresh_dr()
+	_dr_refresh_acc += delta
+	if _dr_refresh_acc >= DR_REFRESH_INTERVAL:
+		_dr_refresh_acc = 0.0
+		_refresh_dr()
 	if _elapsed >= duration:
 		_close()
 
 
 func _pulse_enemies() -> void:
-	if source == null or not is_instance_valid(source) or tick_damage <= 0.0:
+	if source == null or not is_instance_valid(source):
 		return
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
+	for u in ArenaState.units_near(global_position, radius, true, true, true):
 		if u.team == source.team:
 			continue
 		if not _contains(u):
 			continue
 		if not _has_los(u):
 			continue
-		u.receive_ability_hit(source, element, tick_damage, 0.0, extra_elements, true, false, true, -1, 0, ability_id, combat_text_cast_id)
+		if tick_damage > 0.0:
+			u.receive_ability_hit(source, element, tick_damage, 0.0, extra_elements, true, false, true, -1, 0, ability_id, combat_text_cast_id)
+		if threat_pulse > 0.0:
+			ThreatTable.add_threat(u, source, threat_pulse, ability_id)
 
 
 func _pulse_allies() -> void:
 	if source == null or not is_instance_valid(source) or tick_shield <= 0.0:
 		return
 	var dur := shield_duration if shield_duration > 0.05 else Unit.WARD_TIME
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
+	for u in ArenaState.units_near(global_position, radius, true, true, true):
 		if u.team != source.team:
 			continue
 		if not _contains(u):
@@ -141,20 +164,22 @@ func _pulse_allies() -> void:
 func _refresh_dr() -> void:
 	if source == null or not is_instance_valid(source) or source.is_dead:
 		return
+	if ally_dr <= 0.0 and caster_dr <= 0.0:
+		return
 	var hit_caster := false
-	for other in ArenaState.units:
-		var u := other as Unit
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
+	for u in ArenaState.units_near(global_position, radius, true, true, true):
 		if u.team != source.team:
 			continue
 		if not _contains(u):
 			continue
 		if u == source:
 			hit_caster = true
-		u.apply_damage_reduction(DR_PERCENT, DR_REFRESH)
-	if not hit_caster:
-		source.apply_damage_reduction(DR_PERCENT, DR_REFRESH)
+			if caster_dr > 0.0:
+				u.apply_damage_reduction(caster_dr, DR_REFRESH)
+		elif ally_dr > 0.0:
+			u.apply_damage_reduction(ally_dr, DR_REFRESH)
+	if not hit_caster and caster_dr > 0.0:
+		source.apply_damage_reduction(caster_dr, DR_REFRESH)
 
 
 func _contains(u: Unit) -> bool:
@@ -176,10 +201,15 @@ func _has_los(u: Unit) -> bool:
 	return arena.spell_has_los(global_position, u.global_position, exclude)
 
 
+func _exit_tree() -> void:
+	_active.erase(self)
+
+
 func _close() -> void:
 	if _closing:
 		return
 	_closing = true
+	_active.erase(self)
 	var tw := create_tween()
 	tw.tween_method(_set_fade, 1.0, 0.0, 0.35)
 	tw.finished.connect(queue_free)

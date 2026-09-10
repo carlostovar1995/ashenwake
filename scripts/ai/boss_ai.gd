@@ -41,7 +41,7 @@ func _physics_process(delta: float) -> void:
 	if _cycle > 0.0:
 		return
 	_fire_ability(target)
-	var rate := 0.7 if _phase2 else 1.0
+	var rate := CombatBalance.flat("colossus.p2.rate") if _phase2 else 1.0
 	_cycle = [3.4, 5.2, 4.6][_index] * rate
 	_index = (_index + 1) % 3
 
@@ -58,18 +58,18 @@ func _fire_ability(target: Unit) -> void:
 	match _index:
 		0:
 			begin_ability("Cone Cleave", 0.85, Color(1.0, 0.55, 0.12))
-			var cleave := Telegraph.cone_cleave(unit, unit.global_position, forward, 6.2, deg_to_rad(95.0), 0.85, 95.0)
+			var cleave := Telegraph.cone_cleave(unit, unit.global_position, forward, 6.2, deg_to_rad(95.0), 0.85, CombatBalance.flat("colossus.cleave"))
 			cleave.sfx_warn = "boss.telegraph.warn"
 			cleave.sfx_impact = "colossus.cleave"
 		1:
 			begin_ability("Circle Slam", 1.35, Color(1.0, 0.4, 0.15))
 			var slam_at := target.global_position
-			var slam := Telegraph.circle_slam(unit, slam_at, 4.1, 1.35, 150.0)
+			var slam := Telegraph.circle_slam(unit, slam_at, 4.1, 1.35, CombatBalance.flat("colossus.slam"))
 			slam.sfx_warn = "boss.telegraph.warn"
 			slam.sfx_impact = "colossus.slam"
 		2:
 			begin_ability("Line Breath", 1.05, Color(1.0, 0.25, 0.35))
-			var breath := Telegraph.line_breath(unit, unit.global_position, forward, 18.0, 2.3, 1.05, 130.0)
+			var breath := Telegraph.line_breath(unit, unit.global_position, forward, 18.0, 2.3, 1.05, CombatBalance.flat("colossus.breath"))
 			breath.sfx_warn = "boss.telegraph.warn"
 			breath.sfx_impact = "colossus.breath"
 
@@ -117,6 +117,10 @@ func ability_progress() -> float:
 	return clampf(ability_elapsed / ability_duration, 0.0, 1.0)
 
 
+func in_phase2() -> bool:
+	return _phase2
+
+
 func _tick_ability_display(delta: float) -> void:
 	if ability_duration <= 0.0:
 		return
@@ -127,9 +131,8 @@ func _tick_ability_display(delta: float) -> void:
 
 func _enter_phase2() -> void:
 	_phase2 = true
-	unit.move_speed += 1.1
-	unit.attack_damage *= 1.15
-	ArenaState.start_shrink()
+	unit.move_speed += CombatBalance.flat("colossus.p2.speed")
+	unit.attack_damage *= 1.0 + CombatBalance.pct("colossus.p2.auto")
 	if not _adds_spawned:
 		_adds_spawned = true
 		if ArenaState.arena and ArenaState.arena.has_method("spawn_add"):

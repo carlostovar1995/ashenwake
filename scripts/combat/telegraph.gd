@@ -2,6 +2,17 @@ class_name Telegraph
 extends Node3D
 
 const GroundIndicator := preload("res://scripts/visual/ground_indicator.gd")
+const _SolarCollapseFx := preload("res://scripts/visual/solar_collapse_fx.gd")
+const _FIRE_SHELL := preload("res://assets/vfx/elemental/effects/dawnwarden/solar_fire_shell.gdshader")
+const _FIRE_TEX := preload("res://assets/vfx/elemental/effects/dawnwarden/fire_body.png")
+const _VISUAL_HZ := 20.0
+
+static var _cover_wedge: ArrayMesh
+static var _cover_wedge_edge: ArrayMesh
+static var _corona_torus: TorusMesh
+static var _corona_ring_mat: StandardMaterial3D
+static var _corona_heat_mesh: SphereMesh
+static var _corona_heat_mat: ShaderMaterial
 
 enum Shape { CIRCLE, CONE, LINE }
 
@@ -23,7 +34,6 @@ var slow_percent: float = 0.0
 var slow_duration: float = 0.0
 var element: int = 0
 var extra_elements: PackedInt32Array = PackedInt32Array()
-var mark_damage_bonus: float = 0.0
 var overheat_cast_id: int = -1
 var combat_text_cast_id: int = -1
 var infusion_double: int = 0
@@ -31,8 +41,10 @@ var ability_id: String = ""
 var los_from_source: bool = false
 var requires_cover: bool = false
 var pillar_damage_ratio: float = 0.0
-var linger_seconds: float = 0.0
+var inner_radius: float = 0.0
 var cover_visual: bool = false
+var judgment_stacks: int = 0
+var pillar_flat_damage: float = 0.0
 var inbound_cover: bool = false
 var warn_vfx: String = ""
 var warn_vfx_cfg: Dictionary = {}
@@ -48,6 +60,8 @@ var _ring: MeshInstance3D
 var _ring_mesh: TorusMesh
 var _shadows: Array[MeshInstance3D] = []
 var _shadow_mats: Array[StandardMaterial3D] = []
+var _shadow_edges: Array[MeshInstance3D] = []
+var _shadow_pillars: Array[ArenaPillar] = []
 var _pull: GPUParticles3D
 var _boss_light: OmniLight3D
 var _warn_played: bool = false
@@ -62,6 +76,8 @@ var _wall_shadows: Array[MeshInstance3D] = []
 var _wall_shadow_key: String = ""
 var _outline: MeshInstance3D
 var _outline_mat: StandardMaterial3D
+var _heat: MeshInstance3D
+var _visual_wait: float = 0.0
 
 
 static func circle_slam(p_source: Unit, pos: Vector3, p_radius: float, p_time: float, p_damage: float, p_hostile: bool = true) -> Telegraph:
@@ -114,20 +130,32 @@ static func solar_collapse(p_source: Unit, p_time: float, p_damage: float) -> Te
 	t.warning_time = p_time
 	t.damage = p_damage
 	t.ability_id = "solar_collapse"
-	t.los_from_source = false
 	t.requires_cover = true
-	t.inbound_cover = true
-	t.pillar_damage_ratio = 0.25
-	t.linger_seconds = 6.0
-	t.cover_visual = true
 	t.interruptible = false
-	t.vfx_scene = AbilityFx.GROUND_EXPLOSION
-	t.vfx_cfg = {"scale": 4.2, "lifetime": 2.4}
 	t.sfx_loop = "dawnwarden.collapse.warn"
 	t.sfx_impact = "dawnwarden.collapse.impact"
 	t.color = Color(1.0, 0.45, 0.08, 0.55)
 	var pos := p_source.global_position if p_source else Vector3.ZERO
 	_add(t, pos, Vector3.ZERO)
+	return t
+
+
+static func solar_corona(p_source: Unit, p_time: float, p_damage: float) -> Telegraph:
+	var t := Telegraph.new()
+	t.shape = Shape.CIRCLE
+	t.source = p_source
+	t.radius = maxf(ArenaState.arena_radius, 28.0)
+	t.inner_radius = CombatBalance.flat("dawnwarden.corona.inner")
+	t.warning_time = p_time
+	t.damage = p_damage
+	t.ability_id = "solar_corona"
+	t.interruptible = false
+	t.sfx_loop = "dawnwarden.collapse.warn"
+	t.sfx_impact = "dawnwarden.collapse.impact"
+	t.warn_vfx = AbilityFx.FIRE_CAST
+	t.warn_vfx_cfg = {"scale": 1.15, "lifetime": 0.85}
+	t.color = Color(1.0, 0.28, 0.06, 0.62)
+	_add(t, Vector3.ZERO, Vector3.ZERO)
 	return t
 
 
@@ -150,9 +178,17 @@ func _build_visual() -> void:
 	_mesh = MeshInstance3D.new()
 	GroundIndicator.prepare(_mesh)
 	add_child(_mesh)
+	if ability_id == "solar_collapse":
+		_mesh.visible = false
+		return
 	match shape:
 		Shape.CIRCLE:
 			if cover_visual:
+				_mat = GroundIndicator.shader_mat(color, true, Vector2(2.0, 2.0))
+				_mesh.mesh = GroundIndicator.circle_mesh()
+				_mesh.material_override = _mat
+				GroundIndicator.set_circle_radius(_mesh, 2.0)
+				_mesh.position.y = 0.05
 				_build_collapse_visual()
 			else:
 				_mat = GroundIndicator.shader_mat(color, true, Vector2(radius, radius))
@@ -160,6 +196,9 @@ func _build_visual() -> void:
 				_mesh.material_override = _mat
 				GroundIndicator.set_circle_radius(_mesh, radius)
 				_mesh.position.y = 0.05
+				if inner_radius > 0.05:
+					GroundIndicator.set_inner_hole(_mat, inner_radius, radius)
+					_build_corona_visual()
 		Shape.LINE:
 			_mat = GroundIndicator.shader_mat(color, false, Vector2(width, length))
 			_mesh.mesh = GroundIndicator.rect_mesh()
@@ -178,21 +217,72 @@ func _build_visual() -> void:
 			add_child(_outline)
 
 
-func _build_collapse_visual() -> void:
-	_mesh.visible = false
+func _build_corona_visual() -> void:
+	var hole := maxf(inner_radius, 0.8)
 	_fill = MeshInstance3D.new()
-	_fill_mat = StandardMaterial3D.new()
-	_fill_mat.albedo_color = Color(1.0, 0.28, 0.04, 0.22)
-	_fill_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_fill_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_fill_mat.emission_enabled = true
-	_fill_mat.emission = Color(1.0, 0.22, 0.02)
-	_fill_mat.emission_energy_multiplier = 1.8
-	_fill_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_fill.material_override = _fill_mat
-	_fill.mesh = _make_annulus_mesh(25.2, 28.0, 0.05)
-	_fill.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	GroundIndicator.prepare(_fill)
+	var safe_mat := GroundIndicator.shader_mat(Color(1.0, 0.86, 0.32, 1.0), true, Vector2(hole, hole))
+	_fill.mesh = GroundIndicator.circle_mesh()
+	_fill.material_override = safe_mat
+	GroundIndicator.set_circle_radius(_fill, hole)
+	safe_mat.set_shader_parameter("fill_alpha", 0.07)
+	safe_mat.set_shader_parameter("outline_alpha", 0.95)
+	safe_mat.set_shader_parameter("emission_strength", 1.35)
+	_fill.position.y = 0.06
 	add_child(_fill)
+	_ensure_corona_res()
+	_corona_torus.inner_radius = maxf(hole - 0.18, 0.4)
+	_corona_torus.outer_radius = hole + 0.16
+	_ring = MeshInstance3D.new()
+	_ring.mesh = _corona_torus
+	_ring.rotation_degrees.x = 90.0
+	_ring.position.y = 0.18
+	_ring.material_override = _corona_ring_mat
+	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_ring.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	_ring.scale = Vector3.ONE
+	_corona_ring_mat.emission_energy_multiplier = 5.5
+	add_child(_ring)
+	_heat = MeshInstance3D.new()
+	_heat.mesh = _corona_heat_mesh
+	_heat.material_override = _corona_heat_mat
+	_heat.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_heat.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	_heat.top_level = true
+	add_child(_heat)
+	FxHeroLights.bind(self, Color(1.0, 0.45, 0.12), 1.6, 7.0)
+
+
+static func _ensure_corona_res() -> void:
+	if _corona_torus == null:
+		_corona_torus = TorusMesh.new()
+		_corona_torus.rings = 6
+		_corona_torus.ring_segments = 24
+	if _corona_ring_mat == null:
+		_corona_ring_mat = StandardMaterial3D.new()
+		_corona_ring_mat.albedo_color = Color(1.0, 0.84, 0.28, 0.92)
+		_corona_ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_corona_ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_corona_ring_mat.emission_enabled = true
+		_corona_ring_mat.emission = Color(1.0, 0.72, 0.18)
+		_corona_ring_mat.emission_energy_multiplier = 5.5
+		_corona_ring_mat.cull_mode = BaseMaterial3D.CULL_BACK
+		_corona_ring_mat.disable_receive_shadows = true
+	if _corona_heat_mesh == null:
+		_corona_heat_mesh = SphereMesh.new()
+		_corona_heat_mesh.radius = 1.15
+		_corona_heat_mesh.height = 2.3
+		_corona_heat_mesh.radial_segments = 12
+		_corona_heat_mesh.rings = 8
+	if _corona_heat_mat == null:
+		_corona_heat_mat = ShaderMaterial.new()
+		_corona_heat_mat.shader = _FIRE_SHELL
+		_corona_heat_mat.set_shader_parameter("fade_alpha", 1.0)
+		_corona_heat_mat.set_shader_parameter("fire_tex", _FIRE_TEX)
+
+
+func _build_collapse_visual() -> void:
+	_ensure_cover_wedges()
 	_wall = MeshInstance3D.new()
 	_wall_mat = StandardMaterial3D.new()
 	_wall_mat.albedo_color = Color(1.0, 0.48, 0.08, 0.72)
@@ -203,12 +293,12 @@ func _build_collapse_visual() -> void:
 	_wall_mat.emission_energy_multiplier = 6.5
 	_wall_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_wall.material_override = _wall_mat
-	_wall.mesh = _make_tube_mesh(26.6, 1.55)
+	_wall.mesh = _make_tube_mesh(1.0, 1.0)
 	_wall.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_wall)
 	_ring_mesh = TorusMesh.new()
-	_ring_mesh.inner_radius = 25.0
-	_ring_mesh.outer_radius = 27.4
+	_ring_mesh.inner_radius = 0.72
+	_ring_mesh.outer_radius = 1.0
 	_ring_mesh.rings = 12
 	_ring_mesh.ring_segments = 64
 	_ring = MeshInstance3D.new()
@@ -227,8 +317,8 @@ func _build_collapse_visual() -> void:
 	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_ring)
 	_build_pull_particles()
-	call_deferred("_build_pillar_shadows")
-	call_deferred("_sync_wall_shadows")
+	_build_pillar_shadows()
+	_sync_wall_shadows()
 	call_deferred("_spawn_rim_heat")
 	FxHeroLights.bind(self, Color(1.0, 0.55, 0.15), 2.4, 16.0)
 
@@ -242,15 +332,15 @@ func _build_pull_particles() -> void:
 	var pm := ParticleProcessMaterial.new()
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_RING
 	pm.emission_ring_axis = Vector3.UP
-	pm.emission_ring_radius = 26.4
-	pm.emission_ring_inner_radius = 24.8
+	pm.emission_ring_radius = 1.4
+	pm.emission_ring_inner_radius = 0.4
 	pm.emission_ring_height = 0.6
-	pm.direction = Vector3(0, 0.15, 0)
-	pm.spread = 12.0
-	pm.initial_velocity_min = 0.4
-	pm.initial_velocity_max = 1.4
-	pm.radial_accel_min = -28.0
-	pm.radial_accel_max = -16.0
+	pm.direction = Vector3(0, 0.2, 0)
+	pm.spread = 18.0
+	pm.initial_velocity_min = 2.4
+	pm.initial_velocity_max = 5.5
+	pm.radial_accel_min = 10.0
+	pm.radial_accel_max = 18.0
 	pm.gravity = Vector3(0, 0.8, 0)
 	pm.scale_min = 0.35
 	pm.scale_max = 0.7
@@ -280,7 +370,7 @@ func _build_pillar_shadows() -> void:
 		return
 	for pillar in arena.living_pillars():
 		var mi := MeshInstance3D.new()
-		mi.mesh = _shadow_mesh_for(pillar, 0.08, 1.0, true)
+		mi.mesh = _cover_wedge
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = Color(0.02, 0.04, 0.12, 1.0)
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -292,8 +382,9 @@ func _build_pillar_shadows() -> void:
 		add_child(mi)
 		_shadows.append(mi)
 		_shadow_mats.append(mat)
+		_shadow_pillars.append(pillar)
 		var edge := MeshInstance3D.new()
-		edge.mesh = _shadow_edge_strip(pillar, 0.11)
+		edge.mesh = _cover_wedge_edge
 		var edge_mat := StandardMaterial3D.new()
 		edge_mat.albedo_color = Color(1.0, 0.78, 0.28, 0.08)
 		edge_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -305,7 +396,9 @@ func _build_pillar_shadows() -> void:
 		edge.material_override = edge_mat
 		edge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(edge)
+		_shadow_edges.append(edge)
 		_shadow_edge_mats.append(edge_mat)
+	_orient_pillar_shadows()
 
 
 func _sync_wall_shadows() -> void:
@@ -317,136 +410,130 @@ func _sync_wall_shadows() -> void:
 		if not wall.is_cover_solid():
 			continue
 		walls.append(wall)
-		key += "%d:%.0f:%.0f," % [wall.get_instance_id(), wall.global_position.x * 10.0, wall.global_position.z * 10.0]
-	if key == _wall_shadow_key:
+		key += "%d," % wall.get_instance_id()
+	if key != _wall_shadow_key:
+		_wall_shadow_key = key
+		for node in _wall_shadows:
+			if is_instance_valid(node):
+				node.queue_free()
+		_wall_shadows.clear()
+		for wall in walls:
+			var mi := MeshInstance3D.new()
+			mi.mesh = _cover_wedge
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color(0.02, 0.04, 0.12, 1.0)
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+			mat.vertex_color_use_as_albedo = true
+			mi.material_override = mat
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(mi)
+			_wall_shadows.append(mi)
+			var edge := MeshInstance3D.new()
+			edge.mesh = _cover_wedge_edge
+			var edge_mat := StandardMaterial3D.new()
+			edge_mat.albedo_color = Color(1.0, 0.78, 0.28, 0.22)
+			edge_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			edge_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			edge_mat.emission_enabled = true
+			edge_mat.emission = Color(1.0, 0.62, 0.12)
+			edge_mat.emission_energy_multiplier = 1.2
+			edge_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+			edge.material_override = edge_mat
+			edge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(edge)
+			_wall_shadows.append(edge)
+	_orient_wall_shadows(walls)
+
+
+func _light_origin() -> Vector3:
+	if source != null and is_instance_valid(source):
+		return source.global_position
+	return global_position
+
+
+func _orient_cover_wedge(mi: MeshInstance3D, origin: Vector3, half_xz: float, length: float, y: float) -> void:
+	if mi == null:
 		return
-	_wall_shadow_key = key
-	for node in _wall_shadows:
-		if is_instance_valid(node):
-			node.queue_free()
-	_wall_shadows.clear()
+	var light := _light_origin()
+	var p := Vector3(origin.x, y, origin.z)
+	var away := Vector3(p.x - light.x, 0.0, p.z - light.z)
+	if away.length_squared() < 0.04:
+		away = Vector3(0.0, 0.0, 1.0)
+	else:
+		away = away.normalized()
+	var start := p + away * (half_xz + 0.08)
+	mi.scale = Vector3.ONE
+	mi.global_position = start
+	var look := start + away
+	if Vector2(look.x - start.x, look.z - start.z).length_squared() > 0.0001:
+		mi.look_at(Vector3(look.x, start.y, look.z), Vector3.UP)
+	mi.scale = Vector3(half_xz * 2.2 + 0.55, 1.0, length)
+
+
+func _orient_pillar_shadows() -> void:
+	for i in _shadows.size():
+		var pillar := _shadow_pillars[i] if i < _shadow_pillars.size() else null
+		var living := pillar != null and is_instance_valid(pillar) and pillar.living
+		var fill := _shadows[i]
+		var edge := _shadow_edges[i] if i < _shadow_edges.size() else null
+		if fill:
+			fill.visible = living
+		if edge:
+			edge.visible = living
+		if not living:
+			continue
+		_orient_cover_wedge(fill, pillar.global_position, pillar.half_xz(), 9.2, 0.08)
+		if edge:
+			_orient_cover_wedge(edge, pillar.global_position, pillar.half_xz(), 0.55, 0.11)
+
+
+func _orient_wall_shadows(walls: Array[SpellWall]) -> void:
+	var wi := 0
 	for wall in walls:
-		var mi := MeshInstance3D.new()
-		mi.mesh = _shadow_mesh_at(wall.global_position, wall.cover_half(), 0.08, 1.0, true)
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(0.02, 0.04, 0.12, 1.0)
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-		mat.vertex_color_use_as_albedo = true
-		mi.material_override = mat
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(mi)
-		_wall_shadows.append(mi)
-		var edge := MeshInstance3D.new()
-		edge.mesh = _shadow_edge_at(wall.global_position, wall.cover_half(), 0.11)
-		var edge_mat := StandardMaterial3D.new()
-		edge_mat.albedo_color = Color(1.0, 0.78, 0.28, 0.08)
-		edge_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		edge_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		edge_mat.emission_enabled = true
-		edge_mat.emission = Color(1.0, 0.62, 0.12)
-		edge_mat.emission_energy_multiplier = 1.2
-		edge_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-		edge.material_override = edge_mat
-		edge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(edge)
-		_wall_shadows.append(edge)
+		if wi + 1 >= _wall_shadows.size():
+			break
+		_orient_cover_wedge(_wall_shadows[wi], wall.global_position, wall.cover_half(), 9.2, 0.08)
+		_orient_cover_wedge(_wall_shadows[wi + 1], wall.global_position, wall.cover_half(), 0.55, 0.11)
+		wi += 2
 
 
-func _shadow_mesh_for(pillar: ArenaPillar, y: float, width_scale: float, fade: bool = false) -> ArrayMesh:
-	return _shadow_mesh_at(pillar.global_position, pillar.half_xz(), y, width_scale, fade)
+static func _ensure_cover_wedges() -> void:
+	if _cover_wedge != null and _cover_wedge_edge != null:
+		return
+	_cover_wedge = _unit_wedge_mesh(1.0, 1.18, true)
+	_cover_wedge_edge = _unit_wedge_mesh(1.0, 1.0, false)
 
 
-func _shadow_mesh_at(origin: Vector3, half_xz: float, y: float, width_scale: float, fade: bool = false) -> ArrayMesh:
-	var p := Vector3(origin.x, 0.0, origin.z)
-	var inward := Vector3(-p.x, 0.0, -p.z)
-	if inward.length_squared() < 0.01:
-		inward = Vector3(0, 0, -1)
-	inward = inward.normalized()
-	var right := Vector3(-inward.z, 0.0, inward.x)
-	var half := (half_xz + 0.28) * width_scale
-	var start := p + inward * (half_xz + 0.08)
-	var length := 9.2
-	var end := start + inward * length
-	var half2 := half * 1.18
+static func _unit_wedge_mesh(end_scale: float, taper: float, fade: bool) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var a := start - right * half + Vector3(0, y, 0)
-	var b := start + right * half + Vector3(0, y, 0)
-	var c := end + right * half2 + Vector3(0, y, 0)
-	var d := end - right * half2 + Vector3(0, y, 0)
+	var half := 0.5
+	var a := Vector3(-half, 0.0, 0.0)
+	var b := Vector3(half, 0.0, 0.0)
+	var c := Vector3(half * taper, 0.0, -end_scale)
+	var d := Vector3(-half * taper, 0.0, -end_scale)
 	if fade:
 		st.set_color(Color(1, 1, 1, 0.92))
-		st.add_vertex(to_local(a))
+		st.add_vertex(a)
 		st.set_color(Color(1, 1, 1, 0.92))
-		st.add_vertex(to_local(b))
+		st.add_vertex(b)
 		st.set_color(Color(1, 1, 1, 0.0))
-		st.add_vertex(to_local(c))
+		st.add_vertex(c)
 		st.set_color(Color(1, 1, 1, 0.92))
-		st.add_vertex(to_local(a))
+		st.add_vertex(a)
 		st.set_color(Color(1, 1, 1, 0.0))
-		st.add_vertex(to_local(c))
+		st.add_vertex(c)
 		st.set_color(Color(1, 1, 1, 0.0))
-		st.add_vertex(to_local(d))
+		st.add_vertex(d)
 	else:
-		st.add_vertex(to_local(a))
-		st.add_vertex(to_local(b))
-		st.add_vertex(to_local(c))
-		st.add_vertex(to_local(a))
-		st.add_vertex(to_local(c))
-		st.add_vertex(to_local(d))
-	return st.commit()
-
-
-func _shadow_edge_strip(pillar: ArenaPillar, y: float) -> ArrayMesh:
-	return _shadow_edge_at(pillar.global_position, pillar.half_xz(), y)
-
-
-func _shadow_edge_at(origin: Vector3, half_xz: float, y: float) -> ArrayMesh:
-	var p := Vector3(origin.x, 0.0, origin.z)
-	var inward := Vector3(-p.x, 0.0, -p.z)
-	if inward.length_squared() < 0.01:
-		inward = Vector3(0, 0, -1)
-	inward = inward.normalized()
-	var right := Vector3(-inward.z, 0.0, inward.x)
-	var half := half_xz + 0.22
-	var start := p + inward * (half_xz + 0.04)
-	var end := start + inward * 0.55
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var a := start - right * half + Vector3(0, y, 0)
-	var b := start + right * half + Vector3(0, y, 0)
-	var c := end + right * half + Vector3(0, y, 0)
-	var d := end - right * half + Vector3(0, y, 0)
-	st.add_vertex(to_local(a))
-	st.add_vertex(to_local(b))
-	st.add_vertex(to_local(c))
-	st.add_vertex(to_local(a))
-	st.add_vertex(to_local(c))
-	st.add_vertex(to_local(d))
-	return st.commit()
-
-
-func _make_annulus_mesh(inner: float, outer: float, y: float) -> ArrayMesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var steps := 48
-	inner = maxf(inner, 0.2)
-	outer = maxf(outer, inner + 0.15)
-	for i in steps:
-		var a0 := TAU * float(i) / float(steps)
-		var a1 := TAU * float(i + 1) / float(steps)
-		var i0 := Vector3(cos(a0) * inner, y, sin(a0) * inner)
-		var i1 := Vector3(cos(a1) * inner, y, sin(a1) * inner)
-		var o0 := Vector3(cos(a0) * outer, y, sin(a0) * outer)
-		var o1 := Vector3(cos(a1) * outer, y, sin(a1) * outer)
-		st.add_vertex(i0)
-		st.add_vertex(o0)
-		st.add_vertex(o1)
-		st.add_vertex(i0)
-		st.add_vertex(o1)
-		st.add_vertex(i1)
+		st.add_vertex(a)
+		st.add_vertex(b)
+		st.add_vertex(c)
+		st.add_vertex(a)
+		st.add_vertex(c)
+		st.add_vertex(d)
 	return st.commit()
 
 
@@ -498,7 +585,10 @@ func contains_point(world: Vector3) -> bool:
 	local.y = 0.0
 	match shape:
 		Shape.CIRCLE:
-			return Vector2(local.x, local.z).length() <= radius
+			var d := Vector2(local.x, local.z).length()
+			if inner_radius > 0.05:
+				return d >= inner_radius and d <= radius
+			return d <= radius
 		Shape.LINE:
 			return absf(local.x) <= width * 0.5 and local.z <= 0.0 and local.z >= -length
 		Shape.CONE:
@@ -515,6 +605,15 @@ func dodge_point(from: Vector3) -> Vector3:
 		return cover_dodge_point(from)
 	match shape:
 		Shape.CIRCLE:
+			if inner_radius > 0.05:
+				var to_from := from - global_position
+				to_from.y = 0.0
+				var d := to_from.length()
+				if d <= inner_radius - 0.35:
+					return from
+				if d < 0.05:
+					return global_position
+				return global_position + to_from.normalized() * (inner_radius * 0.55)
 			var away := from - global_position
 			away.y = 0.0
 			if away.length_squared() < 0.01:
@@ -526,10 +625,15 @@ func dodge_point(from: Vector3) -> Vector3:
 			var world_side := global_transform.basis.x * side * (width * 0.5 + 2.0)
 			return Vector3(from.x, 0.0, from.z) + Vector3(world_side.x, 0.0, world_side.z)
 		Shape.CONE:
-			var local := to_local(from)
-			var side := 1.0 if local.x >= 0.0 else -1.0
-			var world_side := global_transform.basis.x * side * 3.5
-			return Vector3(from.x, 0.0, from.z) + Vector3(world_side.x, 0.0, world_side.z)
+			# Frontal cones are escaped by moving behind the caster, not a short sidestep.
+			var back := global_transform.basis.z
+			back.y = 0.0
+			if back.length_squared() < 0.01:
+				back = Vector3(0.0, 0.0, 1.0)
+			var dist := 3.2
+			if source != null and is_instance_valid(source):
+				dist = source.radius + 2.4
+			return global_position + back.normalized() * dist
 	return from
 
 
@@ -544,7 +648,11 @@ func cover_dodge_point(from: Vector3) -> Vector3:
 	var best_d := INF
 	for pillar in arena.living_pillars():
 		var dest: Vector3
-		if inbound_cover:
+		if ability_id == "solar_collapse":
+			dest = _SolarCollapseFx.cover_point_for_pillar(pillar, 0.45)
+			if dest == Vector3.ZERO:
+				dest = arena.cover_point_behind(pillar, threat, 0.45)
+		elif inbound_cover:
 			dest = arena.cover_point_inward(pillar, 0.45)
 		else:
 			dest = arena.cover_point_behind(pillar, threat, 0.45)
@@ -577,6 +685,9 @@ func _stop_warn_loop() -> void:
 
 
 func _play_warn_vfx() -> void:
+	if ability_id == "solar_collapse":
+		_SolarCollapseFx.spawn(source)
+		return
 	if warn_vfx == "":
 		return
 	var look := Vector3.ZERO
@@ -594,62 +705,78 @@ func _process(delta: float) -> void:
 		_play_warn_vfx()
 		_play_warn_sfx()
 	elapsed += delta
-	var pulse := 0.5 + 0.5 * sin(elapsed * 14.0)
-	if _mat is ShaderMaterial:
-		var sh := _mat as ShaderMaterial
-		if cover_visual:
-			sh.set_shader_parameter("fill_alpha", 0.03)
-			sh.set_shader_parameter("outline_alpha", 0.55)
-		else:
-			sh.set_shader_parameter("fill_alpha", 0.16 + 0.08 * pulse)
-			sh.set_shader_parameter("outline_alpha", GroundIndicator.OUTLINE_ALPHA)
-			sh.set_shader_parameter("outline_width", GroundIndicator.LINE_WIDTH)
-			sh.set_shader_parameter("color", Color(color.r, color.g, color.b, 1.0))
-	elif _mat is StandardMaterial3D:
-		var sm := _mat as StandardMaterial3D
-		var c := color
-		c.a = 0.16 + 0.08 * pulse if elapsed < warning_time else 0.22
-		sm.albedo_color = c
-	if _outline_mat:
-		var oc := color
-		oc.a = GroundIndicator.OUTLINE_ALPHA
-		_outline_mat.albedo_color = oc
+	if _heat != null and is_instance_valid(_heat) and source != null and is_instance_valid(source):
+		_heat.global_position = source.global_position + Vector3(0.0, 1.75, 0.0)
+	if ability_id == "solar_collapse":
+		_visual_wait -= delta
+		if _visual_wait <= 0.0:
+			_visual_wait = 1.0 / _VISUAL_HZ
+			var collapse_u := clampf(elapsed / maxf(warning_time, 0.001), 0.0, 1.0)
+			var collapse_arena := ArenaState.arena as Arena
+			if collapse_arena:
+				collapse_arena.set_solar_flare(collapse_u, true)
+	else:
+		_visual_wait -= delta
+		if _visual_wait <= 0.0:
+			_visual_wait = 1.0 / _VISUAL_HZ
+			var pulse := 0.5 + 0.5 * sin(elapsed * 14.0)
+			if _mat is ShaderMaterial:
+				var sh := _mat as ShaderMaterial
+				if cover_visual:
+					sh.set_shader_parameter("fill_alpha", 0.14 + 0.12 * pulse)
+					sh.set_shader_parameter("outline_alpha", 0.92)
+					sh.set_shader_parameter("outline_width", GroundIndicator.LINE_WIDTH)
+					sh.set_shader_parameter("color", Color(color.r, color.g, color.b, 1.0))
+				else:
+					sh.set_shader_parameter("fill_alpha", 0.16 + 0.08 * pulse)
+					sh.set_shader_parameter("outline_alpha", GroundIndicator.OUTLINE_ALPHA)
+					sh.set_shader_parameter("outline_width", GroundIndicator.LINE_WIDTH)
+					sh.set_shader_parameter("color", Color(color.r, color.g, color.b, 1.0))
+					if inner_radius > 0.05:
+						GroundIndicator.set_inner_hole(sh, inner_radius, radius)
+						sh.set_shader_parameter("fill_alpha", 0.22 + 0.10 * pulse)
+			elif _mat is StandardMaterial3D:
+				var sm := _mat as StandardMaterial3D
+				var c := color
+				c.a = 0.16 + 0.08 * pulse if elapsed < warning_time else 0.22
+				sm.albedo_color = c
+			if _outline_mat:
+				var oc := color
+				oc.a = GroundIndicator.OUTLINE_ALPHA
+				_outline_mat.albedo_color = oc
 	if cover_visual:
+		if source != null and is_instance_valid(source):
+			global_position = Vector3(source.global_position.x, 0.04, source.global_position.z)
 		_sync_wall_shadows()
-	if cover_visual and _ring_mesh:
+		_orient_pillar_shadows()
 		var u := clampf(elapsed / maxf(warning_time, 0.001), 0.0, 1.0)
 		var arena := ArenaState.arena as Arena
 		if arena:
 			arena.set_solar_flare(u, true)
-		var outer := lerpf(27.5, 7.2, u * u)
-		_ring_mesh.outer_radius = outer
-		_ring_mesh.inner_radius = maxf(outer - 2.15, 0.6)
-		if absf(outer - _last_outer) > 0.12:
-			_last_outer = outer
-			if _fill:
-				_fill.mesh = _make_annulus_mesh(outer, 28.0, 0.05)
-			if _wall:
-				_wall.mesh = _make_tube_mesh(outer, 1.15 + 0.7 * u)
-		if _fill_mat:
-			_fill_mat.albedo_color.a = 0.18 + 0.22 * u
-			_fill_mat.emission_energy_multiplier = 1.6 + 2.8 * u
+		var outer := lerpf(2.2, maxf(radius, 28.0), u * u)
+		GroundIndicator.set_circle_radius(_mesh, outer)
+		if _ring:
+			_ring.scale = Vector3(outer, 1.0, outer)
+		if _wall:
+			var wall_h := 1.15 + 0.7 * u
+			_wall.scale = Vector3(outer, wall_h, outer)
 		if _wall_mat:
 			_wall_mat.albedo_color.a = 0.45 + 0.4 * u
 			_wall_mat.emission_energy_multiplier = 5.0 + 6.0 * u
-		var intensity := 0.12 + 0.78 * u
+		var intensity := 0.5 + 0.45 * u
 		for mat in _shadow_mats:
 			if mat:
 				mat.albedo_color = Color(0.02, 0.04, 0.12, intensity)
 		for edge_mat in _shadow_edge_mats:
 			if edge_mat:
-				edge_mat.albedo_color = Color(1.0, 0.78, 0.22, 0.12 + 0.7 * u)
+				edge_mat.albedo_color = Color(1.0, 0.78, 0.22, 0.45 + 0.5 * u)
 				edge_mat.emission = Color(1.0, 0.62, 0.12)
 				edge_mat.emission_energy_multiplier = 1.4 + 6.5 * u
 		if _pull:
 			var pm := _pull.process_material as ParticleProcessMaterial
 			if pm:
-				pm.emission_ring_radius = outer
-				pm.emission_ring_inner_radius = maxf(outer - 1.6, 0.5)
+				pm.emission_ring_radius = maxf(outer * 0.22, 1.2)
+				pm.emission_ring_inner_radius = 0.35
 	if resolved:
 		return
 	if elapsed < warning_time:
@@ -657,8 +784,10 @@ func _process(delta: float) -> void:
 	resolved = true
 	_stop_warn_loop()
 	_apply_damage()
+	_pulse_corona_impact()
+	var linger := 0.38 if inner_radius > 0.05 else 0.18
 	var tw := create_tween()
-	tw.tween_interval(0.18)
+	tw.tween_interval(linger)
 	tw.tween_callback(func() -> void:
 		if hostile:
 			ArenaState.remove_telegraph(self)
@@ -688,9 +817,23 @@ func interrupt_cast() -> bool:
 	return true
 
 
+func _pulse_corona_impact() -> void:
+	if inner_radius <= 0.05:
+		return
+	if _heat != null and is_instance_valid(_heat):
+		_heat.visible = false
+	if _ring != null and is_instance_valid(_ring):
+		var pop := create_tween()
+		pop.set_pause_mode(Tween.TWEEN_PAUSE_STOP)
+		pop.tween_property(_ring, "scale", Vector3(1.28, 1.0, 1.28), 0.28)
+	if _corona_ring_mat:
+		_corona_ring_mat.emission_energy_multiplier = 8.5
+	SolarWashFx.play(0.12, 0.35)
+
+
 func _exit_tree() -> void:
 	_stop_warn_loop()
-	if not cover_visual:
+	if not cover_visual and ability_id != "solar_collapse":
 		return
 	var arena := ArenaState.arena as Arena
 	if arena:
@@ -703,50 +846,61 @@ func _apply_damage() -> void:
 		if cover_visual and source:
 			at = source.global_position
 		AudioManager.play_at(sfx_impact, at)
+	if ability_id == "solar_collapse":
+		SolarWashFx.play(0.1, 0.4)
 	if vfx_scene != "":
 		var vfx_at := global_position
 		if cover_visual and source:
 			vfx_at = source.global_position
 		AbilityFx.play_at(vfx_scene, vfx_at, vfx_cfg)
-		if cover_visual:
-			AbilityFx.play_at(AbilityFx.FIRE_AREA, vfx_at, {"area_radius": 10.0, "scale": 1.7, "lifetime": 2.2})
-			for i in 4:
-				var angle := TAU * float(i) / 4.0
-				var rim := Vector3(cos(angle) * 24.5, 1.0, sin(angle) * 24.5)
-				AbilityFx.play_at(AbilityFx.FIRE_CAST, rim, {
-					"look": -rim,
-					"scale": 1.35,
-					"lifetime": 1.5,
-				})
-	for u in ArenaState.units:
-		if u == null or not is_instance_valid(u) or u.is_dead:
-			continue
-		if u.is_structure:
-			continue
+	for u in ArenaState.units_near(global_position, _unit_query_radius(), false, true, true):
 		if source and u.team == source.team:
 			continue
 		if contains_point(u.global_position):
 			if _blocked_by_wall(u):
 				continue
-			if element != AbilityDef.Element.NONE or mark_damage_bonus > 0.0 or extra_elements.size() > 0:
-				u.receive_ability_hit(source, element, damage, mark_damage_bonus, extra_elements, false, true, true, overheat_cast_id, infusion_double, ability_id, combat_text_cast_id)
+			if element != AbilityDef.Element.NONE or extra_elements.size() > 0:
+				u.receive_ability_hit(source, element, damage, 0.0, extra_elements, false, true, true, overheat_cast_id, infusion_double, ability_id, combat_text_cast_id)
 			else:
 				u.apply_world_hit(damage, source, "hit", ability_id if not ability_id.is_empty() else "boss_hit", combat_text_cast_id)
+			if judgment_stacks > 0:
+				u.apply_judgment_brand(judgment_stacks)
 			if slow_duration > 0.0:
 				u.apply_slow(slow_percent, slow_duration)
 	_damage_walls()
+	if pillar_flat_damage > 0.0 or pillar_damage_ratio > 0.0:
+		_damage_pillars()
+
+
+func _unit_query_radius() -> float:
+	match shape:
+		Shape.LINE:
+			return sqrt(length * length + width * width * 0.25)
+		Shape.CONE:
+			return radius
+		_:
+			return radius
+
+
+func _damage_pillars() -> void:
+	var arena := ArenaState.arena as Arena
+	if arena == null:
+		return
+	for pillar in arena.living_pillars():
+		if not contains_point(pillar.global_position):
+			continue
+		var amount := pillar_flat_damage
+		if amount <= 0.0 and pillar_damage_ratio > 0.0:
+			amount = pillar.max_health * pillar_damage_ratio
+		if amount > 0.0:
+			pillar.take_damage(amount)
 	if pillar_damage_ratio > 0.0:
-		var arena := ArenaState.arena as Arena
-		if arena:
-			arena.damage_living_pillars(pillar_damage_ratio)
-			_chip_cover_walls(pillar_damage_ratio)
-	if linger_seconds > 0.0:
-		var linger_arena := ArenaState.arena as Arena
-		if linger_arena:
-			linger_arena.start_lingering_dawn(linger_seconds)
+		_chip_cover_walls(pillar_damage_ratio)
 
 
 func _blocked_by_wall(u: Unit) -> bool:
+	if inner_radius > 0.05:
+		return false
 	var arena := ArenaState.arena as Arena
 	if arena == null or u == null:
 		return false
@@ -755,6 +909,12 @@ func _blocked_by_wall(u: Unit) -> bool:
 		exclude.append(source.get_rid())
 	exclude.append(u.get_rid())
 	var from := global_position
+	if ability_id == "solar_collapse":
+		if _SolarCollapseFx.covers_world(u.global_position):
+			return true
+		if source:
+			from = source.global_position
+		return SpellWall.cover_occludes(from, u.global_position, exclude)
 	if inbound_cover:
 		return arena.has_radial_shadow(u.global_position, exclude)
 	if source and (los_from_source or shape == Shape.CONE or shape == Shape.LINE):
@@ -765,7 +925,7 @@ func _blocked_by_wall(u: Unit) -> bool:
 func _damage_walls() -> void:
 	if damage <= 0.0:
 		return
-	if inbound_cover and pillar_damage_ratio > 0.0:
+	if requires_cover and pillar_damage_ratio > 0.0:
 		return
 	for wall in SpellWall.living_walls():
 		if not wall.can_be_damaged_by(source):
@@ -794,8 +954,16 @@ func _chip_cover_walls(ratio: float) -> void:
 func _overlaps_wall(wall: SpellWall) -> bool:
 	if wall == null:
 		return false
-	if shape == Shape.CIRCLE and wall.range_to(global_position) <= radius:
-		return true
+	if shape == Shape.CIRCLE:
+		if inner_radius > 0.05:
+			if contains_point(wall.global_position):
+				return true
+			for p in wall.click_world_points():
+				if contains_point(p):
+					return true
+			return false
+		if wall.range_to(global_position) <= radius:
+			return true
 	if contains_point(wall.global_position):
 		return true
 	for p in wall.click_world_points():
@@ -805,6 +973,8 @@ func _overlaps_wall(wall: SpellWall) -> bool:
 
 
 func _wall_in_cover(wall: SpellWall) -> bool:
+	if inner_radius > 0.05:
+		return false
 	var arena := ArenaState.arena as Arena
 	if arena == null or wall == null:
 		return false

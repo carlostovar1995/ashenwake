@@ -1,7 +1,8 @@
 class_name UnitMovement
 extends Node
 
-const WAYPOINT_REACH := 0.32
+const WAYPOINT_REACH := 0.5
+const _REPATH_SEC := 0.28
 
 var current_speed: float = 0.0
 var has_target: bool = false
@@ -18,6 +19,9 @@ var _dash_to: Vector3 = Vector3.ZERO
 var _los_target: Node3D
 var _los_ok: bool = true
 var _los_left: float = 0.0
+var _los_skip_pillars: bool = false
+var _repath_cool: float = 0.0
+var _wrap_sign: float = 0.0
 
 @onready var unit: Unit = get_parent()
 @onready var agent: NavigationAgent3D = unit.get_node("NavigationAgent3D")
@@ -29,25 +33,15 @@ func _ready() -> void:
 	agent.avoidance_enabled = false
 
 
-func bind_map(_map: RID) -> void:
-	pass
-
-
 func set_target(pos: Vector3, min_move: float = 0.2) -> void:
 	var requested := Vector3(pos.x, unit.global_position.y, pos.z)
 	if has_target and _xz_dist_sq(requested, _requested_goal) < min_move * min_move:
 		return
+	if _xz_dist_sq(requested, _requested_goal) > 0.4 * 0.4:
+		_wrap_sign = 0.0
 	_requested_goal = requested
-	var arena := ArenaState.arena as Arena
-	if arena:
-		_path = arena.plan_movement_path(unit.global_position, requested, maxf(unit.radius, 0.4))
-	else:
-		_path = PackedVector3Array([requested])
-	if _path.is_empty():
-		_path = PackedVector3Array([requested])
-	_path_index = 0
-	goal = _path[_path.size() - 1]
-	has_target = true
+	_repath_cool = 0.0
+	_rebuild_path()
 
 
 func clear_target() -> void:
@@ -56,22 +50,30 @@ func clear_target() -> void:
 	_requested_goal = goal
 	_path.clear()
 	_path_index = 0
+	_repath_cool = 0.0
+	_wrap_sign = 0.0
 
 
 func is_dodging() -> bool:
 	return _dashing
 
 
-func start_dodge(dir: Vector3, distance: float, duration: float) -> void:
-	var flat := Vector3(dir.x, 0.0, dir.z)
-	if flat.length_squared() < 0.0001:
-		flat = unit.facing_dir()
-	flat = flat.normalized()
-	var dest := unit.global_position + flat * maxf(distance, 0.4)
-	dest.y = unit.global_position.y
-	var arena := ArenaState.arena as Arena
-	if arena:
-		dest = _dodge_stop_point(unit.global_position, dest, maxf(unit.radius, 0.4))
+func blink_to(dir: Vector3, distance: float) -> void:
+	stop_dodge()
+	var dest := _blink_dest(dir, distance)
+	var look := dest - unit.global_position
+	look.y = 0.0
+	if look.length_squared() > 0.0001:
+		unit.rotation.y = Basis.looking_at(look.normalized(), Vector3.UP).get_euler().y
+	unit.global_position = dest
+	unit.velocity = Vector3.ZERO
+	current_speed = 0.0
+	if unit.has_method("on_dodge_landed"):
+		unit.on_dodge_landed()
+
+
+func start_dodge(dir: Vector3, distance: float, duration: float) -> Vector3:
+	var dest := _blink_dest(dir, distance)
 	_dashing = true
 	_dash_duration = maxf(duration, 0.08)
 	_dash_left = _dash_duration
@@ -82,6 +84,20 @@ func start_dodge(dir: Vector3, distance: float, duration: float) -> void:
 	if look.length_squared() > 0.0001:
 		unit.rotation.y = Basis.looking_at(look.normalized(), Vector3.UP).get_euler().y
 	current_speed = look.length() / _dash_duration
+	return dest
+
+
+func _blink_dest(dir: Vector3, distance: float) -> Vector3:
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length_squared() < 0.0001:
+		flat = unit.facing_dir()
+	flat = flat.normalized()
+	var dest := unit.global_position + flat * maxf(distance, 0.4)
+	dest.y = unit.global_position.y
+	var arena := ArenaState.arena as Arena
+	if arena:
+		dest = _dodge_stop_point(unit.global_position, dest, maxf(unit.radius, 0.4))
+	return dest
 
 
 func stop_dodge() -> void:
@@ -117,43 +133,51 @@ func is_traveling() -> bool:
 	return has_target and not arrived()
 
 
-func has_line_of_sight(target: Node3D) -> bool:
+func has_line_of_sight(target: Node3D, skip_pillars: bool = false) -> bool:
 	if target == null or not is_instance_valid(target):
 		return false
-	if target == _los_target and _los_left > 0.0:
+	if target == _los_target and _los_left > 0.0 and skip_pillars == _los_skip_pillars:
 		return _los_ok
 	_los_target = target
+	_los_skip_pillars = skip_pillars
 	_los_left = 0.15
-	_los_ok = _ray_line_of_sight(target)
+	_los_ok = _ray_line_of_sight(target, skip_pillars)
 	return _los_ok
 
 
-func _ray_line_of_sight(target: Node3D) -> bool:
+func _ray_line_of_sight(target: Node3D, skip_pillars: bool = false) -> bool:
 	var space := unit.get_world_3d().direct_space_state
 	if space == null:
 		return true
 	var from := unit.global_position + Vector3(0.0, 1.0, 0.0)
 	var to := target.global_position + Vector3(0.0, 1.0, 0.0)
-	var q := PhysicsRayQueryParameters3D.create(from, to)
-	q.collision_mask = 1
 	var skip: Array[RID] = [unit.get_rid()]
 	if target is CollisionObject3D:
 		skip.append((target as CollisionObject3D).get_rid())
-	q.exclude = skip
-	var hit := space.intersect_ray(q)
-	if hit.is_empty():
-		return true
-	var collider: Object = hit.get("collider")
-	if collider == target:
-		return true
-	if collider is Node and (target.is_ancestor_of(collider) or collider.is_ancestor_of(target)):
-		return true
-	return false
+	for _i in 8:
+		var q := PhysicsRayQueryParameters3D.create(from, to)
+		q.collision_mask = 1
+		q.exclude = skip
+		var hit := space.intersect_ray(q)
+		if hit.is_empty():
+			return true
+		var collider: Object = hit.get("collider")
+		if collider == target:
+			return true
+		if collider is Node and (target.is_ancestor_of(collider) or collider.is_ancestor_of(target)):
+			return true
+		if skip_pillars and collider is ArenaPillar:
+			skip.append((collider as ArenaPillar).get_rid())
+			continue
+		return false
+	return true
 
 
 func tick(delta: float, want_move: bool, face_override: Vector3 = Vector3.ZERO) -> void:
 	if _los_left > 0.0:
 		_los_left = maxf(0.0, _los_left - delta)
+	if _repath_cool > 0.0:
+		_repath_cool = maxf(0.0, _repath_cool - delta)
 	if _dashing:
 		_tick_dodge(delta)
 		return
@@ -228,24 +252,81 @@ func _tick_dodge(delta: float) -> void:
 	if _dash_left <= 0.0:
 		_dashing = false
 		current_speed = 0.0
+		if unit != null and unit.has_method("on_dodge_landed"):
+			unit.on_dodge_landed()
 
 
 func _advance_path() -> void:
-	while _path_index < _path.size() - 1:
-		var waypoint := _path[_path_index]
-		if _xz_dist_sq(waypoint, unit.global_position) > WAYPOINT_REACH * WAYPOINT_REACH:
-			break
-		_path_index += 1
 	var arena := ArenaState.arena as Arena
+	var clearance := maxf(unit.radius, 0.4)
+	_pass_reached_waypoints()
+	if arena and _repath_cool <= 0.0 and _path_index < _path.size():
+		if not arena.movement_segment_clear(
+			unit.global_position,
+			_path[_path_index],
+			clearance + 0.04
+		):
+			if not _skip_blocked_waypoint(arena, clearance):
+				_rebuild_path()
+				_repath_cool = _REPATH_SEC
+				_pass_reached_waypoints()
 	while arena and _path_index < _path.size() - 1:
 		var later := _path[_path_index + 1]
 		if not arena.movement_segment_clear(
 			unit.global_position,
 			later,
-			maxf(unit.radius, 0.4) + 0.06
+			clearance + 0.04
 		):
 			break
+		var goal_pt := _path[_path.size() - 1]
+		var to_goal := Vector2(goal_pt.x - unit.global_position.x, goal_pt.z - unit.global_position.z)
+		var to_later := Vector2(later.x - unit.global_position.x, later.z - unit.global_position.z)
+		if to_goal.length_squared() > 0.04 and to_later.dot(to_goal) < 0.0:
+			break
 		_path_index += 1
+
+
+func _pass_reached_waypoints() -> void:
+	while _path_index < _path.size() - 1:
+		var waypoint := _path[_path_index]
+		if _xz_dist_sq(waypoint, unit.global_position) > WAYPOINT_REACH * WAYPOINT_REACH:
+			break
+		_path_index += 1
+
+
+func _skip_blocked_waypoint(arena: Arena, clearance: float) -> bool:
+	if _path_index >= _path.size() - 1:
+		return false
+	var later := _path[_path_index + 1]
+	if not arena.movement_segment_clear(unit.global_position, later, clearance + 0.04):
+		return false
+	var goal_pt := _path[_path.size() - 1]
+	var to_goal := Vector2(goal_pt.x - unit.global_position.x, goal_pt.z - unit.global_position.z)
+	var to_later := Vector2(later.x - unit.global_position.x, later.z - unit.global_position.z)
+	if to_goal.length_squared() > 0.04 and to_later.dot(to_goal) < 0.0:
+		return false
+	_path_index += 1
+	return true
+
+
+func _rebuild_path() -> void:
+	var arena := ArenaState.arena as Arena
+	var wrap_io: Array = [_wrap_sign]
+	if arena:
+		_path = arena.plan_movement_path(
+			unit.global_position,
+			_requested_goal,
+			maxf(unit.radius, 0.4),
+			wrap_io
+		)
+		_wrap_sign = float(wrap_io[0]) if wrap_io.size() > 0 else _wrap_sign
+	else:
+		_path = PackedVector3Array([_requested_goal])
+	if _path.is_empty():
+		_path = PackedVector3Array([_requested_goal])
+	_path_index = 0
+	goal = _path[_path.size() - 1]
+	has_target = true
 
 
 func _xz_dist_sq(a: Vector3, b: Vector3) -> float:
