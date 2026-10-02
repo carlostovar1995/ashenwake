@@ -1,0 +1,58 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" uid="uid://c4yqnx8u4vet8" path="res://assets/vfx/bases/bolt/Vfx/textures/Sparks.png" id="6_4ufbo"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_a82x1"]
+render_priority = 1
+transparency = 1
+blend_mode = 1
+cull_mode = 2
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = ExtResource("6_4ufbo")
+billboard_mode = 3
+billboard_keep_scale = true
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
+
+[sub_resource type="Gradient" id="Gradient_451s7"]
+colors = PackedColorArray(0.95544374, 0.95703125, 0.75382596, 1, 1, 0.9719238, 0.28125, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_02j6r"]
+gradient = SubResource("Gradient_451s7")
+
+[sub_resource type="Curve" id="Curve_bocop"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(0.09909909, 0.20224726), 0.0, 0.0, 0, 0, Vector2(0.13963965, 0.8988764), 0.0, 0.0, 0, 0, Vector2(0.23873875, 0.49438208), 0.0, 0.0, 0, 0, Vector2(0.2927928, 0.70786524), 0.0, 0.0, 0, 0, Vector2(0.33333334, 0.23595512), 0.0, 0.0, 0, 0, Vector2(0.4009009, 1), 0.0, 0.0, 0, 0, Vector2(0.5045045, 0.022471905), 0.0, 0.0, 0, 0, Vector2(0.5810811, 0.79775286), 0.0, 0.0, 0, 0, Vector2(0.72072077, 0.1460675), 0.0, 0.0, 0, 0, Vector2(0.7657658, 0.6966293), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 12
+
+[sub_resource type="CurveTexture" id="CurveTexture_3fiaa"]
+curve = SubResource("Curve_bocop")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_knq0q"]
+lifetime_randomness = 0.2
+emission_shape = 1
+emission_sphere_radius = 0.2
+direction = Vector3(0, 0, -1)
+spread = 25.0
+initial_velocity_max = 0.5
+gravity = Vector3(0, 0.25, 0)
+scale_min = 0.099999994
+scale_max = 0.19999999
+scale_curve = SubResource("CurveTexture_3fiaa")
+color_ramp = SubResource("GradientTexture1D_02j6r")
+
+[sub_resource type="QuadMesh" id="QuadMesh_3dfl8"]
+
+[node name="DivineMeteorPersist" type="Node3D" unique_id=173531293]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.01297164)
+
+[node name="Particles" type="GPUParticles3D" parent="." unique_id=1703047156 groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 0.99999994, 0, 0, 0, 0.99999994, 0, 3.9587594e-08, 0.01297164)
+material_override = SubResource("StandardMaterial3D_a82x1")
+cast_shadow = 0
+amount = 80
+lifetime = 2.0
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+process_material = SubResource("ParticleProcessMaterial_knq0q")
+draw_pass_1 = SubResource("QuadMesh_3dfl8")

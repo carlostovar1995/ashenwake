@@ -1,33 +1,132 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://bfwuirrt7xsj1"]
 
-[ext_resource type="Shader" path="res://assets/vfx/infusions/fire/fire_aura.tres" id="1_aura"]
-[ext_resource type="ArrayMesh" path="res://assets/vfx/infusions/fire/fire_aura.obj" id="2_aura_mesh"]
-[ext_resource type="Shader" path="res://assets/vfx/infusions/fire/fire_core.tres" id="3_core"]
-[ext_resource type="ArrayMesh" path="res://assets/vfx/infusions/fire/fire_core.obj" id="4_core_mesh"]
+[ext_resource type="ArrayMesh" uid="uid://tw1000n4qalq" path="res://assets/vfx/bases/bolt/Vfx/meshes/Standard Bolt Core.obj" id="1_vlkuy"]
+[ext_resource type="Texture2D" uid="uid://dbsrtsohkmgi8" path="res://assets/vfx/bases/bolt/Vfx/textures/FireBody.png" id="FireBody"]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_aura"]
+[sub_resource type="VisualShaderNodeFresnel" id="VisualShaderNodeFresnel_eo8m7"]
+default_input_values = [2, true, 3, 4.0]
+
+[sub_resource type="VisualShaderNodeColorConstant" id="VisualShaderNodeColorConstant_2d7qw"]
+constant = Color(3.2944162, 2.884463, 1.6965405, 1)
+
+[sub_resource type="Gradient" id="Gradient_osiy0"]
+offsets = PackedFloat32Array(0, 0.04597701, 1)
+colors = PackedColorArray(0, 0, 0, 1, 0.04597701, 0.04597701, 0.04597701, 1, 1, 1, 1, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_ltp4r"]
+gradient = SubResource("Gradient_osiy0")
+fill_from = Vector2(1, 0.51282054)
+fill_to = Vector2(1, 0.54273504)
+
+[sub_resource type="VisualShaderNodeTexture" id="VisualShaderNodeTexture_r5ukb"]
+texture = SubResource("GradientTexture2D_ltp4r")
+
+[sub_resource type="VisualShaderNodeClamp" id="VisualShaderNodeClamp_ghlgo"]
+
+[sub_resource type="VisualShaderNodeFloatOp" id="VisualShaderNodeFloatOp_xi40a"]
+operator = 2
+
+[sub_resource type="VisualShader" id="VisualShader_wua5q"]
+modes/cull = 2
+flags/unshaded = true
+flags/shadows_disabled = true
+flags/ambient_light_disabled = true
+flags/fog_disabled = true
+nodes/fragment/0/position = Vector2(1060, 120)
+nodes/fragment/2/node = SubResource("VisualShaderNodeFresnel_eo8m7")
+nodes/fragment/2/position = Vector2(380, 380)
+nodes/fragment/3/node = SubResource("VisualShaderNodeColorConstant_2d7qw")
+nodes/fragment/3/position = Vector2(860, 120)
+nodes/fragment/4/node = SubResource("VisualShaderNodeTexture_r5ukb")
+nodes/fragment/4/position = Vector2(620, 120)
+nodes/fragment/5/node = SubResource("VisualShaderNodeClamp_ghlgo")
+nodes/fragment/5/position = Vector2(680, 420)
+nodes/fragment/6/node = SubResource("VisualShaderNodeFloatOp_xi40a")
+nodes/fragment/6/position = Vector2(860, 220)
+nodes/fragment/connections = PackedInt32Array(3, 0, 0, 0, 5, 0, 6, 1, 4, 0, 6, 0, 6, 0, 0, 1, 2, 0, 5, 0)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_m5xg8"]
 render_priority = 0
-shader = ExtResource("1_aura")
+shader = SubResource("VisualShader_wua5q")
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_core"]
+[sub_resource type="VisualShaderNodeColorConstant" id="VisualShaderNodeColorConstant_020f2"]
+constant = Color(4.415934, 1.7736998, 0, 1)
+
+[sub_resource type="Gradient" id="Gradient_mofvr"]
+colors = PackedColorArray(0.029656649, 0.029656649, 0.029656649, 1, 1, 1, 1, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_rga57"]
+gradient = SubResource("Gradient_mofvr")
+fill_from = Vector2(1, 0.6837607)
+
+[sub_resource type="VisualShaderNodeTexture" id="VisualShaderNodeTexture_5ppv0"]
+texture = SubResource("GradientTexture2D_rga57")
+texture_type = 1
+
+[sub_resource type="VisualShaderNodeTexture" id="VisualShaderNodeTexture_3kqur"]
+expanded_output_ports = [0]
+texture = ExtResource("FireBody")
+texture_type = 1
+
+[sub_resource type="VisualShaderNodeFloatOp" id="VisualShaderNodeFloatOp_ilely"]
+output_port_for_preview = 0
+operator = 1
+
+[sub_resource type="VisualShaderNodeClamp" id="VisualShaderNodeClamp_ol8ui"]
+
+[sub_resource type="VisualShaderNodeUVFunc" id="VisualShaderNodeUVFunc_1mos1"]
+
+[sub_resource type="VisualShaderNodeInput" id="VisualShaderNodeInput_v66mq"]
+input_name = "time"
+
+[sub_resource type="VisualShaderNodeVectorOp" id="VisualShaderNodeVectorOp_nh6ml"]
+default_input_values = [0, Vector2(0, 0), 1, Vector2(0.1, 3)]
+op_type = 0
+operator = 2
+
+[sub_resource type="VisualShader" id="VisualShader_bc7bk"]
+modes/cull = 2
+flags/unshaded = true
+flags/shadows_disabled = true
+flags/ambient_light_disabled = true
+flags/fog_disabled = true
+nodes/fragment/0/position = Vector2(720, 20)
+nodes/fragment/3/node = SubResource("VisualShaderNodeTexture_5ppv0")
+nodes/fragment/3/position = Vector2(-180, 220)
+nodes/fragment/4/node = SubResource("VisualShaderNodeTexture_3kqur")
+nodes/fragment/4/position = Vector2(80, 20)
+nodes/fragment/5/node = SubResource("VisualShaderNodeFloatOp_ilely")
+nodes/fragment/5/position = Vector2(320, 280)
+nodes/fragment/6/node = SubResource("VisualShaderNodeClamp_ol8ui")
+nodes/fragment/6/position = Vector2(500, 280)
+nodes/fragment/7/node = SubResource("VisualShaderNodeUVFunc_1mos1")
+nodes/fragment/7/position = Vector2(-180, 20)
+nodes/fragment/8/node = SubResource("VisualShaderNodeInput_v66mq")
+nodes/fragment/8/position = Vector2(-700, 20)
+nodes/fragment/9/node = SubResource("VisualShaderNodeVectorOp_nh6ml")
+nodes/fragment/9/position = Vector2(-380, 20)
+nodes/fragment/10/node = SubResource("VisualShaderNodeColorConstant_020f2")
+nodes/fragment/10/position = Vector2(360, 20)
+nodes/fragment/connections = PackedInt32Array(3, 0, 5, 1, 8, 0, 9, 0, 9, 0, 7, 2, 10, 0, 0, 0, 4, 1, 5, 0, 7, 0, 4, 0, 5, 0, 6, 0, 6, 0, 0, 1)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_4ufbo"]
 render_priority = 0
-shader = ExtResource("3_core")
+shader = SubResource("VisualShader_bc7bk")
 
-[node name="FireBoltBody" type="Node3D"]
+[node name="FireBoltBody" type="Node3D" unique_id=915930786]
 
-[node name="FireAura" type="MeshInstance3D" parent="." groups=["fx_body", "fx_aura"]]
-material_override = SubResource("ShaderMaterial_aura")
+[node name="FireCore" type="MeshInstance3D" parent="." unique_id=150674608 groups=["fx_body", "fx_core"]]
+material_override = SubResource("ShaderMaterial_m5xg8")
 cast_shadow = 0
-mesh = ExtResource("2_aura_mesh")
+mesh = ExtResource("1_vlkuy")
 
-[node name="FireCore" type="MeshInstance3D" parent="." groups=["fx_body", "fx_core"]]
-material_override = SubResource("ShaderMaterial_core")
+[node name="FireAura" type="MeshInstance3D" parent="." unique_id=487377099 groups=["fx_aura", "fx_body"]]
+material_override = SubResource("ShaderMaterial_4ufbo")
 cast_shadow = 0
-mesh = ExtResource("4_core_mesh")
+mesh = ExtResource("1_vlkuy")
 
-[node name="OmniLight3D" type="OmniLight3D" parent="." groups=["fx_body"]]
+[node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=889151157 groups=["fx_body"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.335529e-09, 0)
 light_color = Color(1, 0.46001357, 0.0669049, 1)
 light_energy = 5.0
 omni_range = 3.0
-shadow_enabled = false

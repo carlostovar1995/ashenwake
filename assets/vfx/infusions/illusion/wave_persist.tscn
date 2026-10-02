@@ -1,0 +1,107 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/vfx/bases/wave/Vfx/meshes/sm_hadouken3.obj" id="1_vlkuy"]
+[ext_resource type="Shader" uid="uid://c804y7kp0m1m2" path="res://assets/vfx/bases/bolt/Vfx/shaders/StandardCore.tres" id="12_sa27u"]
+[ext_resource type="Shader" uid="uid://8lkiyeq6hqiq" path="res://assets/vfx/bases/bolt/Vfx/shaders/Sparkles.tres" id="13_mqxr3"]
+[ext_resource type="Texture2D" uid="uid://bifqquyjua3e2" path="res://assets/vfx/bases/bolt/Vfx/textures/star_07.png" id="28_q1bh0"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_60o10"]
+render_priority = 0
+shader = ExtResource("13_mqxr3")
+shader_parameter/Texture2DParameter = ExtResource("28_q1bh0")
+
+[sub_resource type="Curve" id="Curve_a6srm"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(0.79904306, 1), 0.0, 0.0, 0, 0, Vector2(1, 0), -3.4755058, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="CurveTexture" id="CurveTexture_e17ei"]
+curve = SubResource("Curve_a6srm")
+
+[sub_resource type="Gradient" id="Gradient_e17ei"]
+offsets = PackedFloat32Array(0.010928961, 1)
+colors = PackedColorArray(1, 0, 1, 1, 1, 1, 1, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_ulp6l"]
+gradient = SubResource("Gradient_e17ei")
+
+[sub_resource type="Curve" id="Curve_dwbkj"]
+_data = [Vector2(0, 1), 0.0, 0.51966274, 0, 0, Vector2(1, 0), -0.46192354, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="CurveTexture_tyjmu"]
+curve = SubResource("Curve_dwbkj")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_da1wa"]
+emission_shape_scale = Vector3(0.2, 0.1, 0.2)
+emission_shape = 2
+emission_sphere_radius = 1.0
+angle_min = -179.99998
+angle_max = 180.00002
+direction = Vector3(1, 1, 1)
+initial_velocity_min = 0.099999994
+initial_velocity_max = 0.19999999
+angular_velocity_min = -1.6093254e-05
+angular_velocity_max = 59.99998
+gravity = Vector3(0, 0, 0)
+scale_min = 0.099999994
+scale_max = 0.19999999
+scale_curve = SubResource("CurveTexture_tyjmu")
+color = Color(1.8247963, 1.8247963, 1.8247963, 1)
+color_ramp = SubResource("GradientTexture1D_ulp6l")
+alpha_curve = SubResource("CurveTexture_e17ei")
+
+[sub_resource type="QuadMesh" id="QuadMesh_fk1k4"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wchij"]
+render_priority = 0
+shader = ExtResource("12_sa27u")
+shader_parameter/Outter_Color = Color(1, 0.6901961, 0.9843137, 0.5882353)
+shader_parameter/Inner_Color = Color(1, 0.9529412, 0.99607843, 0.5882353)
+shader_parameter/Opacity = 1.0
+
+[sub_resource type="Curve" id="Curve_khb2l"]
+_data = [Vector2(0, 0.30337083), 0.0, -0.2683787, 0, 0, Vector2(1, 0), -0.24085277, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="CurveTexture_xn74c"]
+curve = SubResource("Curve_khb2l")
+
+[sub_resource type="Gradient" id="Gradient_ulp6l"]
+colors = PackedColorArray(0.99999994, 0.29527423, 0.9938007, 1, 1, 0.74278134, 0.99315196, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_1ujug"]
+gradient = SubResource("Gradient_ulp6l")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_mlhxq"]
+direction = Vector3(0, 0, 1)
+spread = 0.0
+initial_velocity_min = -2.0
+initial_velocity_max = -2.0
+gravity = Vector3(0, 0, 0)
+scale_min = 0.79999995
+scale_curve = SubResource("CurveTexture_tyjmu")
+color_ramp = SubResource("GradientTexture1D_1ujug")
+alpha_curve = SubResource("CurveTexture_xn74c")
+
+[node name="IllusionWavePersist" type="Node3D" unique_id=693146552]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.01297164)
+
+[node name="Sparkles" type="GPUParticles3D" parent="." unique_id=1359407504 groups=["fx_persist"]]
+material_override = SubResource("ShaderMaterial_60o10")
+cast_shadow = 0
+amount = 150
+amount_ratio = 0.25
+lifetime = 3.0
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+process_material = SubResource("ParticleProcessMaterial_da1wa")
+draw_pass_1 = SubResource("QuadMesh_fk1k4")
+
+[node name="IllusionCore3" type="GPUParticles3D" parent="." unique_id=1329637684 groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.0033395886)
+material_override = SubResource("ShaderMaterial_wchij")
+cast_shadow = 0
+amount = 500
+lifetime = 0.2
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+process_material = SubResource("ParticleProcessMaterial_mlhxq")
+draw_pass_1 = ExtResource("1_vlkuy")

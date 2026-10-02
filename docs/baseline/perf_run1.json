@@ -1,0 +1,255 @@
+{
+	"avg_fps": 42.045,
+	"casts": {
+		"Bulwark": {
+			"0:wall": 11,
+			"1:nova": 11,
+			"2:aoe_explosion": 11,
+			"3:bolt": 11,
+			"4:iron_rampage": 11,
+			"5:hearthguard": 10
+		},
+		"Ember": {
+			"0:bolt": 4,
+			"1:missiles": 4,
+			"2:ground_aoe": 4,
+			"3:meteor": 4,
+			"4:pyre": 4,
+			"5:ashen_crucible": 4
+		},
+		"Hex": {
+			"0:ray": 3,
+			"1:bolt": 3,
+			"2:missiles": 3,
+			"3:meteor": 3,
+			"4:ashen_crucible": 3,
+			"5:pyre": 3
+		},
+		"Mend": {
+			"0:target": 16,
+			"1:aura": 8,
+			"2:ground_aoe": 16,
+			"3:wave": 16,
+			"4:worldbloom": 16,
+			"5:eye_of_tempest": 16
+		},
+		"Vex": {
+			"0:wave": 12,
+			"1:nova": 11,
+			"2:aoe_explosion": 11,
+			"3:target": 11,
+			"4:eye_of_tempest": 11,
+			"5:worldbloom": 11
+		}
+	},
+	"draw_calls": {
+		"max": 1878.0,
+		"mean": 1154.881,
+		"p50": 1146.0,
+		"p95": 1544.0,
+		"p99": 1636.0
+	},
+	"frame_ms": {
+		"max": 244.96,
+		"mean": 23.784,
+		"p50": 14.832,
+		"p95": 82.179,
+		"p99": 149.286
+	},
+	"frames_over_16_7ms": 513,
+	"frames_over_33_3ms": 226,
+	"hitches_over_100ms": [
+		{
+			"at_s": 2.714,
+			"ms": 179.798
+		},
+		{
+			"at_s": 5.816,
+			"ms": 155.727
+		},
+		{
+			"at_s": 6.026,
+			"ms": 121.018
+		},
+		{
+			"at_s": 9.267,
+			"ms": 171.066
+		},
+		{
+			"at_s": 12.643,
+			"ms": 236.697
+		},
+		{
+			"at_s": 12.768,
+			"ms": 124.411
+		},
+		{
+			"at_s": 15.736,
+			"ms": 105.26
+		},
+		{
+			"at_s": 15.85,
+			"ms": 113.858
+		},
+		{
+			"at_s": 16.041,
+			"ms": 190.945
+		},
+		{
+			"at_s": 16.146,
+			"ms": 105.304
+		},
+		{
+			"at_s": 18.718,
+			"ms": 118.98
+		},
+		{
+			"at_s": 18.849,
+			"ms": 130.772
+		}
+	],
+	"live_counts": {
+		"nodes": {
+			"first": 6776.0,
+			"last": 6603.0,
+			"max": 6938.0,
+			"mean": 6695.889,
+			"slope_per_s": -0.062
+		},
+		"objects": {
+			"first": 14973.0,
+			"last": 15501.0,
+			"max": 16159.0,
+			"mean": 15335.824,
+			"slope_per_s": 25.781
+		},
+		"orphan_nodes": {
+			"first": 0.0,
+			"last": 0.0,
+			"max": 0.0,
+			"mean": 0.0,
+			"slope_per_s": 0.0
+		},
+		"particle_budget": {
+			"first": 550.0,
+			"last": 420.0,
+			"max": 6766.0,
+			"mean": 862.546,
+			"slope_per_s": 22.314
+		},
+		"particle_systems": {
+			"first": 13.0,
+			"last": 14.0,
+			"max": 99.0,
+			"mean": 18.148,
+			"slope_per_s": 0.424
+		},
+		"projectiles": {
+			"first": 2.0,
+			"last": 2.0,
+			"max": 14.0,
+			"mean": 2.361,
+			"slope_per_s": 0.065
+		},
+		"resources": {
+			"first": 1882.0,
+			"last": 1882.0,
+			"max": 1882.0,
+			"mean": 1882.0,
+			"slope_per_s": 0.0
+		},
+		"spell_walls": {
+			"first": 1.0,
+			"last": 1.0,
+			"max": 1.0,
+			"mean": 1.0,
+			"slope_per_s": 0.0
+		},
+		"static_memory_mb": {
+			"first": 233.077,
+			"last": 245.095,
+			"max": 247.951,
+			"mean": 243.252,
+			"slope_per_s": 0.356
+		},
+		"telegraphs": {
+			"first": 0.0,
+			"last": 0.0,
+			"max": 0.0,
+			"mean": 0.0,
+			"slope_per_s": 0.0
+		},
+		"units": {
+			"first": 71.0,
+			"last": 71.0,
+			"max": 71.0,
+			"mean": 71.0,
+			"slope_per_s": 0.0
+		},
+		"video_memory_mb": {
+			"first": 486.131,
+			"last": 483.82,
+			"max": 495.073,
+			"mean": 486.036,
+			"slope_per_s": 0.009
+		}
+	},
+	"meta": {
+		"adapter": "NVIDIA GeForce RTX 4060 Ti",
+		"casters": 5,
+		"chase_dummies_requested": 60,
+		"frames_measured": 1263,
+		"godot": "4.7.2-stable",
+		"measure_seconds": 30.0,
+		"os": "Windows",
+		"renderer": "forward_plus",
+		"seed": 1337,
+		"vsync": "disabled",
+		"warmup_seconds": 6.0,
+		"window": "1600x900"
+	},
+	"primitives": {
+		"max": 5370825.0,
+		"mean": 2434466.33,
+		"p50": 2310709.0,
+		"p95": 3920030.0,
+		"p99": 4427601.0
+	},
+	"render_cpu_ms": {
+		"max": 4.403,
+		"mean": 1.173,
+		"p50": 1.047,
+		"p95": 1.992,
+		"p99": 3.043
+	},
+	"render_gpu_ms": {
+		"max": 24.31,
+		"mean": 3.821,
+		"p50": 2.976,
+		"p95": 9.342,
+		"p99": 13.022
+	},
+	"render_objects": {
+		"max": 7527.0,
+		"mean": 3092.61,
+		"p50": 3151.0,
+		"p95": 4932.0,
+		"p99": 5551.0
+	},
+	"script_physics_ms_worst_per_second": {
+		"max": 167.345,
+		"mean": 63.495,
+		"p50": 43.693,
+		"p95": 157.842,
+		"p99": 159.881
+	},
+	"script_process_ms_worst_per_second": {
+		"max": 37.057,
+		"mean": 16.602,
+		"p50": 15.977,
+		"p95": 20.852,
+		"p99": 25.401
+	},
+	"walls_live_peak": 1,
+	"walls_spawned_total": 11
+}

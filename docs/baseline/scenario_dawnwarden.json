@@ -1,0 +1,581 @@
+{
+	"digest": "dfc4ef2f2416b88171bca3909b99151748949068979c2a8741962bebe6bc8d74",
+	"meta": {
+		"boss": "dawnwarden",
+		"godot": "4.7.2-stable",
+		"phase2_forced": true,
+		"physics_ticks": 3600,
+		"seed": 1337,
+		"sim_seconds": 60.0,
+		"wall_seconds": 7.8
+	},
+	"results": {
+		"casts": {
+			"Bulwark": {
+				"0:wall": 2,
+				"1:nova": 6,
+				"2:aoe_explosion": 5,
+				"3:bolt": 19,
+				"4:iron_rampage": 3,
+				"5:hearthguard": 3
+			},
+			"Ember": {
+				"0:bolt": 17,
+				"1:missiles": 10,
+				"2:ground_aoe": 3,
+				"3:meteor": 2,
+				"4:pyre": 2,
+				"5:ashen_crucible": 4
+			},
+			"Hex": {
+				"0:ray": 5,
+				"1:bolt": 12,
+				"2:missiles": 6,
+				"3:meteor": 2,
+				"4:ashen_crucible": 3,
+				"5:pyre": 2
+			},
+			"Mend": {
+				"0:target": 13,
+				"1:aura": 11,
+				"2:ground_aoe": 6,
+				"3:wave": 6,
+				"4:worldbloom": 3,
+				"5:eye_of_tempest": 4
+			},
+			"Vex": {
+				"0:wave": 7,
+				"1:nova": 5,
+				"2:aoe_explosion": 5,
+				"3:target": 6,
+				"4:eye_of_tempest": 3,
+				"5:worldbloom": 4
+			}
+		},
+		"damage": {
+			"Bulwark": {
+				"afflicted": {
+					"hits": 19,
+					"total": 28.0
+				},
+				"aoe_explosion": {
+					"hits": 5,
+					"total": 1332.8
+				},
+				"bolt": {
+					"hits": 19,
+					"total": 1087.07
+				},
+				"burn": {
+					"hits": 7,
+					"total": 133.16
+				},
+				"nova": {
+					"hits": 6,
+					"total": 1021.02
+				},
+				"shock_chain": {
+					"hits": 30,
+					"total": 558.98
+				}
+			},
+			"Dawnwarden": {
+				"auto": {
+					"hits": 25,
+					"total": 3917.92
+				},
+				"cone_cleave": {
+					"hits": 2,
+					"total": 280.39
+				},
+				"judgment": {
+					"hits": 46,
+					"total": 554.21
+				},
+				"pillar_shot": {
+					"hits": 32,
+					"total": 374.42
+				},
+				"sunspot": {
+					"hits": 9,
+					"total": 1634.01
+				}
+			},
+			"Ember": {
+				"ashen_crucible": {
+					"hits": 4,
+					"total": 120.0
+				},
+				"ashen_wake": {
+					"hits": 2,
+					"total": 15.0
+				},
+				"bolt": {
+					"hits": 17,
+					"total": 999.6
+				},
+				"burn": {
+					"hits": 50,
+					"total": 1022.6
+				},
+				"ground_aoe": {
+					"hits": 45,
+					"total": 1102.5
+				},
+				"meteor": {
+					"hits": 2,
+					"total": 1400.0
+				},
+				"missiles": {
+					"hits": 171,
+					"total": 1737.6
+				},
+				"pyre": {
+					"hits": 2,
+					"total": 1862.06
+				},
+				"shock_chain": {
+					"hits": 103,
+					"total": 763.62
+				}
+			},
+			"Hex": {
+				"afflicted": {
+					"hits": 30,
+					"total": 33.0
+				},
+				"ashen_crucible": {
+					"hits": 2,
+					"total": 60.0
+				},
+				"bolt": {
+					"hits": 12,
+					"total": 504.0
+				},
+				"meteor": {
+					"hits": 2,
+					"total": 1000.0
+				},
+				"missiles": {
+					"hits": 108,
+					"total": 833.6
+				},
+				"pyre": {
+					"hits": 2,
+					"total": 1057.99
+				},
+				"ray": {
+					"hits": 45,
+					"total": 2400.0
+				},
+				"shock_chain": {
+					"hits": 88,
+					"total": 699.2
+				}
+			},
+			"Mend": {
+				"shock_chain": {
+					"hits": 6,
+					"total": 50.0
+				},
+				"wave": {
+					"hits": 6,
+					"total": 368.0
+				}
+			},
+			"Vex": {
+				"aoe_explosion": {
+					"hits": 4,
+					"total": 980.0
+				},
+				"shock_chain": {
+					"hits": 10,
+					"total": 179.31
+				},
+				"wave": {
+					"hits": 7,
+					"total": 256.0
+				}
+			}
+		},
+		"damage_taken": {
+			"Bulwark": {
+				"hits": 34,
+				"total": 802.1
+			},
+			"Dawnwarden": {
+				"hits": 804,
+				"total": 21605.11
+			},
+			"Ember": {
+				"hits": 32,
+				"total": 4128.71
+			},
+			"Hex": {
+				"hits": 6,
+				"total": 588.89
+			},
+			"Mend": {
+				"hits": 10,
+				"total": 417.27
+			},
+			"Vex": {
+				"hits": 32,
+				"total": 823.99
+			}
+		},
+		"deaths": {},
+		"final_health": {
+			"Bulwark": 1000000.0,
+			"Ember": 1000000.0,
+			"Hex": 1000000.0,
+			"Mend": 1000000.0,
+			"Vex": 1000000.0
+		},
+		"final_threat": {
+			"Bulwark": 6871.97,
+			"Ember": 9022.99,
+			"Hex": 6587.78,
+			"Mend": 598.8,
+			"Vex": 2134.72
+		},
+		"healing": {
+			"Bulwark": {
+				"anointed": {
+					"hits": 9,
+					"total": 170.14
+				}
+			},
+			"Mend": {
+				"aura": {
+					"hits": 90,
+					"total": 1400.73
+				},
+				"ground_aoe": {
+					"hits": 66,
+					"total": 371.44
+				},
+				"rejuvenation": {
+					"hits": 67,
+					"total": 3100.49
+				},
+				"target": {
+					"hits": 1,
+					"total": 32.0
+				},
+				"worldbloom": {
+					"hits": 1,
+					"total": 132.0
+				},
+				"worldroot": {
+					"hits": 3,
+					"total": 115.34
+				}
+			},
+			"Vex": {
+				"nova": {
+					"hits": 9,
+					"total": 1227.85
+				},
+				"rejuvenation": {
+					"hits": 3,
+					"total": 40.43
+				},
+				"worldbloom": {
+					"hits": 2,
+					"total": 38.14
+				},
+				"worldroot": {
+					"hits": 3,
+					"total": 132.4
+				}
+			}
+		},
+		"never_cast": [],
+		"outcome": "",
+		"stack_peaks": {
+			"Bulwark:chill": 0,
+			"Bulwark:shock": 0,
+			"Dawnwarden:chill": 26,
+			"Dawnwarden:shock": 100,
+			"Ember:chill": 0,
+			"Ember:shock": 0,
+			"Hex:chill": 0,
+			"Hex:shock": 0,
+			"Mend:chill": 0,
+			"Mend:shock": 0,
+			"Vex:chill": 0,
+			"Vex:shock": 0
+		},
+		"statuses": {
+			"Bulwark": {
+				"buff:frost_path": {
+					"applications": 3,
+					"max_stacks": 1
+				},
+				"buff:holy_blessing": {
+					"applications": 1,
+					"max_stacks": 1
+				},
+				"buff:rejuvenation": {
+					"applications": 8,
+					"max_stacks": 12
+				},
+				"buff:sanctuary_dr": {
+					"applications": 3,
+					"max_stacks": 1
+				},
+				"buff:ward": {
+					"applications": 3,
+					"max_stacks": 1
+				},
+				"debuff:protection_hold": {
+					"applications": 2,
+					"max_stacks": 1
+				},
+				"debuff:solar_brand": {
+					"applications": 1,
+					"max_stacks": 187
+				}
+			},
+			"Dawnwarden": {
+				"buff:burn": {
+					"applications": 5,
+					"max_stacks": 1
+				},
+				"buff:rooted": {
+					"applications": 3,
+					"max_stacks": 1
+				},
+				"buff:slow": {
+					"applications": 3,
+					"max_stacks": 1
+				},
+				"debuff:afflicted": {
+					"applications": 3,
+					"max_stacks": 13
+				},
+				"debuff:burn": {
+					"applications": 5,
+					"max_stacks": 1
+				},
+				"debuff:chilled": {
+					"applications": 5,
+					"max_stacks": 26
+				},
+				"debuff:shocked": {
+					"applications": 1,
+					"max_stacks": 100
+				},
+				"debuff:slow": {
+					"applications": 3,
+					"max_stacks": 1
+				}
+			},
+			"Ember": {
+				"buff:holy_blessing": {
+					"applications": 1,
+					"max_stacks": 1
+				},
+				"buff:recast": {
+					"applications": 2,
+					"max_stacks": 1
+				},
+				"buff:rejuvenation": {
+					"applications": 8,
+					"max_stacks": 12
+				},
+				"buff:ward": {
+					"applications": 10,
+					"max_stacks": 1
+				},
+				"debuff:solar_brand": {
+					"applications": 1,
+					"max_stacks": 18
+				}
+			},
+			"Hex": {
+				"buff:holy_blessing": {
+					"applications": 1,
+					"max_stacks": 1
+				},
+				"buff:recast": {
+					"applications": 2,
+					"max_stacks": 1
+				},
+				"buff:rejuvenation": {
+					"applications": 3,
+					"max_stacks": 12
+				},
+				"buff:ward": {
+					"applications": 3,
+					"max_stacks": 1
+				},
+				"debuff:solar_brand": {
+					"applications": 1,
+					"max_stacks": 26
+				}
+			},
+			"Mend": {
+				"buff:aura_1": {
+					"applications": 11,
+					"max_stacks": 1
+				},
+				"buff:holy_blessing": {
+					"applications": 1,
+					"max_stacks": 1
+				},
+				"buff:recast": {
+					"applications": 3,
+					"max_stacks": 1
+				},
+				"buff:rejuvenation": {
+					"applications": 7,
+					"max_stacks": 12
+				},
+				"buff:slow": {
+					"applications": 2,
+					"max_stacks": 1
+				},
+				"buff:ward": {
+					"applications": 2,
+					"max_stacks": 1
+				},
+				"debuff:slow": {
+					"applications": 2,
+					"max_stacks": 1
+				},
+				"debuff:solar_brand": {
+					"applications": 1,
+					"max_stacks": 72
+				}
+			},
+			"Vex": {
+				"buff:holy_blessing": {
+					"applications": 4,
+					"max_stacks": 1
+				},
+				"buff:recast": {
+					"applications": 3,
+					"max_stacks": 1
+				},
+				"buff:rejuvenation": {
+					"applications": 7,
+					"max_stacks": 12
+				},
+				"buff:slow": {
+					"applications": 2,
+					"max_stacks": 1
+				},
+				"buff:ward": {
+					"applications": 3,
+					"max_stacks": 1
+				},
+				"debuff:slow": {
+					"applications": 2,
+					"max_stacks": 1
+				},
+				"debuff:solar_brand": {
+					"applications": 1,
+					"max_stacks": 128
+				}
+			}
+		},
+		"telegraphs": {
+			"CIRCLE:solar_collapse": 1,
+			"CIRCLE:solar_corona": 1,
+			"CIRCLE:sunspot": 4,
+			"CONE:cone_cleave": 1
+		},
+		"threat_checkpoints": [
+			{
+				"boss_health": 999995712.0,
+				"holder": "Ember",
+				"t": 10.0,
+				"threat": {
+					"Bulwark": 937.59,
+					"Ember": 2515.43,
+					"Hex": 774.84,
+					"Mend": 40.15,
+					"Vex": 318.95
+				}
+			},
+			{
+				"boss_health": 999992030.0,
+				"holder": "Ember",
+				"t": 20.0,
+				"threat": {
+					"Bulwark": 1838.72,
+					"Ember": 3280.02,
+					"Hex": 2599.69,
+					"Mend": 118.84,
+					"Vex": 739.31
+				}
+			},
+			{
+				"boss_health": 999989434.0,
+				"holder": "Ember",
+				"t": 30.0,
+				"threat": {
+					"Bulwark": 2942.69,
+					"Ember": 4082.48,
+					"Hex": 3536.32,
+					"Mend": 337.37,
+					"Vex": 1038.84
+				}
+			},
+			{
+				"boss_health": 489997530.0,
+				"holder": "Ember",
+				"t": 40.0,
+				"threat": {
+					"Bulwark": 4801.29,
+					"Ember": 5289.95,
+					"Hex": 4488.44,
+					"Mend": 447.14,
+					"Vex": 1619.13
+				}
+			},
+			{
+				"boss_health": 489992047.0,
+				"holder": "Ember",
+				"t": 50.0,
+				"threat": {
+					"Bulwark": 6072.28,
+					"Ember": 8159.69,
+					"Hex": 5987.31,
+					"Mend": 532.45,
+					"Vex": 2096.32
+				}
+			},
+			{
+				"boss_health": 489990094.0,
+				"holder": "Ember",
+				"t": 60.0,
+				"threat": {
+					"Bulwark": 6871.97,
+					"Ember": 9022.99,
+					"Hex": 6587.78,
+					"Mend": 598.8,
+					"Vex": 2134.72
+				}
+			},
+			{
+				"boss_health": 489990094.0,
+				"holder": "Ember",
+				"t": 60.0,
+				"threat": {
+					"Bulwark": 6871.97,
+					"Ember": 9022.99,
+					"Hex": 6587.78,
+					"Mend": 598.8,
+					"Vex": 2134.72
+				}
+			}
+		],
+		"units_alive": 6,
+		"walls_spawned": {
+			"Bulwark": 2
+		}
+	}
+}

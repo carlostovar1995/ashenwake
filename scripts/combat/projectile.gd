@@ -142,10 +142,6 @@ static func _make(p_source: Unit, origin: Vector3, cfg: Dictionary, auth: bool) 
 	var used_vfx := false
 	var wave_ab := p_source._ability_def(p.ability_id) if p_source != null else null
 	var is_wave := AbilityDef.matches_base(p.ability_id, "wave") or (wave_ab != null and wave_ab.delivery == AbilityDef.Delivery.WAVE)
-	if is_wave:
-		var pal := SpellBaseFx.palette(wave_ab) if wave_ab != null else {"core": Color(0.62, 0.82, 1.0), "rim": Color(0.32, 0.55, 0.95)}
-		WaveFx.attach(p, p.radius * 2.0, pal.core, pal.rim)
-		used_vfx = true
 	var parent: Node = ArenaState.arena if ArenaState.arena else p_source.get_tree().current_scene
 	parent.add_child(p)
 	p.global_position = origin
@@ -154,7 +150,11 @@ static func _make(p_source: Unit, origin: Vector3, cfg: Dictionary, auth: bool) 
 		if absf(p.direction.dot(Vector3.UP)) < 0.98:
 			p.look_at(look_at_pos, Vector3.UP)
 	if is_wave:
-		SpellVfx.attach_persist_cfg(p, cfg)
+		used_vfx = SpellVfx.attach_projectile(p, cfg)
+		if not used_vfx:
+			var pal := SpellBaseFx.palette(wave_ab) if wave_ab != null else {"core": Color(0.62, 0.82, 1.0), "rim": Color(0.32, 0.55, 0.95)}
+			WaveFx.attach(p, p.radius * 2.0, pal.core, pal.rim)
+			used_vfx = true
 	else:
 		used_vfx = SpellVfx.attach_projectile(p, cfg)
 	if not used_vfx:

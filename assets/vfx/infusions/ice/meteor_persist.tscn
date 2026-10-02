@@ -1,0 +1,156 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" uid="uid://c4yqnx8u4vet8" path="res://assets/vfx/bases/bolt/Vfx/textures/Sparks.png" id="6_4ufbo"]
+[ext_resource type="Shader" uid="uid://brps8lj3wglnn" path="res://assets/vfx/bases/bolt/Vfx/shaders/Ice Particles 1.tres" id="17_bc7bk"]
+[ext_resource type="Texture2D" uid="uid://dkthey3f808sk" path="res://assets/vfx/bases/bolt/Vfx/textures/Snowflake.png" id="18_2m1vj"]
+[ext_resource type="ArrayMesh" uid="uid://c866dtkj46ttn" path="res://assets/vfx/bases/bolt/Vfx/meshes/Shards 4.obj" id="19_r7emw"]
+[ext_resource type="ArrayMesh" uid="uid://dgniw0vfebnyk" path="res://assets/vfx/bases/bolt/Vfx/meshes/Shards 3.obj" id="20_731f0"]
+[ext_resource type="ArrayMesh" uid="uid://bhfd2vwiwty6q" path="res://assets/vfx/bases/bolt/Vfx/meshes/Shards 2.obj" id="21_uxkrg"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_x12oq"]
+render_priority = 2
+shader = ExtResource("17_bc7bk")
+shader_parameter/Vector2Parameter = Vector2(1, 1)
+shader_parameter/Texture2DParameter = ExtResource("6_4ufbo")
+
+[sub_resource type="Curve" id="Curve_mxoj4"]
+_data = [Vector2(0, 0), 0.0, 0.0, 0, 0, Vector2(0.1339713, 1), 0.0, 0.0, 0, 0, Vector2(0.53588516, 1), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 4
+
+[sub_resource type="CurveTexture" id="CurveTexture_60o10"]
+curve = SubResource("Curve_mxoj4")
+
+[sub_resource type="Gradient" id="Gradient_742vd"]
+colors = PackedColorArray(0.9372549, 0.99215686, 1, 1, 1, 1, 1, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_da1wa"]
+gradient = SubResource("Gradient_742vd")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_3fiaa"]
+emission_shape_scale = Vector3(0.2, 0.15, 0.3)
+emission_shape = 2
+emission_sphere_radius = 1.0
+angle_min = -179.99998
+angle_max = 180.00002
+direction = Vector3(1, 1, 1)
+spread = 0.0
+initial_velocity_min = -0.29999998
+initial_velocity_max = 0.29999998
+gravity = Vector3(0, 0, 0)
+scale_min = 0.099999994
+scale_max = 0.19999999
+color_ramp = SubResource("GradientTexture1D_da1wa")
+alpha_curve = SubResource("CurveTexture_60o10")
+
+[sub_resource type="QuadMesh" id="QuadMesh_3l2vh"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_jsccc"]
+render_priority = 2
+shader = ExtResource("17_bc7bk")
+shader_parameter/Vector2Parameter = Vector2(1, 1)
+shader_parameter/Texture2DParameter = ExtResource("18_2m1vj")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_1tog5"]
+emission_shape_scale = Vector3(0.2, 0.15, 0.3)
+emission_shape = 2
+emission_sphere_radius = 1.0
+angle_min = -179.99998
+angle_max = 180.00002
+direction = Vector3(1, 1, 1)
+spread = 0.0
+initial_velocity_min = -0.29999998
+initial_velocity_max = 0.29999998
+gravity = Vector3(0, 0, 0)
+scale_min = 0.19999999
+scale_max = 0.29999998
+color_ramp = SubResource("GradientTexture1D_da1wa")
+alpha_curve = SubResource("CurveTexture_60o10")
+
+[sub_resource type="Gradient" id="Gradient_2wea5"]
+colors = PackedColorArray(0.78431374, 1, 0.9607843, 1, 1, 1, 1, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_mrrl4"]
+gradient = SubResource("Gradient_2wea5")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_utm8t"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+disable_fog = true
+vertex_color_use_as_albedo = true
+vertex_color_is_srgb = true
+albedo_texture = SubResource("GradientTexture2D_mrrl4")
+
+[sub_resource type="Curve" id="Curve_45hla"]
+_data = [Vector2(0, 0.73033714), 0.0, 0.0, 0, 0, Vector2(0.8918919, 0.6966293), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="CurveTexture" id="CurveTexture_rp05q"]
+curve = SubResource("Curve_45hla")
+
+[sub_resource type="Curve" id="Curve_680nb"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(1e-05, 1), 0.0, 0.0, 0, 0, Vector2(0.72072077, 1), 0.08601267, 0.08601267, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 4
+
+[sub_resource type="CurveTexture" id="CurveTexture_20mg0"]
+curve = SubResource("Curve_680nb")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_ymjig"]
+emission_shape_scale = Vector3(0.2, 0.1, 0.2)
+emission_shape = 2
+emission_sphere_radius = 1.0
+angle_min = -179.99998
+angle_max = 180.00002
+use_rotation_3d = true
+rotation_3d_min = Vector3(-180, -180, -180)
+rotation_3d_max = Vector3(180, 180, 180)
+direction = Vector3(0, 0, 1)
+initial_velocity_min = -0.29999998
+initial_velocity_max = -0.29999998
+angular_velocity_min = -1.6093254e-05
+angular_velocity_max = -1.6093254e-05
+orbit_velocity_min = 9.49949e-08
+orbit_velocity_max = 9.49949e-08
+gravity = Vector3(0, -2, 0)
+use_scale_3d = true
+scale_3d_min = Vector3(0.1, 0.1, 0.2)
+scale_3d_max = Vector3(0.2, 0.2, 0.4)
+scale_min = 0.08
+scale_max = 0.12
+scale_curve = SubResource("CurveTexture_20mg0")
+alpha_curve = SubResource("CurveTexture_rp05q")
+
+[node name="IceMeteorPersist" type="Node3D" unique_id=156553353]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.004650712)
+
+[node name="Round Particles" type="GPUParticles3D" parent="." unique_id=201685961 groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.0324983)
+material_override = SubResource("ShaderMaterial_x12oq")
+cast_shadow = 0
+amount = 100
+lifetime = 3.0
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+process_material = SubResource("ParticleProcessMaterial_3fiaa")
+draw_pass_1 = SubResource("QuadMesh_3l2vh")
+
+[node name="Snowflakes" type="GPUParticles3D" parent="." unique_id=240426966 groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.0324983)
+material_override = SubResource("ShaderMaterial_jsccc")
+cast_shadow = 0
+amount = 100
+lifetime = 3.0
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+process_material = SubResource("ParticleProcessMaterial_1tog5")
+draw_pass_1 = SubResource("QuadMesh_3l2vh")
+
+[node name="Ice Shards" type="GPUParticles3D" parent="." unique_id=228339670 groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.008912563, 0.007376164)
+material_override = SubResource("StandardMaterial3D_utm8t")
+cast_shadow = 0
+amount = 30
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+process_material = SubResource("ParticleProcessMaterial_ymjig")
+draw_passes = 3
+draw_pass_1 = ExtResource("19_r7emw")
+draw_pass_2 = ExtResource("20_731f0")
+draw_pass_3 = ExtResource("21_uxkrg")

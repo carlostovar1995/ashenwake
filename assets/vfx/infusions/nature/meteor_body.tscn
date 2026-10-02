@@ -1,0 +1,27 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/vfx/bases/meteor/Vfx/meshes/fireball_mesh_st.obj" id="1_vlkuy"]
+[ext_resource type="Shader" uid="uid://c804y7kp0m1m2" path="res://assets/vfx/bases/bolt/Vfx/shaders/StandardCore.tres" id="12_sa27u"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_q1bh0"]
+render_priority = 0
+shader = ExtResource("12_sa27u")
+shader_parameter/Outter_Color = Color(0.56705695, 1.265801, 0.21069743, 1)
+shader_parameter/Inner_Color = Color(0.853542, 0.6648811, 0.40634578, 1)
+shader_parameter/Opacity = 1.0
+
+[node name="NatureMeteorBody" type="Node3D" unique_id=700500428]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.01297164)
+
+[node name="Visual" type="Node3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="NatureCore" type="MeshInstance3D" parent="Visual" unique_id=977416338 groups=["fx_aura", "fx_body", "fx_core"]]
+material_override = SubResource("ShaderMaterial_q1bh0")
+cast_shadow = 0
+mesh = ExtResource("1_vlkuy")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="Visual" unique_id=1095712883]
+light_color = Color(0.49803922, 0.94509804, 0.3137255, 1)
+light_energy = 5.0
+omni_range = 3.0

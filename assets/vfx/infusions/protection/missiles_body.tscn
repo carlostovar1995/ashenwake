@@ -1,0 +1,26 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/vfx/bases/missiles/Vfx/meshes/Custom Missile.obj" id="1_vlkuy"]
+[ext_resource type="Shader" uid="uid://c804y7kp0m1m2" path="res://assets/vfx/bases/bolt/Vfx/shaders/StandardCore.tres" id="12_sa27u"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_6ox25"]
+render_priority = 0
+shader = ExtResource("12_sa27u")
+shader_parameter/Outter_Color = Color(0.64164686, 0.64164686, 0.64164686, 1)
+shader_parameter/Inner_Color = Color(1, 1, 1, 1)
+shader_parameter/Opacity = 1.0
+
+[node name="ProtectionMissilesBody" type="Node3D" unique_id=1224622619]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.01297164)
+
+[node name="Visual" type="Node3D" parent="."]
+
+[node name="ProtectionCore" type="MeshInstance3D" parent="Visual" unique_id=1105318338 groups=["fx_aura", "fx_body", "fx_core"]]
+material_override = SubResource("ShaderMaterial_6ox25")
+cast_shadow = 0
+mesh = ExtResource("1_vlkuy")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="Visual" unique_id=1400492714]
+light_color = Color(0.49354547, 0.49354553, 0.49354553, 1)
+light_energy = 5.0
+omni_range = 3.0

@@ -4,7 +4,7 @@ Hand this to a VFX artist. Combat code follows the missile; it does not own left
 
 **Cost / OmniLight / animation one-pager:** [OPTIMAL_DESIGN.md](OPTIMAL_DESIGN.md) (what is cheap vs what drops FPS).
 
-Canonical travel placeholders: Bolt `assets/vfx/projectiles/effects/mprojectile_basic/mprojectile_basic_vfx_01.tscn`, Missiles `.../mprojectile_javelin/mprojectile_javelin_vfx_01.tscn`, Meteor `assets/vfx/elemental/effects/projectile/vfx_fire_projectile_01.tscn`. Persist and impact slots are empty until you drop a scene in.
+Canonical travel placeholders: Bolt `assets/vfx/bases/bolt/body.tscn`, Missiles `assets/vfx/bases/missiles/body.tscn`, Meteor `assets/vfx/bases/meteor/body.tscn`, Wave `assets/vfx/bases/wave/body.tscn`. Persist and impact slots are empty until you drop a scene in.
 
 ## Three layers
 
@@ -79,7 +79,7 @@ A craft is **base + up to two infusions**. Design to the base’s slots. Do not 
 - Tag body meshes `fx_core` and `fx_aura` (in addition to `fx_body`) so a dual craft can keep first-infusion core + second-infusion aura. Both persist scenes still attach.
 - Nature, Divine, and Protection use the same slots. They read as heal/ward, not a second enemy missile.
 
-Example: Fire Bolt + Lightning → FireCore + LightningAura, fire persist (trail/sparks) and lightning persist (trail/sparks/arcs), first-infusion light. Lightning Bolt + Fire → LightningCore + FireAura, both persists. Ice Bolt + Fire → ice-tinted bolt body + fire persist (ice has no bolt body yet).
+Example: Fire Bolt + Lightning → FireCore + LightningAura, fire persist and lightning persist, first-infusion light. Lightning Bolt + Fire → LightningCore + FireAura, both persists. Ice Bolt + Fire → IceCore + FireAura, both persists.
 
 ### Plug-in paths
 
@@ -91,11 +91,11 @@ Combat mixes **one body per base** with **persist + impact per infusion and base
 - Persist: `assets/vfx/infusions/{infusion}/{base}_persist.tscn` (ids: `fire`, `ice`, `lightning`, `shadow`, `nature`, `divine`, `protection`, `wind`, `illusion`)
 - Impact: `assets/vfx/infusions/{infusion}/{base}_impact.tscn`
 
-Examples: `assets/vfx/infusions/ice/bolt_persist.tscn`, `assets/vfx/infusions/fire/bolt_impact.tscn`, `assets/vfx/infusions/fire/bolt_body.tscn`, `assets/vfx/infusions/shadow/bolt_body.tscn`, `assets/vfx/infusions/wind/bolt_body.tscn`, `assets/vfx/bases/bolt/body.tscn`.
+Examples: `assets/vfx/infusions/ice/bolt_persist.tscn`, `assets/vfx/infusions/fire/missiles_body.tscn`, `assets/vfx/infusions/fire/meteor_body.tscn`, `assets/vfx/infusions/fire/wave_body.tscn`, `assets/vfx/infusions/fire/bolt_body.tscn`, `assets/vfx/infusions/shadow/bolt_body.tscn`, `assets/vfx/infusions/wind/bolt_body.tscn`, `assets/vfx/bases/bolt/body.tscn`, `assets/vfx/bases/missiles/body.tscn`, `assets/vfx/bases/meteor/body.tscn`, `assets/vfx/bases/wave/body.tscn`.
 
 Tag persist children `fx_persist` (Local Coords off). Tag body children `fx_body`. Impact scenes are one-shots played at the hit point; do not parent them under the travel body.
 
-Until a file exists, that slot is skipped. Bolt/Missiles/Meteor keep placeholder bodies. Burst/Nova/Target keep the existing ground-flash placeholder until an impact file is present.
+Until a file exists, that slot is skipped. Burst/Nova/Target keep the existing ground-flash placeholder until an impact file is present.
 
 To point at an existing scene without moving it, set `BODY` / `PERSIST` / `IMPACT` in `scripts/visual/spell_vfx_slots.gd`.
 
@@ -103,8 +103,8 @@ To point at an existing scene without moving it, set `BODY` / `PERSIST` / `IMPAC
 
 Skip empty slots. Do not fill a missing slot with a bolt mesh.
 
-- **Bolt / Missiles / Wave** — travel body, travel persist, impact at hit. Wave body is the arc mesh (`scripts/visual/wave_fx.gd`); persist is optional wisps, not a mesh tail.
-- **Meteor** — falling rock travel (follow-bound) + ground impact. Persist on the rock; impact on land.
+- **Bolt / Missiles / Wave** — travel body, travel persist, impact at hit. Wave body is the hadouken mesh in `assets/vfx/bases/wave/`; persist is optional wisps, not a mesh tail.
+- **Meteor** — falling fireball travel (follow-bound) + ground impact. Persist on the rock; impact on land. Mesh import is sized to the default 4.2 marker; combat only scales the host for illusion/charge.
 - **Burst / Nova** — impact only (flash + ring). No travel persist.
 - **Ground AOE** — zone loop for the puddle lifetime. Optional persist mist; impact when placed.
 - **Aura** — ring on the caster. Tick pulse, no trail.

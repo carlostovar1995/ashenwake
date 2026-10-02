@@ -1,0 +1,31 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/vfx/bases/missiles/Vfx/meshes/Custom Missile.obj" id="1_mesh"]
+[ext_resource type="Shader" path="res://assets/vfx/bases/bolt/Vfx/shaders/StandardCore.tres" id="2_core"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_core"]
+render_priority = 0
+shader = ExtResource("2_core")
+shader_parameter/Outter_Color = Color(0.82, 0.9, 1.0, 1)
+shader_parameter/Inner_Color = Color(0.95, 0.98, 1.0, 1)
+shader_parameter/Opacity = 1.0
+
+[node name="MissilesBody" type="Node3D"]
+
+[node name="Visual" type="Node3D" parent="."]
+
+[node name="MissileCore" type="MeshInstance3D" parent="Visual" groups=["fx_body", "fx_core"]]
+material_override = SubResource("ShaderMaterial_core")
+cast_shadow = 0
+mesh = ExtResource("1_mesh")
+
+[node name="MissileAura" type="MeshInstance3D" parent="Visual" groups=["fx_body", "fx_aura"]]
+material_override = SubResource("ShaderMaterial_core")
+cast_shadow = 0
+mesh = ExtResource("1_mesh")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="Visual" groups=["fx_body"]]
+light_color = Color(0.75, 0.9, 1.0, 1)
+light_energy = 5.0
+omni_range = 3.0
+shadow_enabled = false

@@ -1,0 +1,24 @@
+[gd_scene format=3 uid="uid://jlwvr56ays5b"]
+
+[ext_resource type="Shader" uid="uid://c3ncytv5ihfy1" path="res://assets/vfx/infusions/divine/Divine Bolt Base.tres" id="1_8iuno"]
+[ext_resource type="ArrayMesh" uid="uid://tw1000n4qalq" path="res://assets/vfx/bases/bolt/Vfx/meshes/Standard Bolt Core.obj" id="1_vlkuy"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ixp1a"]
+render_priority = 0
+shader = ExtResource("1_8iuno")
+shader_parameter/Outter_Color = Color(1.8247963, 1.8247963, 0.7137932, 1)
+shader_parameter/Inner_Color = Color(1.8247963, 1.8247963, 1.8247963, 1)
+shader_parameter/Opacity = 1.0
+
+[node name="DivineBoltBody" type="Node3D" unique_id=2088560166]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.01297164)
+
+[node name="DivineCore" type="MeshInstance3D" parent="." unique_id=1837103483 groups=["fx_aura", "fx_body", "fx_core"]]
+material_override = SubResource("ShaderMaterial_ixp1a")
+cast_shadow = 0
+mesh = ExtResource("1_vlkuy")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=768210104]
+light_color = Color(1, 0.91549367, 0.43865916, 1)
+light_energy = 5.0
+omni_range = 3.0

@@ -1,0 +1,70 @@
+[gd_scene format=3 uid="uid://bd01iato1p5fs"]
+
+[ext_resource type="Shader" uid="uid://vr4ferx0x8x8" path="res://assets/vfx/bases/bolt/Vfx/shaders/Standard Particles.tres" id="9_08hhg"]
+[ext_resource type="Texture2D" uid="uid://c4rsesbjmsk3l" path="res://assets/vfx/bases/bolt/Vfx/textures/smoke_01.png" id="11_q1bh0"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_e7wkh"]
+render_priority = 5
+shader = ExtResource("9_08hhg")
+shader_parameter/Particle = ExtResource("11_q1bh0")
+
+[sub_resource type="Curve" id="Curve_r0tmn"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(0.05263158, 1), 0.0, 0.0, 0, 0, Vector2(0.7612613, 1), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 4
+
+[sub_resource type="CurveTexture" id="CurveTexture_f66kb"]
+curve = SubResource("Curve_r0tmn")
+
+[sub_resource type="Curve" id="Curve_ok62x"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(1e-05, 0), 0.0, 0.0, 0, 0, Vector2(0.31531534, 1), 0.0, 0.0, 0, 0, Vector2(0.7522523, 1), 0.0, 0.0, 0, 0, Vector2(0.98648655, 0), 0.0, 0.0, 0, 0]
+point_count = 5
+
+[sub_resource type="CurveTexture" id="CurveTexture_c8otg"]
+curve = SubResource("Curve_ok62x")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_x12oq"]
+emission_shape_scale = Vector3(0.2, 0.2, 0.2)
+emission_shape = 1
+emission_sphere_radius = 1.0
+angle_min = -179.99998
+angle_max = 180.00002
+direction = Vector3(1, 1, 1)
+initial_velocity_min = -0.19999999
+initial_velocity_max = 0.19999999
+angular_velocity_min = -50.000015
+angular_velocity_max = 49.99998
+gravity = Vector3(0, 1, 0)
+scale_min = 0.39999998
+scale_max = 1.5999999
+scale_curve = SubResource("CurveTexture_c8otg")
+color = Color(0, 0, 0, 1)
+alpha_curve = SubResource("CurveTexture_f66kb")
+
+[sub_resource type="QuadMesh" id="QuadMesh_640tc"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_csvgv"]
+render_priority = 0
+shader = ExtResource("9_08hhg")
+shader_parameter/Particle = ExtResource("11_q1bh0")
+
+[node name="ShadowBoltPersist" type="Node3D" unique_id=690990636]
+
+[node name="Shadow Smoke" type="GPUParticles3D" parent="." unique_id=1144559647 groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0015574396, -0.0111624)
+material_override = SubResource("ShaderMaterial_e7wkh")
+cast_shadow = 0
+amount = 150
+lifetime = 3.0
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+process_material = SubResource("ParticleProcessMaterial_x12oq")
+draw_pass_1 = SubResource("QuadMesh_640tc")
+
+[node name="Shadow Smoke2" type="GPUParticles3D" parent="." unique_id=1589036766 groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0015574396, -0.0111624)
+material_override = SubResource("ShaderMaterial_csvgv")
+cast_shadow = 0
+amount = 150
+lifetime = 3.0
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+process_material = SubResource("ParticleProcessMaterial_x12oq")
+draw_pass_1 = SubResource("QuadMesh_640tc")

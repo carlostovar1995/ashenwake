@@ -1,0 +1,38 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/vfx/bases/meteor/Vfx/meshes/fireball_mesh_st.obj" id="1_vlkuy"]
+[ext_resource type="ArrayMesh" path="res://assets/vfx/bases/meteor/Vfx/meshes/fireball_mesh_st.obj" id="4_sa27u"]
+[ext_resource type="Texture2D" uid="uid://bdrtwueajn7y1" path="res://assets/vfx/bases/bolt/Vfx/textures/T_Noise_6Yu1.png" id="8_tks4j"]
+[ext_resource type="Shader" uid="uid://daciuknb3x5os" path="res://assets/vfx/bases/bolt/Vfx/shaders/WindAura.tres" id="14_03jxu"]
+[ext_resource type="Shader" uid="uid://dc7nxiiuligon" path="res://assets/vfx/bases/bolt/Vfx/shaders/WindCore.tres" id="17_mqxr3"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ok62x"]
+render_priority = 0
+shader = ExtResource("17_mqxr3")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_pmojk"]
+render_priority = 2
+shader = ExtResource("14_03jxu")
+shader_parameter/ColorParameter = Color(2.1168277, 2.1168277, 2.1168277, 1)
+shader_parameter/Wind_Speed = Vector2(1, 1)
+shader_parameter/Wind_Texture = ExtResource("8_tks4j")
+shader_parameter/Alpha_Cut = 0.15
+
+[node name="WindMeteorBody" type="Node3D" unique_id=825387659]
+
+[node name="Visual" type="Node3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="WindCore" type="MeshInstance3D" parent="Visual" unique_id=1570310837 groups=["fx_body", "fx_core"]]
+material_override = SubResource("ShaderMaterial_ok62x")
+cast_shadow = 0
+mesh = ExtResource("1_vlkuy")
+
+[node name="WindAura" type="MeshInstance3D" parent="Visual" unique_id=1173442507 groups=["fx_aura", "fx_body"]]
+material_override = SubResource("ShaderMaterial_pmojk")
+cast_shadow = 0
+mesh = ExtResource("4_sa27u")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="Visual" unique_id=348303451]
+light_energy = 5.0
+omni_range = 3.0

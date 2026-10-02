@@ -1,0 +1,104 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/vfx/bases/wave/Vfx/meshes/sm_hadouken3.obj" id="1_vlkuy"]
+[ext_resource type="ArrayMesh" path="res://assets/vfx/bases/wave/Vfx/meshes/sm_hadouken3.obj" id="4_sa27u"]
+[ext_resource type="Texture2D" uid="uid://5npfqiq7qs08" path="res://assets/vfx/bases/bolt/Vfx/textures/T_VFX_Noise_531.png" id="8_mqxr3"]
+[ext_resource type="Shader" uid="uid://jah1mesrglak" path="res://assets/vfx/bases/bolt/Vfx/shaders/ShadowAura.tres" id="10_h6bgt"]
+[ext_resource type="Shader" uid="uid://c804y7kp0m1m2" path="res://assets/vfx/bases/bolt/Vfx/shaders/StandardCore.tres" id="12_sa27u"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_utp13"]
+render_priority = 0
+shader = ExtResource("12_sa27u")
+shader_parameter/Outter_Color = Color(0, 0, 0, 1)
+shader_parameter/Inner_Color = Color(1.7199847, 1.1260523, 1.8247963, 1)
+shader_parameter/Opacity = 1.0
+
+[sub_resource type="Gradient" id="Gradient_bc7bk"]
+offsets = PackedFloat32Array(0.17788461, 0.31730768, 0.37019232)
+colors = PackedColorArray(0.22745098, 0, 0.45882353, 1, 1.7177452, 0.5020588, 2.055, 1, 0, 0, 0, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_1dm1j"]
+gradient = SubResource("Gradient_bc7bk")
+
+[sub_resource type="Gradient" id="Gradient_r7emw"]
+offsets = PackedFloat32Array(0, 0.46153846, 0.9951923, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_6brma"]
+gradient = SubResource("Gradient_r7emw")
+fill_from = Vector2(1, 0)
+fill_to = Vector2(1, 1)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_w818f"]
+render_priority = 1
+shader = ExtResource("10_h6bgt")
+shader_parameter/ColorParameter = Color(0, 0, 0, 1)
+shader_parameter/Texture_Scale = Vector2(1, 1)
+shader_parameter/Texture_Speed = Vector2(0.1, 1)
+shader_parameter/Texture = ExtResource("8_mqxr3")
+shader_parameter/Gradient_Subtract = SubResource("GradientTexture2D_6brma")
+shader_parameter/Color_Dissipation = 1.0
+shader_parameter/Color_Gradient = SubResource("GradientTexture1D_1dm1j")
+shader_parameter/Dissappear_Step = 0.3
+
+[sub_resource type="Gradient" id="Gradient_731f0"]
+offsets = PackedFloat32Array(0.9230769, 1)
+colors = PackedColorArray(0, 0, 0, 1, 0.7380371, 0.421875, 1, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_mxoj4"]
+gradient = SubResource("Gradient_731f0")
+
+[sub_resource type="Gradient" id="Gradient_khqga"]
+offsets = PackedFloat32Array(0, 0.29326922, 0.8269231, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_60o10"]
+gradient = SubResource("Gradient_khqga")
+fill_from = Vector2(1, 0.08547009)
+fill_to = Vector2(1, 1)
+
+[sub_resource type="Gradient" id="Gradient_pmojk"]
+offsets = PackedFloat32Array(0.052884616, 0.10576923, 0.15865384, 0.57211536, 0.6298077, 0.67788464)
+colors = PackedColorArray(0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_da1wa"]
+gradient = SubResource("Gradient_pmojk")
+fill_from = Vector2(1, 1)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_02j6r"]
+render_priority = 2
+shader = ExtResource("10_h6bgt")
+shader_parameter/ColorParameter = Color(0, 0, 0, 1)
+shader_parameter/Texture_Scale = Vector2(1, 1)
+shader_parameter/Texture_Speed = Vector2(0, 1)
+shader_parameter/Texture = SubResource("GradientTexture2D_da1wa")
+shader_parameter/Gradient_Subtract = SubResource("GradientTexture2D_60o10")
+shader_parameter/Color_Dissipation = 0.5
+shader_parameter/Color_Gradient = SubResource("GradientTexture1D_mxoj4")
+shader_parameter/Dissappear_Step = 0.435
+
+[node name="ShadowWaveBody" type="Node3D" unique_id=2141316022]
+
+[node name="Visual" type="Node3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="ShadowCore" type="MeshInstance3D" parent="Visual" unique_id=1784284913 groups=["fx_body", "fx_core"]]
+material_override = SubResource("ShaderMaterial_utp13")
+cast_shadow = 0
+mesh = ExtResource("1_vlkuy")
+
+[node name="ShadowAura" type="MeshInstance3D" parent="Visual" unique_id=244942332 groups=["fx_aura", "fx_body"]]
+material_override = SubResource("ShaderMaterial_w818f")
+cast_shadow = 0
+mesh = ExtResource("4_sa27u")
+
+[node name="Shadow Rings" type="MeshInstance3D" parent="Visual" unique_id=491069228 groups=["fx_aura", "fx_body"]]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, 0, 0)
+material_override = SubResource("ShaderMaterial_02j6r")
+cast_shadow = 0
+mesh = ExtResource("4_sa27u")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="Visual" unique_id=128374158]
+light_color = Color(0.64705884, 0.36078432, 0.8509804, 1)
+light_energy = 5.0
+omni_range = 3.0

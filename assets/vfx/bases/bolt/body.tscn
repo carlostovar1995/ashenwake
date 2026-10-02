@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://bk7n2m8qp4xfw"]
+[gd_scene format=3 uid="uid://54b01vyj2p50"]
 
 [ext_resource type="Script" uid="uid://c41ntihw8yiem" path="res://scripts/visual/bolt_base_fx.gd" id="1_fx"]
 [ext_resource type="Shader" uid="uid://xl0aelqdmcew" path="res://assets/vfx/bases/bolt/bolt_core.tres" id="2_core"]
@@ -67,31 +67,30 @@ color_ramp = SubResource("GradientTexture1D_spark")
 
 [sub_resource type="QuadMesh" id="QuadMesh_spark"]
 
-[node name="BoltBase" type="Node3D"]
+[node name="BoltBase" type="Node3D" unique_id=1384889151]
 script = ExtResource("1_fx")
 
-[node name="Visual" type="Node3D" parent="."]
+[node name="Visual" type="Node3D" parent="." unique_id=271447674]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
 
-[node name="BoltCore" type="MeshInstance3D" parent="Visual" groups=["fx_body"]]
+[node name="BoltCore" type="MeshInstance3D" parent="Visual" unique_id=1625526183 groups=["fx_body"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.30142617)
 material_override = SubResource("ShaderMaterial_core")
 cast_shadow = 0
 mesh = ExtResource("4_mesh")
 
-[node name="BoltAura" type="MeshInstance3D" parent="Visual" groups=["fx_body"]]
+[node name="BoltAura" type="MeshInstance3D" parent="Visual" unique_id=1920791174 groups=["fx_body"]]
 transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, -0.006515146, 0, 0.24689472)
 material_override = SubResource("ShaderMaterial_aura")
 cast_shadow = 0
 mesh = ExtResource("4_mesh")
 
-[node name="Sparkles" type="GPUParticles3D" parent="Visual" groups=["fx_persist"]]
+[node name="Sparkles" type="GPUParticles3D" parent="Visual" unique_id=1317046751 groups=["fx_persist"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.2145102)
 material_override = SubResource("ShaderMaterial_spark")
 cast_shadow = 0
 amount = 200
 lifetime = 1.5
 visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
-local_coords = false
 process_material = SubResource("ParticleProcessMaterial_spark")
 draw_pass_1 = SubResource("QuadMesh_spark")

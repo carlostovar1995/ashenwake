@@ -1,0 +1,61 @@
+[gd_scene format=3 uid="uid://cif1cbkw8rin6"]
+
+[ext_resource type="ArrayMesh" uid="uid://tw1000n4qalq" path="res://assets/vfx/bases/bolt/Vfx/meshes/Standard Bolt Core.obj" id="1_vlkuy"]
+[ext_resource type="Shader" uid="uid://bih4ygogy42d8" path="res://assets/vfx/bases/bolt/Vfx/shaders/IceCore.tres" id="14_08hhg"]
+[ext_resource type="Texture2D" uid="uid://52u71wid1r71" path="res://assets/vfx/bases/bolt/Vfx/textures/web_01.tres" id="15_wua5q"]
+[ext_resource type="Shader" uid="uid://bou3rr8rgbeyo" path="res://assets/vfx/bases/bolt/Vfx/shaders/Ice_Aura.tres" id="16_q1bh0"]
+
+[sub_resource type="Gradient" id="Gradient_csvgv"]
+colors = PackedColorArray(0.57626635, 1.8247954, 1.6676, 1, 1.8247963, 1.8247963, 1.8247963, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_3fiaa"]
+gradient = SubResource("Gradient_csvgv")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_3l2vh"]
+render_priority = 0
+shader = ExtResource("14_08hhg")
+shader_parameter/Ice_Vertex_Scale = Vector2(1, 2)
+shader_parameter/Ice_Vextex_Speed = Vector2(0.05, 0)
+shader_parameter/Ice_Vertex_Texture = ExtResource("15_wua5q")
+shader_parameter/Wave_Intensity = 0.02
+shader_parameter/Ice_Texture_Scale = Vector2(1, 2)
+shader_parameter/Ice_Texture_Speed = Vector2(0.1, 0)
+shader_parameter/Ice_Texture = ExtResource("15_wua5q")
+shader_parameter/Gradient_1D_Color = SubResource("GradientTexture1D_3fiaa")
+
+[sub_resource type="Gradient" id="Gradient_cl72q"]
+colors = PackedColorArray(1.987145, 3.2944162, 3.2944162, 1, 1, 1, 1, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_m016a"]
+gradient = SubResource("Gradient_cl72q")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_3fiaa"]
+render_priority = 0
+shader = ExtResource("16_q1bh0")
+shader_parameter/Ice_Vertex_Scale = Vector2(2, 2)
+shader_parameter/Ice_Vextex_Speed = Vector2(0.01, 0.01)
+shader_parameter/Ice_Vertex_Texture = ExtResource("15_wua5q")
+shader_parameter/Wave_Intensity = 0.01
+shader_parameter/Ice_Texture_Scale = Vector2(1, 1)
+shader_parameter/Ice_Texture_Speed = Vector2(0.1, 0.1)
+shader_parameter/Ice_Texture = ExtResource("15_wua5q")
+shader_parameter/Gradient_1D_Color = SubResource("GradientTexture1D_m016a")
+
+[node name="IceBoltBody" type="Node3D" unique_id=1837484749]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.004650712)
+
+[node name="IceCore" type="MeshInstance3D" parent="." unique_id=1444298381 groups=["fx_body", "fx_core"]]
+material_override = SubResource("ShaderMaterial_3l2vh")
+cast_shadow = 0
+mesh = ExtResource("1_vlkuy")
+
+[node name="IceAura" type="MeshInstance3D" parent="." unique_id=680934495 groups=["fx_aura", "fx_body"]]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.05, 0, 0, 0)
+material_override = SubResource("ShaderMaterial_3fiaa")
+cast_shadow = 0
+mesh = ExtResource("1_vlkuy")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=127476806]
+light_color = Color(0.62524796, 0.9976576, 0.99999994, 1)
+light_energy = 5.0
+omni_range = 3.0

@@ -1,0 +1,145 @@
+[gd_scene format=3 uid="uid://bws5np5c18qxh"]
+
+[ext_resource type="ArrayMesh" uid="uid://tw1000n4qalq" path="res://assets/vfx/bases/bolt/Vfx/meshes/Standard Bolt Core.obj" id="1_vlkuy"]
+[ext_resource type="ArrayMesh" uid="uid://c0413gmcxle3y" path="res://assets/vfx/bases/bolt/Vfx/meshes/Standard Bolt Aura.obj" id="4_sa27u"]
+[ext_resource type="Shader" uid="uid://c804y7kp0m1m2" path="res://assets/vfx/bases/bolt/Vfx/shaders/StandardCore.tres" id="12_sa27u"]
+[ext_resource type="Texture2D" uid="uid://disn2p6dfn1qq" path="res://assets/vfx/bases/bolt/Vfx/textures/spark_07.png" id="27_wua5q"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_da1wa"]
+render_priority = 1
+shader = ExtResource("12_sa27u")
+shader_parameter/Outter_Color = Color(1.3147132, 0.32948396, 1.3426629, 1)
+shader_parameter/Inner_Color = Color(1.8247963, 1.8247963, 1.8247963, 1)
+shader_parameter/Opacity = 1.0
+
+[sub_resource type="VisualShaderNodeFloatOp" id="VisualShaderNodeFloatOp_2m1vj"]
+operator = 5
+
+[sub_resource type="VisualShaderNodeTexture" id="VisualShaderNodeTexture_r7emw"]
+source = 5
+
+[sub_resource type="VisualShaderNodeTexture" id="VisualShaderNodeTexture_731f0"]
+source = 5
+
+[sub_resource type="VisualShaderNodeTexture" id="VisualShaderNodeTexture_uxkrg"]
+expanded_output_ports = [0]
+source = 5
+
+[sub_resource type="VisualShaderNodeUVFunc" id="VisualShaderNodeUVFunc_m3qep"]
+function = 1
+
+[sub_resource type="VisualShaderNodeUVFunc" id="VisualShaderNodeUVFunc_khqga"]
+
+[sub_resource type="VisualShaderNodeVectorOp" id="VisualShaderNodeVectorOp_pmojk"]
+default_input_values = [0, Vector2(0, 0), 1, Vector2(0, 0)]
+op_type = 0
+operator = 2
+
+[sub_resource type="VisualShaderNodeInput" id="VisualShaderNodeInput_xjoot"]
+input_name = "time"
+
+[sub_resource type="VisualShaderNodeVec2Parameter" id="VisualShaderNodeVec2Parameter_ok62x"]
+parameter_name = "Texture_Speed"
+
+[sub_resource type="VisualShaderNodeTexture2DParameter" id="VisualShaderNodeTexture2DParameter_csvgv"]
+parameter_name = "Color_Gradient"
+texture_type = 1
+
+[sub_resource type="VisualShaderNodeFloatParameter" id="VisualShaderNodeFloatParameter_cl72q"]
+parameter_name = "Color_Dissipation"
+
+[sub_resource type="VisualShaderNodeColorParameter" id="VisualShaderNodeColorParameter_m016a"]
+parameter_name = "ColorParameter"
+
+[sub_resource type="VisualShaderNodeClamp" id="VisualShaderNodeClamp_742vd"]
+
+[sub_resource type="VisualShaderNodeTexture2DParameter" id="VisualShaderNodeTexture2DParameter_jsccc"]
+parameter_name = "Texture"
+texture_type = 1
+
+[sub_resource type="VisualShaderNodeTexture2DParameter" id="VisualShaderNodeTexture2DParameter_1tog5"]
+parameter_name = "Gradient_Subtract"
+texture_type = 1
+
+[sub_resource type="VisualShaderNodeVec2Parameter" id="VisualShaderNodeVec2Parameter_2wea5"]
+parameter_name = "Texture_Scale"
+default_value_enabled = true
+default_value = Vector2(3, 2)
+
+[sub_resource type="VisualShaderNodeFloatOp" id="VisualShaderNodeFloatOp_680nb"]
+operator = 1
+
+[sub_resource type="VisualShader" id="VisualShader_a82x1"]
+modes/cull = 2
+flags/unshaded = true
+flags/shadows_disabled = true
+flags/fog_disabled = true
+nodes/fragment/0/position = Vector2(500, 140)
+nodes/fragment/2/node = SubResource("VisualShaderNodeTexture2DParameter_csvgv")
+nodes/fragment/2/position = Vector2(-380, -200)
+nodes/fragment/3/node = SubResource("VisualShaderNodeTexture2DParameter_jsccc")
+nodes/fragment/3/position = Vector2(-1400, 40)
+nodes/fragment/4/node = SubResource("VisualShaderNodeTexture2DParameter_1tog5")
+nodes/fragment/4/position = Vector2(-1440, 760)
+nodes/fragment/6/node = SubResource("VisualShaderNodeVec2Parameter_2wea5")
+nodes/fragment/6/position = Vector2(-2140, 280)
+nodes/fragment/9/node = SubResource("VisualShaderNodeFloatOp_680nb")
+nodes/fragment/9/position = Vector2(-700, 440)
+nodes/fragment/10/node = SubResource("VisualShaderNodeFloatOp_2m1vj")
+nodes/fragment/10/position = Vector2(-400, 200)
+nodes/fragment/12/node = SubResource("VisualShaderNodeTexture_r7emw")
+nodes/fragment/12/position = Vector2(-1040, 440)
+nodes/fragment/13/node = SubResource("VisualShaderNodeTexture_731f0")
+nodes/fragment/13/position = Vector2(-1140, 820)
+nodes/fragment/14/node = SubResource("VisualShaderNodeTexture_uxkrg")
+nodes/fragment/14/position = Vector2(-40, 20)
+nodes/fragment/15/node = SubResource("VisualShaderNodeUVFunc_m3qep")
+nodes/fragment/15/position = Vector2(-1780, 280)
+nodes/fragment/16/node = SubResource("VisualShaderNodeUVFunc_khqga")
+nodes/fragment/16/position = Vector2(-1440, 420)
+nodes/fragment/17/node = SubResource("VisualShaderNodeVectorOp_pmojk")
+nodes/fragment/17/position = Vector2(-1740, 640)
+nodes/fragment/18/node = SubResource("VisualShaderNodeInput_xjoot")
+nodes/fragment/18/position = Vector2(-2100, 640)
+nodes/fragment/19/node = SubResource("VisualShaderNodeVec2Parameter_ok62x")
+nodes/fragment/19/position = Vector2(-2100, 740)
+nodes/fragment/20/node = SubResource("VisualShaderNodeFloatParameter_cl72q")
+nodes/fragment/20/position = Vector2(-880, -60)
+nodes/fragment/22/node = SubResource("VisualShaderNodeColorParameter_m016a")
+nodes/fragment/22/position = Vector2(60, -260)
+nodes/fragment/23/node = SubResource("VisualShaderNodeClamp_742vd")
+nodes/fragment/23/position = Vector2(180, 280)
+nodes/fragment/connections = PackedInt32Array(6, 0, 15, 1, 16, 0, 12, 0, 15, 0, 16, 0, 17, 0, 16, 2, 18, 0, 17, 0, 19, 0, 17, 1, 4, 0, 13, 2, 13, 0, 9, 1, 12, 0, 9, 0, 3, 0, 12, 2, 20, 0, 10, 1, 10, 0, 14, 0, 2, 0, 14, 2, 9, 0, 10, 0, 22, 0, 0, 0, 9, 0, 23, 0, 23, 0, 0, 1)
+
+[sub_resource type="Gradient" id="Gradient_knq0q"]
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_20o2i"]
+gradient = SubResource("Gradient_knq0q")
+fill_from = Vector2(1, 0.5555556)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_0oj2o"]
+render_priority = 0
+shader = SubResource("VisualShader_a82x1")
+shader_parameter/ColorParameter = Color(0.7777478, 0.140625, 1, 1)
+shader_parameter/Texture_Scale = Vector2(1, 1)
+shader_parameter/Texture_Speed = Vector2(0, 1)
+shader_parameter/Texture = ExtResource("27_wua5q")
+shader_parameter/Gradient_Subtract = SubResource("GradientTexture2D_20o2i")
+
+[node name="IllusionBoltBody" type="Node3D" unique_id=1184362999]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.01297164)
+
+[node name="IllusionCore" type="MeshInstance3D" parent="." unique_id=573351806 groups=["fx_body", "fx_core"]]
+material_override = SubResource("ShaderMaterial_da1wa")
+cast_shadow = 0
+mesh = ExtResource("1_vlkuy")
+
+[node name="IllusionAura" type="MeshInstance3D" parent="." unique_id=566574858 groups=["fx_aura", "fx_body"]]
+material_override = SubResource("ShaderMaterial_0oj2o")
+cast_shadow = 0
+mesh = ExtResource("4_sa27u")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=1753657755]
+light_color = Color(1.706, 0.693, 1.685, 1)
+light_energy = 5.0
+omni_range = 3.0

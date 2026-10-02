@@ -1,0 +1,114 @@
+[gd_scene format=3 uid="uid://c62go7ed3k58e"]
+
+[ext_resource type="Texture2D" uid="uid://c4yqnx8u4vet8" path="res://assets/vfx/bases/bolt/Vfx/textures/Sparks.png" id="6_4ufbo"]
+[ext_resource type="Texture2D" uid="uid://dogpfja48qk6i" path="res://assets/vfx/bases/bolt/Vfx/textures/Leaf, Textured.png" id="29_bc7bk"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wcpxr"]
+render_priority = 1
+transparency = 1
+blend_mode = 1
+cull_mode = 2
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = ExtResource("6_4ufbo")
+billboard_mode = 3
+billboard_keep_scale = true
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
+
+[sub_resource type="Gradient" id="Gradient_xjoot"]
+colors = PackedColorArray(0.78398925, 0.95703125, 0.75382596, 1, 0.13658524, 0.4296875, 0.13427734, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_ok62x"]
+gradient = SubResource("Gradient_xjoot")
+
+[sub_resource type="Curve" id="Curve_csvgv"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(0.09909909, 0.20224726), 0.0, 0.0, 0, 0, Vector2(0.13963965, 0.8988764), 0.0, 0.0, 0, 0, Vector2(0.23873875, 0.49438208), 0.0, 0.0, 0, 0, Vector2(0.2927928, 0.70786524), 0.0, 0.0, 0, 0, Vector2(0.33333334, 0.23595512), 0.0, 0.0, 0, 0, Vector2(0.4009009, 1), 0.0, 0.0, 0, 0, Vector2(0.5045045, 0.022471905), 0.0, 0.0, 0, 0, Vector2(0.5810811, 0.79775286), 0.0, 0.0, 0, 0, Vector2(0.72072077, 0.1460675), 0.0, 0.0, 0, 0, Vector2(0.7657658, 0.6966293), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 12
+
+[sub_resource type="CurveTexture" id="CurveTexture_cl72q"]
+curve = SubResource("Curve_csvgv")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_m016a"]
+lifetime_randomness = 0.2
+emission_shape = 1
+emission_sphere_radius = 0.2
+direction = Vector3(0, 0, -1)
+spread = 25.0
+initial_velocity_max = 0.5
+gravity = Vector3(0, 0.25, 0)
+scale_min = 0.099999994
+scale_max = 0.19999999
+scale_curve = SubResource("CurveTexture_cl72q")
+color_ramp = SubResource("GradientTexture1D_ok62x")
+
+[sub_resource type="QuadMesh" id="QuadMesh_3dfl8"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_shuj2"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+disable_fog = true
+vertex_color_use_as_albedo = true
+vertex_color_is_srgb = true
+albedo_texture = ExtResource("29_bc7bk")
+albedo_texture_force_srgb = true
+
+[sub_resource type="Curve" id="Curve_742vd"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(0.3648649, 0.516854), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="CurveTexture" id="CurveTexture_jsccc"]
+curve = SubResource("Curve_742vd")
+
+[sub_resource type="Gradient" id="Gradient_1tog5"]
+colors = PackedColorArray(0.70562744, 1, 0.5859375, 1, 0.23095703, 0.6875, 0, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_3l2vh"]
+gradient = SubResource("Gradient_1tog5")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_2wea5"]
+emission_shape_scale = Vector3(0.2, 0.12, 0.2)
+emission_shape = 1
+emission_sphere_radius = 1.0
+angle_min = -179.99998
+angle_max = 180.00002
+use_rotation_3d = true
+rotation_3d_min = Vector3(0, 0, 0)
+rotation_3d_max = Vector3(360, 360, 360)
+direction = Vector3(1, 1, 1)
+initial_velocity_min = -1.0
+initial_velocity_max = 1.0
+use_rotation_velocity_3d = true
+rotation_velocity_3d_min = Vector3(0, 0, 0)
+rotation_velocity_3d_max = Vector3(360, 360, 360)
+gravity = Vector3(0, -0.25, 0)
+scale_min = 0.39999998
+scale_max = 0.79999995
+color_ramp = SubResource("GradientTexture1D_3l2vh")
+alpha_curve = SubResource("CurveTexture_jsccc")
+
+[sub_resource type="QuadMesh" id="QuadMesh_e7wkh"]
+
+[node name="NatureBoltPersist" type="Node3D" unique_id=743880977]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.01297164)
+
+[node name="Particles" type="GPUParticles3D" parent="." unique_id=1437389657 groups=["fx_persist"]]
+transform = Transform3D(1, 0, 0, 0, 0.99999994, 0, 0, 0, 0.99999994, 0, 3.9587594e-08, 0.01297164)
+material_override = SubResource("StandardMaterial3D_wcpxr")
+cast_shadow = 0
+amount = 80
+lifetime = 2.0
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+process_material = SubResource("ParticleProcessMaterial_m016a")
+draw_pass_1 = SubResource("QuadMesh_3dfl8")
+
+[node name="Leaves" type="GPUParticles3D" parent="." unique_id=1799883530 groups=["fx_persist"]]
+material_override = SubResource("StandardMaterial3D_shuj2")
+cast_shadow = 0
+amount = 30
+lifetime = 2.0
+visibility_aabb = AABB(-16, -4, -16, 32, 8, 32)
+process_material = SubResource("ParticleProcessMaterial_2wea5")
+draw_pass_1 = SubResource("QuadMesh_e7wkh")

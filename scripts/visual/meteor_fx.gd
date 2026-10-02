@@ -5,7 +5,8 @@ const FALL_TIME := 0.95
 const START_HEIGHT := 20.0
 const LATERAL := 11.0
 const CORE_MESH_RADIUS := 0.42
-const ROCK_TO_MARKER := 0.80
+## Authored meteor body matches default aoe_radius. Host scale is radius / this.
+const AUTH_RADIUS := 4.2
 const _BURST_SHADER := preload("res://scripts/visual/firebolt_burst.gdshader")
 
 var caster: Node
@@ -67,36 +68,46 @@ func _build() -> void:
 	_rock = Node3D.new()
 	add_child(_rock)
 	_rock.global_position = _start
-	# Core mesh radius is 0.42; keep the falling rock 20% smaller in diameter than the marker.
-	var rock_scale := maxf(radius * ROCK_TO_MARKER / CORE_MESH_RADIUS, 0.55)
-	_rock.scale = Vector3.ONE * rock_scale
+	# Authored body is already marker-sized; only illusion/charge change the host.
+	_rock.scale = Vector3.ONE * (radius / AUTH_RADIUS)
 	_orient_rock()
-	var rock_cfg := {
-		"scale": 1.12,
-		"yaw_offset": -PI * 0.5,
-	}
+	var attached := false
 	if ability:
+		var travel := {
+			"vfx_body": ability.vfx_body,
+			"vfx_body_aura": ability.vfx_body_aura,
+			"vfx_persist": ability.vfx_persist,
+			"vfx_scale": 1.0,
+			"vfx_yaw": 0.0,
+		}
 		if ability.vfx_primary.a > 0.0:
-			rock_cfg["primary_color"] = ability.vfx_primary
+			travel["vfx_primary"] = ability.vfx_primary
 		if ability.vfx_secondary.a > 0.0:
-			rock_cfg["secondary_color"] = ability.vfx_secondary
+			travel["vfx_secondary"] = ability.vfx_secondary
 		if ability.vfx_tertiary.a > 0.0:
-			rock_cfg["tertiary_color"] = ability.vfx_tertiary
-	var body := AbilityFx.FIRE_PROJECTILE
-	if ability and not ability.vfx_body.is_empty():
-		body = ability.vfx_body
-	var vfx := AbilityFx.attach(body, _rock, rock_cfg)
-	if vfx:
-		# Fire trail sits on the smaller rock; keep the tail from stretching as far.
-		vfx.scale = Vector3(0.52, 1.12, 1.12)
-		if vfx.has_method("open"):
-			vfx.call("open")
-	if ability:
-		SpellVfx.attach_persist(_rock, ability, 0.55)
+			travel["vfx_tertiary"] = ability.vfx_tertiary
+		attached = SpellVfx.attach_projectile(_rock, travel)
+	if not attached:
+		var rock_cfg := {
+			"scale": 1.12,
+			"yaw_offset": -PI * 0.5,
+		}
+		if ability:
+			if ability.vfx_primary.a > 0.0:
+				rock_cfg["primary_color"] = ability.vfx_primary
+			if ability.vfx_secondary.a > 0.0:
+				rock_cfg["secondary_color"] = ability.vfx_secondary
+			if ability.vfx_tertiary.a > 0.0:
+				rock_cfg["tertiary_color"] = ability.vfx_tertiary
+		var vfx := AbilityFx.attach(AbilityFx.FIRE_PROJECTILE, _rock, rock_cfg)
+		if vfx:
+			vfx.scale = Vector3(0.52, 1.12, 1.12)
+			if vfx.has_method("open"):
+				vfx.call("open")
+		_make_core()
 	var charge_vol := clampf((radius - 2.0) / 3.4, 0.0, 1.0)
 	# Clip opens with ~1s of travel; start it on drop so the boom lands with the hit.
 	AudioManager.play_at("meteor.impact", _land, {"volume_db": lerpf(-2.0, 3.0, charge_vol)})
-	_make_core()
 	var tw := create_tween()
 	tw.set_trans(Tween.TRANS_QUAD)
 	tw.set_ease(Tween.EASE_IN)
@@ -128,8 +139,8 @@ func _make_core() -> void:
 	var core := MeshInstance3D.new()
 	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var sm := SphereMesh.new()
-	sm.radius = 0.42
-	sm.height = 0.84
+	sm.radius = CORE_MESH_RADIUS
+	sm.height = CORE_MESH_RADIUS * 2.0
 	core.mesh = sm
 	core.position = Vector3(0.0, 0.0, -0.15)
 	var mat := StandardMaterial3D.new()

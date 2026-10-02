@@ -414,8 +414,8 @@ static func missiles() -> SpellBase:
 	b.color = Color(0.75, 0.85, 1.0)
 	b.skillshot_speed = 26.0
 	b.vfx_scene = AbilityFx.MAGIC_JAVELIN
-	b.vfx_scale = 0.38
-	b.vfx_yaw = -PI * 0.5
+	b.vfx_scale = 1.0
+	b.vfx_yaw = 0.0
 	b.vfx_primary = Color(0.75, 0.9, 1.0)
 	b.vfx_secondary = Color(0.35, 0.55, 1.0)
 	b.vfx_tertiary = Color(1.0, 0.95, 0.55)

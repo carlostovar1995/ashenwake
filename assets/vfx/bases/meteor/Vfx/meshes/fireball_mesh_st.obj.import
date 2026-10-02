@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://blats26sxvv8t"
+path="res://.godot/imported/fireball_mesh_st.obj-195dee4eeea63f9c56bff7bbe934132b.mesh"
+
+[deps]
+
+files=["res://.godot/imported/fireball_mesh_st.obj-195dee4eeea63f9c56bff7bbe934132b.mesh"]
+
+source_file="res://assets/vfx/bases/meteor/Vfx/meshes/fireball_mesh_st.obj"
+dest_files=["res://.godot/imported/fireball_mesh_st.obj-195dee4eeea63f9c56bff7bbe934132b.mesh", "res://.godot/imported/fireball_mesh_st.obj-195dee4eeea63f9c56bff7bbe934132b.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(3.944819, 3.944819, 3.944819)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false

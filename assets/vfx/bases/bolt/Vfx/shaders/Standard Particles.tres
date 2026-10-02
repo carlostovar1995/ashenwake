@@ -1,0 +1,42 @@
+[gd_resource type="VisualShader" format=3 uid="uid://vr4ferx0x8x8"]
+
+[sub_resource type="VisualShaderNodeInput" id="VisualShaderNodeInput_5mq7b"]
+expanded_output_ports = [0]
+input_name = "color"
+
+[sub_resource type="VisualShaderNodeTexture" id="VisualShaderNodeTexture_mr1ve"]
+source = 5
+
+[sub_resource type="VisualShaderNodeTexture2DParameter" id="VisualShaderNodeTexture2DParameter_vv5ka"]
+parameter_name = "Particle"
+texture_type = 1
+
+[sub_resource type="VisualShaderNodeFloatOp" id="VisualShaderNodeFloatOp_imlya"]
+operator = 2
+
+[sub_resource type="VisualShaderNodeFloatParameter" id="VisualShaderNodeFloatParameter_5mq7b"]
+parameter_name = "Alpha_Cut"
+
+[sub_resource type="VisualShaderNodeBillboard" id="VisualShaderNodeBillboard_sbapq"]
+billboard_type = 3
+keep_scale = true
+
+[resource]
+modes/cull = 2
+flags/unshaded = true
+flags/shadows_disabled = true
+flags/fog_disabled = true
+nodes/vertex/2/node = SubResource("VisualShaderNodeBillboard_sbapq")
+nodes/vertex/2/position = Vector2(-140, 340)
+nodes/vertex/connections = PackedInt32Array(2, 0, 0, 10)
+nodes/fragment/2/node = SubResource("VisualShaderNodeInput_5mq7b")
+nodes/fragment/2/position = Vector2(-300, -160)
+nodes/fragment/3/node = SubResource("VisualShaderNodeTexture_mr1ve")
+nodes/fragment/3/position = Vector2(-440, 200)
+nodes/fragment/4/node = SubResource("VisualShaderNodeTexture2DParameter_vv5ka")
+nodes/fragment/4/position = Vector2(-740, -40)
+nodes/fragment/5/node = SubResource("VisualShaderNodeFloatOp_imlya")
+nodes/fragment/5/position = Vector2(100, 240)
+nodes/fragment/6/node = SubResource("VisualShaderNodeFloatParameter_5mq7b")
+nodes/fragment/6/position = Vector2(20, 600)
+nodes/fragment/connections = PackedInt32Array(4, 0, 3, 2, 3, 0, 5, 1, 2, 4, 5, 0, 5, 0, 0, 1, 2, 0, 0, 0)
